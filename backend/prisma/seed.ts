@@ -60,21 +60,41 @@ async function main() {
 
   console.log('✓ Financial categories created');
 
-  // Create default loyalty configuration
+  // Create default loyalty configuration (apply to all products)
   await prisma.loyaltyConfig.upsert({
     where: { id: '00000000-0000-0000-0000-000000000001' },
     update: {},
     create: {
       id: '00000000-0000-0000-0000-000000000001',
-      pointsPerReal: 1.0,
-      minPurchaseValue: 10.0,
-      pointsToRealRatio: 0.01,
-      minPointsRedemption: 100,
+      pointsPerReal: 1,
+      minPurchaseForPoints: 10,
+      pointsExpirationDays: 365,
+      minPointsToRedeem: 100,
+      pointsRedemptionValue: 0.01,
+      applyToAllProducts: true,
       isActive: true,
     },
   });
 
   console.log('✓ Loyalty configuration created');
+
+  // Create default cashback configuration
+  await prisma.cashbackConfig.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000002' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000002',
+      cashbackPercentage: 5,
+      minPurchaseForCashback: 20,
+      maxCashbackPerPurchase: 20,
+      cashbackExpirationDays: 180,
+      minCashbackToUse: 5,
+      applyToAllProducts: true,
+      isActive: true,
+    },
+  });
+
+  console.log('✓ Cashback configuration created');
 
   // Create sample product categories
   const categoriesProduct = [
@@ -111,6 +131,8 @@ async function main() {
         saleType: 'unit',
         unit: 'un',
         eligibleForLoyalty: true,
+        earnsCashback: true,
+        cashbackPercentage: 5,
         isActive: true,
         createdById: admin.id,
       },
@@ -123,6 +145,8 @@ async function main() {
         saleType: 'unit',
         unit: 'un',
         eligibleForLoyalty: true,
+        earnsCashback: true,
+        cashbackPercentage: 5,
         isActive: true,
         createdById: admin.id,
       },
@@ -135,6 +159,8 @@ async function main() {
         saleType: 'weight',
         unit: 'kg',
         eligibleForLoyalty: true,
+        earnsCashback: true,
+        cashbackPercentage: 5,
         isActive: true,
         createdById: admin.id,
       },

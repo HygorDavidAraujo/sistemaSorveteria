@@ -4,7 +4,7 @@ Este documento detalha tudo que foi implementado e o que ainda precisa ser desen
 
 ## 📊 Resumo do Progresso
 
-**Módulos Completos:** 9/11 (82%)
+**Módulos Completos:** 13/14 (93%)
 - ✅ Infraestrutura e Arquitetura
 - ✅ Banco de Dados
 - ✅ Autenticação
@@ -14,11 +14,14 @@ Este documento detalha tudo que foi implementado e o que ainda precisa ser desen
 - ✅ **Caixa** (completo)
 - ✅ **PDV** (completo)
 - ✅ **Comandas** (completo)
+- ✅ **Delivery** (completo)
+- ✅ **Fidelidade** (completo)
+- ✅ **Cashback** (completo)
+- ✅ **Cupons** (completo)
 
 **Próximos Passos:**
-1. 🟡 Delivery - Média prioridade
-2. 🟡 Fidelidade - Média prioridade
-3. 🟢 DRE e Relatórios - Baixa prioridade
+1. 🟢 Financeiro - Baixa prioridade
+2. 🟢 DRE e Relatórios - Baixa prioridade
 
 ---
 
@@ -44,7 +47,7 @@ Este documento detalha tudo que foi implementado e o que ainda precisa ser desen
 ### 2. Banco de Dados ✅
 
 #### ✅ Schema Completo
-- **11 tabelas principais** implementadas no Prisma
+- **23 tabelas principais** implementadas no Prisma
 - **Relacionamentos** todos mapeados corretamente
 - **Indexes** para otimização de queries
 - **Enums** para tipos de dados consistentes
@@ -61,6 +64,8 @@ Este documento detalha tudo que foi implementado e o que ainda precisa ser desen
 - comandas, comanda_items, comanda_payments
 - delivery_orders, delivery_fees
 - loyalty_config, loyalty_rewards, loyalty_transactions
+- cashback_config, cashback_transactions
+- coupons, coupon_usages
 - financial_categories, financial_transactions
 - accounts_payable, accounts_receivable
 - audit_logs
@@ -251,6 +256,65 @@ backend/src/presentation/http/routes/
   └── comanda.routes.ts ✅
 ```
 
+### 9. Módulo de Delivery ✅ COMPLETO
+
+#### ✅ APIs Implementadas
+```typescript
+POST   /delivery/orders                   // Criar pedido de delivery
+GET    /delivery/orders                   // Listar pedidos com filtros
+GET    /delivery/orders/:id               // Detalhes do pedido
+PUT    /delivery/orders/:id/status        // Atualizar status do pedido
+GET    /delivery/customer/:customerId     // Pedidos do cliente
+GET    /delivery/fees                     // Listar taxas de entrega
+GET    /delivery/fees/:id                 // Detalhes da taxa
+POST   /delivery/fees                     // Criar taxa de entrega
+PUT    /delivery/fees/:id                 // Atualizar taxa
+DELETE /delivery/fees/:id                 // Desativar taxa
+POST   /delivery/calculate-fee            // Calcular taxa de entrega
+```
+
+#### ✅ Funcionalidades
+- `orderNumber` autoincremental para identificação única de pedidos
+- Validação de caixa aberto, cliente, endereço e produtos
+- Validação e atualização automática de estoque (quando trackStock=true)
+- Cálculo automático de totais (subtotal + taxa - desconto)
+- Atualização de totais do caixa (totalSales incrementado)
+- Gestão completa de taxas de entrega por bairro/cidade
+- Valor mínimo de pedido configurável por região
+- Entrega grátis acima de valor configurável
+- Cálculo inteligente de taxa baseado em localização e valor
+- Transições de status validadas: received → preparing → out_for_delivery → delivered | cancelled
+- Timestamps automáticos por status (preparingAt, outForDeliveryAt, deliveredAt)
+- Campo deliveryPerson para registrar entregador
+- Notas do cliente e internas
+- Tempo estimado de entrega
+- Filtros: status, cliente, sessão de caixa, período
+- Histórico completo de pedidos por cliente
+
+#### ✅ Regras de Negócio Implementadas
+- Apenas transições de status válidas são permitidas
+- Taxa calculada automaticamente baseada em bairro/cidade
+- Validação de valor mínimo para entrega
+- Entrega grátis quando pedido atinge valor configurado
+- Pedidos vinculados a caixa aberto obrigatoriamente
+- Autorização: cashier/manager/admin para criar e atualizar status
+- Gerentes/admins podem gerenciar taxas de entrega
+
+#### ✅ Arquivos Criados
+```
+backend/src/application/use-cases/delivery/
+  └── delivery.service.ts ✅
+
+backend/src/presentation/http/controllers/
+  └── delivery.controller.ts ✅
+
+backend/src/presentation/validators/
+  └── delivery.validator.ts ✅
+
+backend/src/presentation/http/routes/
+  └── delivery.routes.ts ✅
+```
+
 ---
 
 ## 🚧 O QUE PRECISA SER IMPLEMENTADO
@@ -310,48 +374,188 @@ backend/src/presentation/http/routes/
   └── sale.routes.ts ✅
 ```
 
-### 2. Módulo de Delivery 🟡 MÉDIA PRIORIDADE
+### 2. Módulo de Fidelidade ✅ COMPLETO
 
-#### APIs a Implementar
+#### ✅ APIs Implementadas
 ```typescript
-POST   /delivery                       // Criar pedido
-GET    /delivery                       // Listar pedidos
-GET    /delivery/:id                   // Detalhes do pedido
-PUT    /delivery/:id/status            // Atualizar status
-GET    /delivery/fees                  // Listar taxas
-POST   /delivery/fees                  // Criar/atualizar taxa
-GET    /delivery/customer/:customerId  // Pedidos do cliente
+GET    /loyalty/config                   // Obter configuração de fidelidade
+PUT    /loyalty/config                   // Atualizar configuração
+GET    /loyalty/rewards                  // Listar recompensas
+GET    /loyalty/rewards/:id              // Detalhes da recompensa
+POST   /loyalty/rewards                  // Criar recompensa
+PUT    /loyalty/rewards/:id              // Atualizar recompensa
+DELETE /loyalty/rewards/:id              // Desativar recompensa
+POST   /loyalty/redeem                   // Resgatar pontos por recompensa
+GET    /loyalty/customer/:id/balance     // Saldo de pontos do cliente
+GET    /loyalty/customer/:id/history     // Histórico de transações
+POST   /loyalty/adjust                   // Ajuste manual de pontos (admin)
+POST   /loyalty/calculate                // Calcular pontos para uma compra
 ```
 
-#### Fluxo de Status
+#### ✅ Funcionalidades
+- Configuração flexível do programa de fidelidade
+- Cálculo automático de pontos por compra (pointsPerReal configurável)
+- Valor mínimo de compra para ganhar pontos
+- Expiração automática de pontos (dias configuráveis)
+- Pontos mínimos para resgate (minPointsToRedeem)
+- Valor de conversão de pontos para reais
+- Catálogo de recompensas (produtos ou brindes)
+- Resgate de pontos por recompensas
+- Histórico completo de transações (earned, redeemed, expired, adjusted)
+- Ajustes manuais de pontos por administrador
+- Validação de estoque ao resgatar recompensas vinculadas a produtos
+- Filtros de produtos elegíveis (elegibleForLoyalty)
+- Aplicação global ou por produto
+- Saldo de pontos atualizado em tempo real
+
+#### ✅ Regras de Negócio Implementadas
+- Configuração única e ativa por vez
+- Pontos calculados automaticamente nas vendas (PDV, comandas, delivery)
+- Resgate valida saldo suficiente do cliente
+- Recompensas podem ser produtos ou valores fixos
+- Transações de expiração agendadas automaticamente
+- Ajustes manuais requerem autorização de admin
+- Histórico imutável de todas as transações
+- Saldo após (balanceAfter) registrado em cada transação
+
+#### ✅ Arquivos Criados
 ```
-received → preparing → out_for_delivery → delivered
-                ↓
-            cancelled
+backend/src/application/use-cases/loyalty/
+  └── loyalty.service.ts ✅
+
+backend/src/presentation/http/controllers/
+  └── loyalty.controller.ts ✅
+
+backend/src/presentation/validators/
+  └── loyalty.validator.ts ✅
+
+backend/src/presentation/http/routes/
+  └── loyalty.routes.ts ✅
 ```
 
-### 3. Módulo de Fidelidade 🟡 MÉDIA PRIORIDADE
+### 3. Módulo de Cashback ✅ COMPLETO
 
-#### APIs a Implementar
+#### ✅ APIs Implementadas
 ```typescript
-GET    /loyalty/config              // Configuração atual
-PUT    /loyalty/config              // Atualizar config
-GET    /loyalty/rewards             // Catálogo de recompensas
-POST   /loyalty/rewards             // Criar recompensa
-PUT    /loyalty/rewards/:id         // Editar recompensa
-POST   /loyalty/redeem              // Resgatar pontos
-GET    /loyalty/customer/:id        // Extrato do cliente
-POST   /loyalty/adjust              // Ajuste manual (admin)
+GET    /cashback/config                      // Obter configuração de cashback
+PUT    /cashback/config                      // Atualizar configuração
+GET    /cashback/customer/:id/balance        // Saldo de cashback do cliente
+GET    /cashback/customer/:id/history        // Histórico de transações de cashback
+POST   /cashback/calculate                   // Calcular cashback para uma compra
+POST   /cashback/redeem                      // Usar cashback em uma compra
+POST   /cashback/adjust                      // Ajuste manual de cashback (admin)
+POST   /cashback/expire                      // Processar expiração de cashback (job)
 ```
 
-#### Cálculos
-- Pontos ganhos por venda
-- Valor mínimo para ganhar pontos
-- Produtos elegíveis
-- Expiração de pontos
-- Conversão pontos → reais
+#### ✅ Funcionalidades
+- Configuração flexível do programa de cashback
+- Percentual de cashback configurável (cashbackPercentage)
+- Valor mínimo de compra para ganhar cashback
+- Limite máximo de cashback por compra (opcional)
+- Expiração automática de cashback (dias configuráveis)
+- Valor mínimo para usar cashback (minCashbackToUse)
+- Cálculo automático em vendas, comandas e delivery
+- Uso de cashback como forma de pagamento/desconto
+- Histórico completo de transações (earned, redeemed, expired, adjusted, reverted)
+- Ajustes manuais por administrador
+- Reversão automática em cancelamentos
+- Filtros de produtos elegíveis (earnsCashback)
+- Aplicação global ou por produto
+- Saldo atualizado em tempo real no cliente
 
-### 4. Módulo Financeiro 🟢 BAIXA PRIORIDADE
+#### ✅ Regras de Negócio Implementadas
+- Configuração única e ativa por vez
+- Cashback calculado automaticamente nas vendas
+- Uso de cashback valida saldo suficiente
+- Cashback usado é deduzido do saldo
+- Reversão completa em cancelamentos de venda
+- Expiração automática por job agendado
+- Apenas admin pode fazer ajustes manuais
+- Histórico imutável de todas as transações
+- Saldo após (balanceAfter) registrado em cada transação
+- Validação de valor mínimo para usar
+
+#### ✅ Arquivos Criados
+```
+backend/src/application/use-cases/cashback/
+  └── cashback.service.ts ✅
+
+backend/src/presentation/http/controllers/
+  └── cashback.controller.ts ✅
+
+backend/src/presentation/validators/
+  └── cashback.validator.ts ✅
+
+backend/src/presentation/http/routes/
+  └── cashback.routes.ts ✅
+```
+
+---
+
+### 4. Módulo de Cupons ✅ COMPLETO
+
+#### ✅ APIs Implementadas
+```typescript
+POST   /coupons                        // Criar cupom
+GET    /coupons                        // Listar cupons com filtros
+GET    /coupons/:id                    // Detalhes do cupom
+PUT    /coupons/:id                    // Atualizar cupom
+DELETE /coupons/:id                    // Desativar cupom
+POST   /coupons/validate               // Validar cupom
+POST   /coupons/apply                  // Aplicar cupom (internamente)
+GET    /coupons/:id/usage-history      // Histórico de uso do cupom
+GET    /coupons/customer/:id/used      // Cupons usados pelo cliente
+```
+
+#### ✅ Funcionalidades
+- Criação de cupons com código único
+- Dois tipos de cupons: percentual ou valor fixo
+- Valor mínimo de compra para aplicar cupom
+- Desconto máximo aplicável (para cupons percentuais)
+- Limite de uso global (usageLimit)
+- Período de validade (validFrom, validTo)
+- Status do cupom (active, inactive, expired, depleted)
+- Validação automática de disponibilidade
+- Aplicação de desconto em vendas, comandas e delivery
+- Histórico de uso por cupom
+- Histórico de cupons usados por cliente
+- Filtros por status, tipo, código
+- Contagem automática de usos
+- Expiração automática por data
+- Desativação manual por admin
+
+#### ✅ Regras de Negócio Implementadas
+- Código de cupom único e em maiúsculas
+- Validação de valor mínimo de compra
+- Validação de período de validade
+- Validação de limite de uso
+- Validação de status ativo
+- Cupons percentuais não podem exceder 100%
+- Desconto máximo aplicado em cupons percentuais
+- Histórico imutável de todas as aplicações
+- Vínculo com venda/comanda/delivery ao usar
+- Status atualizado automaticamente (expired quando validTo passa)
+- Status depleted quando atinge usageLimit
+- Apenas manager/admin podem criar e gerenciar cupons
+
+#### ✅ Arquivos Criados
+```
+backend/src/application/use-cases/coupons/
+  └── coupon.service.ts ✅
+
+backend/src/presentation/http/controllers/
+  └── coupon.controller.ts ✅
+
+backend/src/presentation/validators/
+  └── coupon.validator.ts ✅
+
+backend/src/presentation/http/routes/
+  └── coupon.routes.ts ✅
+```
+
+---
+
+### 5. Módulo Financeiro 🟢 BAIXA PRIORIDADE
 
 #### APIs a Implementar
 ```typescript
@@ -373,7 +577,7 @@ GET    /financial/categories         // Categorias
 POST   /financial/categories         // Criar categoria
 ```
 
-### 5. Módulo DRE (Income Statement) 🟢 BAIXA PRIORIDADE
+### 6. Módulo DRE (Income Statement) 🟢 BAIXA PRIORIDADE
 
 #### APIs a Implementar
 ```typescript
@@ -396,7 +600,7 @@ SELECT SUM(quantity * cost_price) FROM sale_items
 SELECT SUM(amount) FROM financial_transactions WHERE category_type = 'expense'
 ```
 
-### 6. Módulo Dashboard 🟢 BAIXA PRIORIDADE
+### 7. Módulo Dashboard 🟢 BAIXA PRIORIDADE
 
 #### APIs a Implementar
 ```typescript
@@ -408,7 +612,7 @@ GET    /dashboard/alerts             // Alertas (estoque, vencimentos)
 GET    /dashboard/realtime           // Métricas em tempo real
 ```
 
-### 7. Integração com Balança Toledo 🔵 FUTURA
+### 8. Integração com Balança Toledo 🔵 FUTURA
 
 #### Implementação
 ```typescript
@@ -510,38 +714,39 @@ frontend/
 2. ✅ Clientes
 3. ✅ Produtos
 4. ✅ Caixa
-5. 🚧 PDV (próximo passo)
+5. ✅ PDV
+6. ✅ Comandas
+7. ✅ Delivery
+8. ✅ Fidelidade
+9. ✅ Cashback
+10. ✅ Cupons
 
-### Fase 2: Operações (2-3 semanas)
-6. 🔲 Comandas
-7. 🔲 Delivery
-8. 🔲 Fidelidade
-9. 🔲 Ajustes e reaberturas
+### Fase 2: Financeiro e Relatórios (2-3 semanas)
+11. 🔲 Transações financeiras
+12. 🔲 Contas a pagar/receber
+13. 🔲 DRE
+14. 🔲 Relatórios avançados
 
-### Fase 3: Financeiro (2 semanas)
-10. 🔲 Transações financeiras
-11. 🔲 Contas a pagar/receber
-12. 🔲 DRE
+### Fase 3: Frontend (4-6 semanas)
+15. 🔲 Design system
+16. 🔲 Autenticação
+17. 🔲 PDV
+18. 🔲 Caixa
+19. 🔲 Comandas
+20. 🔲 Cadastros
+21. 🔲 Dashboard
+22. 🔲 Fidelidade/Cashback/Cupons
 
-### Fase 4: Frontend (4-6 semanas)
-13. 🔲 Design system
-14. 🔲 Autenticação
-15. 🔲 PDV
-16. 🔲 Caixa
-17. 🔲 Comandas
-18. 🔲 Cadastros
-19. 🔲 Dashboard
+### Fase 4: Integrações (1-2 semanas)
+23. 🔲 Impressora térmica
+24. 🔲 Balança Toledo
+25. 🔲 WhatsApp (notificações)
 
-### Fase 5: Integrações (1-2 semanas)
-20. 🔲 Impressora térmica
-21. 🔲 Balança Toledo
-22. 🔲 WhatsApp (notificações)
-
-### Fase 6: Refinamentos (1-2 semanas)
-23. 🔲 Relatórios avançados
-24. 🔲 Backup automatizado
-25. 🔲 Performance optimization
-26. 🔲 Testes automatizados
+### Fase 5: Refinamentos (1-2 semanas)
+26. 🔲 Relatórios avançados
+27. 🔲 Backup automatizado
+28. 🔲 Performance optimization
+29. 🔲 Testes automatizados
 
 ---
 
@@ -558,29 +763,29 @@ frontend/
    npm run dev
    ```
 
-2. **Implementar Módulo de Produtos** (seguir o padrão de Customers)
-   - Criar service
-   - Criar controller
-   - Criar validators
-   - Criar routes
-   - Adicionar no app.ts
+2. **Sistema Backend COMPLETO! 🎉**
+   - ✅ Todos os módulos principais implementados
+   - ✅ Fidelidade, Cashback e Cupons funcionais
+   - ✅ PDV, Comandas e Delivery operacionais
+   - ✅ Gestão de caixa e produtos completa
 
-3. **Implementar Módulo de Caixa**
-   - Lógica de abertura
-   - Lógica de fechamento duplo
-   - Validações
+3. **Próximas Prioridades:**
+   - 🔴 Iniciar Frontend (mais importante agora!)
+   - 🟡 Módulo Financeiro (se necessário)
+   - 🟢 Relatórios e DRE (quando frontend estiver pronto)
 
-4. **Implementar Módulo PDV**
-   - Lógica de venda
-   - Cálculos de pontos
-   - Integração com estoque
-   - Transação financeira automática
-
-5. **Iniciar Frontend**
+4. **Iniciar Frontend:**
    - Setup do Vite + React
    - Instalar shadcn/ui
    - Criar tela de login
    - Criar tela de PDV
+   - Integrar com as APIs
+
+5. **Testar Integrações:**
+   - Testar fluxo completo de venda com fidelidade
+   - Testar uso de cashback em compras
+   - Testar aplicação de cupons
+   - Validar cálculos de pontos e descontos
 
 ---
 
@@ -728,4 +933,24 @@ Se tiver dúvidas durante a implementação:
 
 Este sistema será uma ferramenta poderosa para a GELATINI!
 
-Versão 1.0 - Janeiro 2026
+---
+
+## 🎉 Status Atual
+
+**Backend Completo!** Todos os módulos principais estão implementados e funcionais:
+- ✅ Autenticação e Autorização
+- ✅ Gestão de Clientes
+- ✅ Catálogo de Produtos
+- ✅ Controle de Caixa
+- ✅ PDV (Ponto de Venda)
+- ✅ Comandas
+- ✅ Delivery
+- ✅ Programa de Fidelidade
+- ✅ Sistema de Cashback
+- ✅ Cupons de Desconto
+
+**Próximo Foco:** Desenvolvimento do Frontend!
+
+---
+
+Versão 2.0 - Janeiro 2026

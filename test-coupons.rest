@@ -1,0 +1,287 @@
+### === TESTE DE CUPONS - Sistema Gelatini ===
+
+### 1. Login
+# @name login
+POST http://localhost:3000/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "hygordavidaraujo@gmail.com",
+  "password": "admin123"
+}
+
+### Extrair token
+@token = {{login.response.body.token}}
+
+### 2. Criar Cupom 15OFF
+# @name createCoupon
+POST http://localhost:3000/api/v1/coupons
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "code": "15OFF",
+  "description": "Cupom de 15% de desconto",
+  "couponType": "percentage",
+  "discountValue": 15,
+  "minPurchaseValue": 0,
+  "usageLimit": 100,
+  "validFrom": "2026-01-01T00:00:00Z",
+  "validTo": "2026-12-31T23:59:59Z"
+}
+
+### 3. Listar cupons
+GET http://localhost:3000/api/v1/coupons
+Authorization: Bearer {{token}}
+
+### 4. Buscar sessão de caixa aberta
+# @name cashSession
+GET http://localhost:3000/api/v1/cash-sessions?status=open&limit=1
+Authorization: Bearer {{token}}
+
+### Extrair session ID
+@cashSessionId = {{cashSession.response.body.data[0].id}}
+
+### 5. Buscar cliente
+# @name customer
+GET http://localhost:3000/api/v1/customers?limit=1
+Authorization: Bearer {{token}}
+
+### Extrair customer ID
+@customerId = {{customer.response.body.data[0].id}}
+
+### 6. Buscar produtos
+# @name products
+GET http://localhost:3000/api/v1/products?limit=3
+Authorization: Bearer {{token}}
+
+### Extrair product IDs
+@product1Id = {{products.response.body.data[0].id}}
+@product1Price = {{products.response.body.data[0].price}}
+@product2Id = {{products.response.body.data[1].id}}
+
+### 7. Validar cupom (subtotal R$ 24 - 2x produto1 de R$12)
+# @name validateCoupon
+POST http://localhost:3000/api/v1/coupons/validate
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "code": "15OFF",
+  "subtotal": 24,
+  "customerId": "{{customerId}}"
+}
+
+### Extrair desconto
+@discount = {{validateCoupon.response.body.discountAmount}}
+@couponId = {{createCoupon.response.body.id}}
+
+### ========================================
+### TESTE 1: VENDA PDV COM CUPOM
+### ========================================
+
+### 8. Criar venda PDV com cupom (2x produto1 = R$24, desconto 15% = R$3.60, total = R$20.40)
+# @name salePdv
+POST http://localhost:3000/api/v1/sales
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "cashSessionId": "{{cashSessionId}}",
+  "customerId": "{{customerId}}",
+  "saleType": "pdv",
+  "items": [
+    {
+      "productId": "{{product1Id}}",
+      "quantity": 2
+    }
+  ],
+  "discount": 3.60,
+  "payments": [
+    {
+      "paymentMethod": "cash",
+      "amount": 20.40
+    }
+  ]
+}
+
+### 9. Registrar uso do cupom na venda PDV
+POST http://localhost:3000/api/v1/coupons/apply
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "couponId": "{{couponId}}",
+  "customerId": "{{customerId}}",
+  "discountApplied": 3.60,
+  "saleId": "{{salePdv.response.body.id}}"
+}
+
+### ========================================
+### TESTE 2: COMANDA COM CUPOM
+### ========================================
+
+### 10. Criar comanda
+# @name comanda
+POST http://localhost:3000/api/v1/comandas
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "cashSessionId": "{{cashSessionId}}",
+  "customerName": "Cliente Teste Cupom",
+  "tableNumber": "Mesa 10"
+}
+
+### Extrair comanda ID
+@comandaId = {{comanda.response.body.id}}
+
+### 11. Adicionar item 1 na comanda
+POST http://localhost:3000/api/v1/comandas/{{comandaId}}/items
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "productId": "{{product1Id}}",
+  "quantity": 1
+}
+
+### 12. Adicionar item 2 na comanda
+POST http://localhost:3000/api/v1/comandas/{{comandaId}}/items
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "productId": "{{product2Id}}",
+  "quantity": 2
+}
+
+### 13. Buscar comanda atualizada
+# @name comandaDetail
+GET http://localhost:3000/api/v1/comandas/{{comandaId}}
+Authorization: Bearer {{token}}
+
+### 14. Validar cupom para comanda (subtotal ~R$36, desconto 15% = R$5.40)
+POST http://localhost:3000/api/v1/coupons/validate
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "code": "15OFF",
+  "subtotal": 36,
+  "customerId": "{{customerId}}"
+}
+
+### 15. Fechar comanda com cupom
+# @name closeComanda
+POST http://localhost:3000/api/v1/comandas/{{comandaId}}/close
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "discount": 5.40,
+  "payments": [
+    {
+      "paymentMethod": "pix",
+      "amount": 30.60
+    }
+  ]
+}
+
+### 16. Registrar uso do cupom na comanda
+POST http://localhost:3000/api/v1/coupons/apply
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "couponId": "{{couponId}}",
+  "customerId": "{{customerId}}",
+  "discountApplied": 5.40,
+  "comandaId": "{{comandaId}}"
+}
+
+### ========================================
+### TESTE 3: DELIVERY COM CUPOM
+### ========================================
+
+### 17. Buscar endereço do cliente
+# @name customerDetail
+GET http://localhost:3000/api/v1/customers/{{customerId}}
+Authorization: Bearer {{token}}
+
+### 18. Criar endereço (se necessário)
+# @name address
+POST http://localhost:3000/api/v1/customers/{{customerId}}/addresses
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "zipCode": "01001000",
+  "street": "Rua Teste Cupom",
+  "number": "123",
+  "neighborhood": "Centro",
+  "city": "São Paulo",
+  "state": "SP",
+  "isDefault": true
+}
+
+### 19. Validar cupom para delivery (subtotal R$36, desconto 15% = R$5.40)
+POST http://localhost:3000/api/v1/coupons/validate
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "code": "15OFF",
+  "subtotal": 36,
+  "customerId": "{{customerId}}"
+}
+
+### 20. Criar pedido delivery com cupom (subtotal R$36, desconto R$5.40, taxa R$5, total = R$35.60)
+# @name delivery
+POST http://localhost:3000/api/v1/delivery/orders
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "cashSessionId": "{{cashSessionId}}",
+  "customerId": "{{customerId}}",
+  "customerAddressId": "USE_ADDRESS_ID_HERE",
+  "items": [
+    {
+      "productId": "{{product1Id}}",
+      "quantity": 3
+    }
+  ],
+  "deliveryFee": 5.00,
+  "discount": 5.40,
+  "estimatedTime": 30,
+  "customerNotes": "Pedido com cupom de desconto"
+}
+
+### 21. Registrar uso do cupom no delivery
+POST http://localhost:3000/api/v1/coupons/apply
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "couponId": "{{couponId}}",
+  "customerId": "{{customerId}}",
+  "discountApplied": 5.40,
+  "deliveryOrderId": "{{delivery.response.body.id}}"
+}
+
+### ========================================
+### ESTATÍSTICAS
+### ========================================
+
+### 22. Ver detalhes do cupom
+GET http://localhost:3000/api/v1/coupons/{{couponId}}
+Authorization: Bearer {{token}}
+
+### 23. Estatísticas gerais de cupons
+GET http://localhost:3000/api/v1/coupons/statistics
+Authorization: Bearer {{token}}
+
+### 24. Relatório de uso de cupons
+GET http://localhost:3000/api/v1/coupons/usage-report
+Authorization: Bearer {{token}}

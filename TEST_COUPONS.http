@@ -1,0 +1,47 @@
+# Teste de Cupons - 15%OFF
+
+## 1. Login
+POST http://localhost:3000/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "hygordavidaraujo@gmail.com",
+  "password": "admin123"
+}
+
+## Salvar token da resposta acima e usar nos próximos requests
+
+## 2. Criar Cupom 15%OFF
+POST http://localhost:3000/api/v1/coupons
+Content-Type: application/json
+Authorization: Bearer SEU_TOKEN_AQUI
+
+{
+  "code": "15%OFF",
+  "description": "Cupom de 15% de desconto",
+  "couponType": "percentage",
+  "discountValue": 15,
+  "minPurchaseValue": 0,
+  "usageLimit": 100,
+  "validFrom": "2026-01-01T00:00:00Z",
+  "validTo": "2026-12-31T23:59:59Z"
+}
+
+## 3. Validar Cupom (antes de usar em venda)
+POST http://localhost:3000/api/v1/coupons/validate
+Content-Type: application/json
+Authorization: Bearer SEU_TOKEN_AQUI
+
+{
+  "code": "15%OFF",
+  "subtotal": 100,
+  "customerId": "ID_DO_CLIENTE"
+}
+
+## 4. Listar cupons
+GET http://localhost:3000/api/v1/coupons
+Authorization: Bearer SEU_TOKEN_AQUI
+
+## 5. Ver estatísticas
+GET http://localhost:3000/api/v1/coupons/statistics
+Authorization: Bearer SEU_TOKEN_AQUI

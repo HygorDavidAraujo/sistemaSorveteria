@@ -1,0 +1,290 @@
+@baseUrl = http://localhost:3000/api/v1
+@adminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5OGFkYTAyYS1mMTlhLTQ5MTUtYWYyMC0wM2YwNDY5YTFkNTQiLCJlbWFpbCI6ImFkbWluQGdlbGF0aW5pLmNvbSIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTczNTc3OTg2MCwiZXhwIjoxNzM1NzgzNDYwfQ.bxMCGXnAYVu2MYMxqzM1hgI4Y5xL9TDa5dPZ4bZ4L8k
+@customerId = {{createCustomerResponse.response.body.$.data.id}}
+@saleId = {{createSaleResponse.response.body.$.data.id}}
+@rewardId = {{createRewardResponse.response.body.$.data.id}}
+
+### ============================================================
+### LOYALTY - PROGRAMA DE PONTOS
+### ============================================================
+
+### 1. Obter configuração de Loyalty
+GET {{baseUrl}}/loyalty/config
+Authorization: Bearer {{adminToken}}
+
+### 2. Atualizar configuração de Loyalty
+# @name updateLoyaltyConfig
+PATCH {{baseUrl}}/loyalty/config
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "pointsPerReal": 10,
+  "minPurchaseForPoints": 10,
+  "pointsExpirationDays": 180,
+  "minPointsToRedeem": 100,
+  "pointsRedemptionValue": 0.01,
+  "isActive": true,
+  "applyToAllProducts": true
+}
+
+### 3. Calcular pontos para uma compra
+POST {{baseUrl}}/loyalty/calculate
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "subtotal": 50.00,
+  "productIds": []
+}
+
+### 4. Criar cliente para testes
+# @name createCustomerResponse
+POST {{baseUrl}}/customers
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Cliente Fidelidade Teste",
+  "phone": "(11) 99999-9999",
+  "cpf": "123.456.789-00",
+  "email": "cliente.fidelidade@test.com"
+}
+
+### 5. Adicionar pontos ao cliente
+# @name addPointsResponse
+POST {{baseUrl}}/loyalty/points
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "customerId": "{{customerId}}",
+  "points": 500,
+  "description": "Pontos ganhos em compra de teste"
+}
+
+### 6. Ver extrato de pontos do cliente
+GET {{baseUrl}}/loyalty/customers/{{customerId}}/statement?page=1&limit=10
+Authorization: Bearer {{adminToken}}
+
+### 7. Resgatar pontos
+POST {{baseUrl}}/loyalty/points/redeem
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "customerId": "{{customerId}}",
+  "points": 100,
+  "description": "Resgate de pontos em desconto"
+}
+
+### 8. Ajustar pontos manualmente (admin)
+POST {{baseUrl}}/loyalty/points/adjust
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "customerId": "{{customerId}}",
+  "points": -50,
+  "description": "Ajuste manual de pontos - correção de erro"
+}
+
+### 9. Criar prêmio
+# @name createRewardResponse
+POST {{baseUrl}}/loyalty/rewards
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Sorvete Grátis 500ml",
+  "description": "Troque 200 pontos por um sorvete de 500ml",
+  "pointsCost": 200,
+  "quantityAvailable": 50,
+  "isActive": true
+}
+
+### 10. Listar prêmios
+GET {{baseUrl}}/loyalty/rewards?isActive=true&page=1&limit=10
+Authorization: Bearer {{adminToken}}
+
+### 11. Obter prêmio específico
+GET {{baseUrl}}/loyalty/rewards/{{rewardId}}
+Authorization: Bearer {{adminToken}}
+
+### 12. Resgatar prêmio
+POST {{baseUrl}}/loyalty/rewards/{{rewardId}}/redeem
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "customerId": "{{customerId}}",
+  "quantity": 1
+}
+
+### 13. Atualizar prêmio
+PATCH {{baseUrl}}/loyalty/rewards/{{rewardId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "pointsCost": 150,
+  "quantityAvailable": 100
+}
+
+### 14. Estatísticas do programa de pontos
+GET {{baseUrl}}/loyalty/statistics
+Authorization: Bearer {{adminToken}}
+
+### 15. Expirar pontos antigos (job)
+POST {{baseUrl}}/loyalty/points/expire
+Authorization: Bearer {{adminToken}}
+
+### ============================================================
+### CASHBACK - PROGRAMA DE DINHEIRO DE VOLTA
+### ============================================================
+
+### 16. Obter configuração de Cashback
+GET {{baseUrl}}/cashback/config
+Authorization: Bearer {{adminToken}}
+
+### 17. Atualizar configuração de Cashback
+# @name updateCashbackConfig
+PATCH {{baseUrl}}/cashback/config
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "cashbackPercentage": 5,
+  "minPurchaseForCashback": 20,
+  "maxCashbackPerPurchase": 50,
+  "cashbackExpirationDays": 180,
+  "minCashbackToUse": 5,
+  "isActive": true,
+  "applyToAllProducts": true
+}
+
+### 18. Calcular cashback para uma compra
+POST {{baseUrl}}/cashback/calculate
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "subtotal": 100.00,
+  "productIds": []
+}
+
+### 19. Adicionar cashback ao cliente
+# @name addCashbackResponse
+POST {{baseUrl}}/cashback/add
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "customerId": "{{customerId}}",
+  "amount": 10.50,
+  "description": "Cashback ganho em compra de teste"
+}
+
+### 20. Ver extrato de cashback do cliente
+GET {{baseUrl}}/cashback/customers/{{customerId}}/statement?page=1&limit=10
+Authorization: Bearer {{adminToken}}
+
+### 21. Usar cashback em uma compra
+POST {{baseUrl}}/cashback/use
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "customerId": "{{customerId}}",
+  "amount": 5.00,
+  "description": "Uso de cashback em desconto"
+}
+
+### 22. Ajustar cashback manualmente (admin)
+POST {{baseUrl}}/cashback/adjust
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "customerId": "{{customerId}}",
+  "amount": 5.00,
+  "description": "Ajuste manual de cashback - bonificação especial"
+}
+
+### 23. Criar segundo cliente para teste de transferência
+# @name createCustomer2Response
+POST {{baseUrl}}/customers
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Cliente Destino Cashback",
+  "phone": "(11) 98888-8888",
+  "cpf": "987.654.321-00",
+  "email": "cliente.destino@test.com"
+}
+
+### 24. Transferir cashback entre clientes (admin)
+POST {{baseUrl}}/cashback/transfer
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "fromCustomerId": "{{customerId}}",
+  "toCustomerId": "{{createCustomer2Response.response.body.$.data.id}}",
+  "amount": 2.00,
+  "description": "Transferência de cashback por solicitação do cliente"
+}
+
+### 25. Estatísticas do programa de cashback
+GET {{baseUrl}}/cashback/statistics
+Authorization: Bearer {{adminToken}}
+
+### 26. Expirar cashback antigo (job)
+POST {{baseUrl}}/cashback/expire
+Authorization: Bearer {{adminToken}}
+
+### ============================================================
+### CENÁRIOS DE TESTE COMPLETOS
+### ============================================================
+
+### CENÁRIO 1: Venda no PDV com acúmulo de pontos e cashback
+# 1. Cliente compra R$ 100,00
+# 2. Ganha 1000 pontos (10 pontos por real)
+# 3. Ganha R$ 5,00 de cashback (5%)
+# 4. Pode usar pontos ou cashback na próxima compra
+
+### CENÁRIO 2: Venda no PDV usando pontos
+# 1. Cliente tem 1000 pontos
+# 2. Resgata 500 pontos = R$ 5,00 de desconto
+# 3. Paga R$ 45,00 em vez de R$ 50,00
+# 4. Ainda ganha pontos e cashback sobre o valor pago
+
+### CENÁRIO 3: Venda no PDV usando cashback
+# 1. Cliente tem R$ 10,00 de cashback
+# 2. Usa R$ 5,00 de cashback
+# 3. Paga R$ 45,00 em vez de R$ 50,00
+# 4. Ganha pontos sobre o valor pago
+
+### CENÁRIO 4: Cliente resgata prêmio
+# 1. Cliente tem 300 pontos
+# 2. Resgata prêmio de 200 pontos (Sorvete Grátis)
+# 3. Fica com 100 pontos
+# 4. Prêmio é retirado do estoque
+
+### CENÁRIO 5: Produtos selecionados para programa
+# 1. Configurar applyToAllProducts = false
+# 2. Marcar produtos específicos com eligibleForLoyalty = true e earnsCashback = true
+# 3. Apenas esses produtos acumulam pontos/cashback
+# 4. Outros produtos não acumulam
+
+### ============================================================
+### CONFIGURAÇÃO DE PRODUTOS PARA LOYALTY/CASHBACK
+### ============================================================
+
+### Atualizar produto para participar do programa
+# Usar a API de produtos para marcar:
+# - eligibleForLoyalty: true/false
+# - loyaltyPointsMultiplier: 1.0, 1.5, 2.0 (multiplica pontos)
+# - earnsCashback: true/false
+# - cashbackPercentage: null (usa global) ou valor específico

@@ -21,12 +21,14 @@ model User {
   accountsPayable       AccountPayable[]
   accountsReceivable    AccountReceivable[]
   auditLogs             AuditLog[]
+  cashbackTransactions  CashbackTransaction[]
   cashSessionsClosed    CashSession[]          @relation("CashSessionCloser")
   cashSessionsValidated CashSession[]          @relation("CashSessionValidator")
   cashSessionsOpened    CashSession[]          @relation("CashSessionOpener")
   comandaItemsAdded     ComandaItem[]
   comandasClosed        Comanda[]              @relation("ComandaCloser")
   comandasOpened        Comanda[]              @relation("ComandaOpener")
+  coupons               Coupon[]
   deliveryOrders        DeliveryOrder[]
   financialTransactions FinancialTransaction[]
   loyaltyTransactions   LoyaltyTransaction[]
@@ -65,18 +67,22 @@ model Customer {
   cpf                 String?              @unique @db.VarChar(14)
   notes               String?
   isActive            Boolean              @default(true) @map("is_active")
-  totalPurchases      Decimal              @default(0) @map("total_purchases") @db.Decimal(10, 2)
-  purchaseCount       Int                  @default(0) @map("purchase_count")
-  loyaltyPoints       Int                  @default(0) @map("loyalty_points")
-  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdById         String?              @map("created_by") @db.Uuid
-  accountsReceivable  AccountReceivable[]
-  comandas            Comanda[]
-  addresses           CustomerAddress[]
-  deliveryOrders      DeliveryOrder[]
-  loyaltyTransactions LoyaltyTransaction[]
-  sales               Sale[]
+  totalPurchases         Decimal                 @default(0) @map("total_purchases") @db.Decimal(10, 2)
+  purchaseCount          Int                     @default(0) @map("purchase_count")
+  loyaltyPoints          Int                     @default(0) @map("loyalty_points")
+  cashbackBalance        Decimal                 @default(0) @map("cashback_balance") @db.Decimal(10, 2)
+  totalCashbackEarned    Decimal                 @default(0) @map("total_cashback_earned") @db.Decimal(10, 2)
+  createdAt              DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdById            String?                 @map("created_by") @db.Uuid
+  accountsReceivable     AccountReceivable[]
+  cashbackTransactions   CashbackTransaction[]
+  comandas               Comanda[]
+  addresses              CustomerAddress[]
+  couponUsages           CouponUsage[]
+  deliveryOrders         DeliveryOrder[]
+  loyaltyTransactions    LoyaltyTransaction[]
+  sales                  Sale[]
 
   @@index([name])
   @@index([phone])
@@ -134,6 +140,8 @@ model Product {
   trackStock              Boolean         @default(false) @map("track_stock")
   currentStock            Decimal         @default(0) @map("current_stock") @db.Decimal(10, 3)
   minStock                Decimal         @default(0) @map("min_stock") @db.Decimal(10, 3)
+  cashbackPercentage      Decimal?        @map("cashback_percentage") @db.Decimal(5, 2)
+  earnsCashback           Boolean         @default(false) @map("earns_cashback")
   isActive                Boolean         @default(true) @map("is_active")
   createdAt               DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt               DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -430,15 +438,96 @@ model DeliveryFee {
 model LoyaltyConfig {
   id                   String   @id @default(uuid()) @db.Uuid
   pointsPerReal        Decimal  @map("points_per_real") @db.Decimal(5, 2)
-  minPurchaseValue     Decimal  @default(0) @map("min_purchase_value") @db.Decimal(10, 2)
+  minPurchaseForPoints Decimal  @default(0) @map("min_purchase_for_points") @db.Decimal(10, 2)
   pointsExpirationDays Int?     @map("points_expiration_days")
-  pointsToRealRatio    Decimal  @map("points_to_real_ratio") @db.Decimal(5, 2)
-  minPointsRedemption  Int      @default(100) @map("min_points_redemption")
+  minPointsToRedeem    Int      @default(100) @map("min_points_to_redeem")
+  pointsRedemptionValue Decimal @default(0.01) @map("points_redemption_value") @db.Decimal(5, 4)
+  applyToAllProducts   Boolean  @default(true) @map("apply_to_all_products")
   isActive             Boolean  @unique(map: "idx_loyalty_config_active") @default(true) @map("is_active")
   createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("loyalty_config")
+}
+
+model CashbackConfig {
+  id                     String   @id @default(uuid()) @db.Uuid
+  cashbackPercentage     Decimal  @map("cashback_percentage") @db.Decimal(5, 2)
+  minPurchaseForCashback Decimal  @default(0) @map("min_purchase_for_cashback") @db.Decimal(10, 2)
+  maxCashbackPerPurchase Decimal? @map("max_cashback_per_purchase") @db.Decimal(10, 2)
+  cashbackExpirationDays Int?     @map("cashback_expiration_days")
+    minCashbackToUse       Decimal  @default(5) @map("min_cashback_to_use") @db.Decimal(10, 2)
+    applyToAllProducts     Boolean  @default(true) @map("apply_to_all_products")
+  isActive               Boolean  @default(true) @map("is_active")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("cashback_config")
+}
+
+model CashbackTransaction {
+  id                 String                   @id @default(uuid()) @db.Uuid
+  customerId         String                   @map("customer_id") @db.Uuid
+  transactionType    CashbackTransactionType  @map("transaction_type")
+  amount             Decimal                  @db.Decimal(10, 2)
+  balanceAfter       Decimal                  @map("balance_after") @db.Decimal(10, 2)
+  saleId             String?                  @map("sale_id") @db.Uuid
+  comandaId          String?                  @map("comanda_id") @db.Uuid
+  deliveryOrderId    String?                  @map("delivery_order_id") @db.Uuid
+  description        String?
+  expiresAt          DateTime?                @map("expires_at") @db.Timestamptz(6)
+  createdAt          DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdById        String?                  @map("created_by") @db.Uuid
+  customer           Customer                 @relation(fields: [customerId], references: [id])
+  createdBy          User?                    @relation(fields: [createdById], references: [id])
+
+  @@index([customerId])
+  @@index([createdAt])
+  @@index([expiresAt])
+  @@map("cashback_transactions")
+}
+
+model Coupon {
+  id              String       @id @default(uuid()) @db.Uuid
+  code            String       @unique @db.VarChar(50)
+  description     String?
+  couponType      CouponType   @map("coupon_type")
+  discountValue   Decimal      @map("discount_value") @db.Decimal(10, 2)
+  minPurchaseValue Decimal     @default(0) @map("min_purchase_value") @db.Decimal(10, 2)
+  maxDiscount     Decimal?     @map("max_discount") @db.Decimal(10, 2)
+  usageLimit      Int?         @map("usage_limit")
+  usageCount      Int          @default(0) @map("usage_count")
+  validFrom       DateTime     @map("valid_from") @db.Timestamptz(6)
+  validTo         DateTime?    @map("valid_to") @db.Timestamptz(6)
+  status          CouponStatus @default(active)
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdById     String       @map("created_by") @db.Uuid
+  createdBy       User         @relation(fields: [createdById], references: [id])
+  usages          CouponUsage[]
+
+  @@index([code])
+  @@index([status])
+  @@index([validFrom, validTo])
+  @@map("coupons")
+}
+
+model CouponUsage {
+  id              String   @id @default(uuid()) @db.Uuid
+  couponId        String   @map("coupon_id") @db.Uuid
+  customerId      String   @map("customer_id") @db.Uuid
+  saleId          String?  @map("sale_id") @db.Uuid
+  comandaId       String?  @map("comanda_id") @db.Uuid
+  deliveryOrderId String?  @map("delivery_order_id") @db.Uuid
+  discountApplied Decimal  @map("discount_applied") @db.Decimal(10, 2)
+  usedAt          DateTime @default(now()) @map("used_at") @db.Timestamptz(6)
+  coupon          Coupon   @relation(fields: [couponId], references: [id])
+  customer        Customer @relation(fields: [customerId], references: [id])
+
+  @@index([couponId])
+  @@index([customerId])
+  @@index([usedAt])
+  @@map("coupon_usages")
 }
 
 model LoyaltyReward {
@@ -654,6 +743,25 @@ enum LoyaltyTransactionType {
   expire
   adjustment
   manual
+}
+
+enum CashbackTransactionType {
+  earn
+  redeem
+  expire
+  adjustment
+  manual
+}
+
+enum CouponType {
+  percentage
+  fixed_value
+}
+
+enum CouponStatus {
+  active
+  inactive
+  expired
 }
 
 enum CategoryType {

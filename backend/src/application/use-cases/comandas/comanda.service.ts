@@ -1,6 +1,9 @@
 import { PrismaClient, ComandaStatus, PaymentMethod } from '@prisma/client';
 import prisma from '@infrastructure/database/prisma-client';
 import { AppError } from '@shared/errors/app-error';
+import { LoyaltyService } from '@application/use-cases/loyalty/loyalty.service';
+import { CashbackService } from '@application/use-cases/cashback/cashback.service';
+import { CouponService } from '@application/use-cases/coupons/coupon.service';
 
 export interface CreateComandaDTO {
   tableNumber?: string;
@@ -22,6 +25,7 @@ export interface UpdateItemDTO {
 
 export interface CloseComandaDTO {
   discount?: number;
+  couponCode?: string;
   payments: {
     paymentMethod: PaymentMethod;
     amount: number;
@@ -41,7 +45,15 @@ export interface ComandaFilters {
 }
 
 export class ComandaService {
-  constructor(private prismaClient: PrismaClient = prisma) {}
+  private loyaltyService: LoyaltyService;
+  private cashbackService: CashbackService;
+  private couponService: CouponService;
+
+  constructor(private prismaClient: PrismaClient = prisma) {
+    this.loyaltyService = new LoyaltyService(this.prismaClient);
+    this.cashbackService = new CashbackService(this.prismaClient);
+    this.couponService = new CouponService(this.prismaClient);
+  }
 
   private includeRelations() {
     return {
@@ -504,6 +516,13 @@ export class ComandaService {
   }
 
   async closeComanda(comandaId: string, data: CloseComandaDTO) {
+    const addDays = (days?: number | null) => {
+      if (!days) return undefined;
+      const date = new Date();
+      date.setDate(date.getDate() + days);
+      return date;
+    };
+
     // Validar comanda
     const comanda = await this.prismaClient.comanda.findUnique({
       where: { id: comandaId },
@@ -528,21 +547,71 @@ export class ComandaService {
       throw new AppError('Comanda não possui itens ativos', 400);
     }
 
-    // Validar pagamentos
+    const productIds = comanda.items.map((item) => item.productId);
+
+    // Cliente (se houver) para pontos/cashback
+    let customer: any = null;
+    if (comanda.customerId) {
+      customer = await this.prismaClient.customer.findUnique({
+        where: { id: comanda.customerId },
+        select: {
+          id: true,
+          loyaltyPoints: true,
+          cashbackBalance: true,
+        },
+      });
+
+      if (!customer) {
+        throw new AppError('Cliente não encontrado', 404);
+      }
+    }
+
+    if (data.couponCode && !customer) {
+      throw new AppError('Cupom exige um cliente identificado', 400);
+    }
+
     if (!data.payments || data.payments.length === 0) {
       throw new AppError('Informe ao menos uma forma de pagamento', 400);
     }
 
     const discount = data.discount || 0;
-    const total = Number(comanda.subtotal) - discount;
+    const baseForCoupon = Math.max(Number(comanda.subtotal) - discount, 0);
+
+    let couponDiscount = 0;
+    let validatedCoupon: any = null;
+    if (data.couponCode) {
+      validatedCoupon = await this.couponService.validateCoupon(
+        data.couponCode,
+        baseForCoupon,
+        comanda.customerId!
+      );
+      couponDiscount = validatedCoupon.discountAmount;
+    }
+
+    const total = Number(comanda.subtotal) - discount - couponDiscount;
 
     const totalPayments = data.payments.reduce((sum, p) => sum + p.amount, 0);
 
     if (Math.abs(totalPayments - total) > 0.01) {
       throw new AppError(
-        `O total dos pagamentos (R$ ${totalPayments.toFixed(2)}) não corresponde ao total da comanda (R$ ${total.toFixed(2)})`,
+        `O total dos pagamentos (R$ ${totalPayments.toFixed(
+          2
+        )}) não corresponde ao total da comanda (R$ ${total.toFixed(2)})`,
         400
       );
+    }
+
+    // Pontos e cashback
+    let loyaltyPointsEarned = 0;
+    let cashbackEarned = 0;
+    let loyaltyConfig = null;
+    let cashbackConfig = null;
+
+    if (customer) {
+      loyaltyPointsEarned = await this.loyaltyService.calculatePoints(total, productIds);
+      cashbackEarned = await this.cashbackService.calculateCashback(total, productIds);
+      loyaltyConfig = await this.loyaltyService.getLoyaltyConfig();
+      cashbackConfig = await this.cashbackService.getCashbackConfig();
     }
 
     return this.prismaClient.$transaction(async (tx) => {
@@ -559,7 +628,7 @@ export class ComandaService {
       const closedComanda = await tx.comanda.update({
         where: { id: comandaId },
         data: {
-          discount,
+          discount: discount + couponDiscount,
           total,
           status: 'closed',
           closedAt: new Date(),
@@ -601,17 +670,67 @@ export class ComandaService {
       });
 
       // Atualizar cliente se houver
-      if (comanda.customerId) {
+      if (customer) {
+        let loyaltyBalance = customer.loyaltyPoints;
+
+        if (loyaltyPointsEarned > 0) {
+          loyaltyBalance += loyaltyPointsEarned;
+          await tx.loyaltyTransaction.create({
+            data: {
+              customerId: customer.id,
+              transactionType: 'earn',
+              points: loyaltyPointsEarned,
+              balanceAfter: loyaltyBalance,
+              description: `Comanda #${comanda.comandaNumber}`,
+              saleId: null,
+              expiresAt: addDays(loyaltyConfig?.pointsExpirationDays || 0),
+              createdById: data.closedById,
+            },
+          });
+        }
+
+        let cashbackBalance = Number(customer.cashbackBalance || 0);
+        if (cashbackEarned > 0) {
+          cashbackBalance += cashbackEarned;
+          await tx.cashbackTransaction.create({
+            data: {
+              customerId: customer.id,
+              transactionType: 'earn',
+              amount: cashbackEarned,
+              balanceAfter: cashbackBalance,
+              comandaId,
+              description: `Cashback da comanda #${comanda.comandaNumber}`,
+              expiresAt: addDays(cashbackConfig?.cashbackExpirationDays || 0),
+              createdById: data.closedById,
+            },
+          });
+        }
+
         await tx.customer.update({
-          where: { id: comanda.customerId },
+          where: { id: customer.id },
           data: {
-            totalPurchases: {
+            loyaltyPoints: loyaltyBalance,
+            cashbackBalance,
+            totalCashbackEarned: {
+              increment: cashbackEarned,
+            },
+            purchaseCount: {
               increment: 1,
             },
-            totalSpent: {
+            totalPurchases: {
               increment: total,
             },
           },
+        });
+      }
+
+      if (validatedCoupon) {
+        const couponService = new CouponService(tx as any);
+        await couponService.applyCoupon({
+          couponId: validatedCoupon.coupon.id,
+          customerId: customer!.id,
+          discountApplied: couponDiscount,
+          comandaId,
         });
       }
 
