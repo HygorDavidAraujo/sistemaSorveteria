@@ -1,0 +1,676 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  email                 String                 @unique @db.VarChar(255)
+  passwordHash          String                 @map("password_hash") @db.VarChar(255)
+  fullName              String                 @map("full_name") @db.VarChar(255)
+  role                  UserRole
+  isActive              Boolean                @default(true) @map("is_active")
+  lastLoginAt           DateTime?              @map("last_login_at") @db.Timestamptz(6)
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdById           String?                @map("created_by") @db.Uuid
+  accountsPayable       AccountPayable[]
+  accountsReceivable    AccountReceivable[]
+  auditLogs             AuditLog[]
+  cashSessionsClosed    CashSession[]          @relation("CashSessionCloser")
+  cashSessionsValidated CashSession[]          @relation("CashSessionValidator")
+  cashSessionsOpened    CashSession[]          @relation("CashSessionOpener")
+  comandaItemsAdded     ComandaItem[]
+  comandasClosed        Comanda[]              @relation("ComandaCloser")
+  comandasOpened        Comanda[]              @relation("ComandaOpener")
+  deliveryOrders        DeliveryOrder[]
+  financialTransactions FinancialTransaction[]
+  loyaltyTransactions   LoyaltyTransaction[]
+  productCosts          ProductCost[]
+  products              Product[]
+  refreshTokens         RefreshToken[]
+  saleAdjustments       SaleAdjustment[]
+  sales                 Sale[]                 @relation("SaleCreator")
+  createdBy             User?                  @relation("UserCreator", fields: [createdById], references: [id])
+  createdUsers          User[]                 @relation("UserCreator")
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique @db.VarChar(500)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model Customer {
+  id                  String               @id @default(uuid()) @db.Uuid
+  name                String               @db.VarChar(255)
+  phone               String?              @db.VarChar(20)
+  whatsapp            String?              @db.VarChar(20)
+  email               String?              @db.VarChar(255)
+  cpf                 String?              @unique @db.VarChar(14)
+  notes               String?
+  isActive            Boolean              @default(true) @map("is_active")
+  totalPurchases      Decimal              @default(0) @map("total_purchases") @db.Decimal(10, 2)
+  purchaseCount       Int                  @default(0) @map("purchase_count")
+  loyaltyPoints       Int                  @default(0) @map("loyalty_points")
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdById         String?              @map("created_by") @db.Uuid
+  accountsReceivable  AccountReceivable[]
+  comandas            Comanda[]
+  addresses           CustomerAddress[]
+  deliveryOrders      DeliveryOrder[]
+  loyaltyTransactions LoyaltyTransaction[]
+  sales               Sale[]
+
+  @@index([name])
+  @@index([phone])
+  @@index([cpf])
+  @@index([isActive])
+  @@map("customers")
+}
+
+model CustomerAddress {
+  id             String          @id @default(uuid()) @db.Uuid
+  customerId     String          @map("customer_id") @db.Uuid
+  label          String?         @db.VarChar(100)
+  street         String          @db.VarChar(255)
+  number         String?         @db.VarChar(20)
+  complement     String?         @db.VarChar(255)
+  neighborhood   String?         @db.VarChar(100)
+  city           String          @db.VarChar(100)
+  state          String          @db.VarChar(2)
+  zipCode        String?         @map("zip_code") @db.VarChar(10)
+  referencePoint String?         @map("reference_point")
+  isDefault      Boolean         @default(false) @map("is_default")
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  customer       Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  deliveryOrders DeliveryOrder[]
+
+  @@index([customerId])
+  @@map("customer_addresses")
+}
+
+model Category {
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String    @unique @db.VarChar(100)
+  description  String?
+  isActive     Boolean   @default(true) @map("is_active")
+  displayOrder Int       @default(0) @map("display_order")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  products     Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id                      String          @id @default(uuid()) @db.Uuid
+  categoryId              String?         @map("category_id") @db.Uuid
+  code                    String?         @unique @db.VarChar(50)
+  name                    String          @db.VarChar(255)
+  description             String?
+  salePrice               Decimal         @map("sale_price") @db.Decimal(10, 2)
+  costPrice               Decimal?        @map("cost_price") @db.Decimal(10, 2)
+  saleType                SaleType        @map("sale_type")
+  unit                    String?         @db.VarChar(20)
+  eligibleForLoyalty      Boolean         @default(false) @map("eligible_for_loyalty")
+  loyaltyPointsMultiplier Decimal         @default(1.0) @map("loyalty_points_multiplier") @db.Decimal(5, 2)
+  trackStock              Boolean         @default(false) @map("track_stock")
+  currentStock            Decimal         @default(0) @map("current_stock") @db.Decimal(10, 3)
+  minStock                Decimal         @default(0) @map("min_stock") @db.Decimal(10, 3)
+  isActive                Boolean         @default(true) @map("is_active")
+  createdAt               DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdById             String?         @map("created_by") @db.Uuid
+  comandaItems            ComandaItem[]
+  loyaltyRewards          LoyaltyReward[]
+  productCosts            ProductCost[]
+  category                Category?       @relation(fields: [categoryId], references: [id])
+  createdBy               User?           @relation(fields: [createdById], references: [id])
+  saleItems               SaleItem[]
+
+  @@index([name])
+  @@index([code])
+  @@index([categoryId])
+  @@index([isActive])
+  @@map("products")
+}
+
+model ProductCost {
+  id          String    @id @default(uuid()) @db.Uuid
+  productId   String    @map("product_id") @db.Uuid
+  costPrice   Decimal   @map("cost_price") @db.Decimal(10, 2)
+  validFrom   DateTime  @map("valid_from") @db.Timestamptz(6)
+  validTo     DateTime? @map("valid_to") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdById String?   @map("created_by") @db.Uuid
+  createdBy   User?     @relation(fields: [createdById], references: [id])
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([validFrom, validTo])
+  @@map("product_costs")
+}
+
+model CashSession {
+  id                String               @id @default(uuid()) @db.Uuid
+  sessionNumber     Int                  @default(autoincrement()) @map("session_number")
+  terminalId        String?              @map("terminal_id") @db.VarChar(50)
+  openedById        String               @map("opened_by") @db.Uuid
+  openedAt          DateTime             @default(now()) @map("opened_at") @db.Timestamptz(6)
+  initialCash       Decimal              @default(0) @map("initial_cash") @db.Decimal(10, 2)
+  openingNotes      String?              @map("opening_notes")
+  cashierClosedAt   DateTime?            @map("cashier_closed_at") @db.Timestamptz(6)
+  cashierClosedById String?              @map("cashier_closed_by") @db.Uuid
+  cashierCashCount  Decimal?             @map("cashier_cash_count") @db.Decimal(10, 2)
+  cashierDifference Decimal?             @map("cashier_difference") @db.Decimal(10, 2)
+  cashierNotes      String?              @map("cashier_notes")
+  managerClosedAt   DateTime?            @map("manager_closed_at") @db.Timestamptz(6)
+  managerClosedById String?              @map("manager_closed_by") @db.Uuid
+  managerValidated  Boolean              @default(false) @map("manager_validated")
+  managerNotes      String?              @map("manager_notes")
+  totalSales        Decimal              @default(0) @map("total_sales") @db.Decimal(10, 2)
+  totalCash         Decimal              @default(0) @map("total_cash") @db.Decimal(10, 2)
+  totalCard         Decimal              @default(0) @map("total_card") @db.Decimal(10, 2)
+  totalPix          Decimal              @default(0) @map("total_pix") @db.Decimal(10, 2)
+  totalOther        Decimal              @default(0) @map("total_other") @db.Decimal(10, 2)
+  status            CashSessionStatus    @default(open)
+  paymentBreakdown  CashSessionPayment[]
+  cashierClosedBy   User?                @relation("CashSessionCloser", fields: [cashierClosedById], references: [id])
+  managerClosedBy   User?                @relation("CashSessionValidator", fields: [managerClosedById], references: [id])
+  openedBy          User                 @relation("CashSessionOpener", fields: [openedById], references: [id])
+  comandas          Comanda[]
+  deliveryOrders    DeliveryOrder[]
+  sales             Sale[]
+
+  @@index([status])
+  @@index([openedAt, managerClosedAt])
+  @@index([terminalId])
+  @@map("cash_sessions")
+}
+
+model CashSessionPayment {
+  id             String        @id @default(uuid()) @db.Uuid
+  cashSessionId  String        @map("cash_session_id") @db.Uuid
+  paymentMethod  PaymentMethod @map("payment_method")
+  expectedAmount Decimal       @map("expected_amount") @db.Decimal(10, 2)
+  countedAmount  Decimal?      @map("counted_amount") @db.Decimal(10, 2)
+  difference     Decimal?      @db.Decimal(10, 2)
+  cashSession    CashSession   @relation(fields: [cashSessionId], references: [id], onDelete: Cascade)
+
+  @@index([cashSessionId])
+  @@map("cash_session_payments")
+}
+
+model Sale {
+  id                   String                @id @default(uuid()) @db.Uuid
+  saleNumber           Int                   @default(autoincrement()) @map("sale_number")
+  cashSessionId        String                @map("cash_session_id") @db.Uuid
+  customerId           String?               @map("customer_id") @db.Uuid
+  saleType             TransactionType       @map("sale_type")
+  subtotal             Decimal               @db.Decimal(10, 2)
+  discount             Decimal               @default(0) @db.Decimal(10, 2)
+  deliveryFee          Decimal               @default(0) @map("delivery_fee") @db.Decimal(10, 2)
+  total                Decimal               @db.Decimal(10, 2)
+  loyaltyPointsUsed    Int                   @default(0) @map("loyalty_points_used")
+  loyaltyPointsEarned  Int                   @default(0) @map("loyalty_points_earned")
+  status               SaleStatus            @default(completed)
+  saleDate             DateTime              @default(now()) @map("sale_date") @db.Timestamptz(6)
+  createdById          String                @map("created_by") @db.Uuid
+  isAdjusted           Boolean               @default(false) @map("is_adjusted")
+  adjustmentReason     String?               @map("adjustment_reason")
+  adjustedAt           DateTime?             @map("adjusted_at") @db.Timestamptz(6)
+  adjustedById         String?               @map("adjusted_by") @db.Uuid
+  accountReceivable    AccountReceivable?
+  financialTransaction FinancialTransaction?
+  payments             Payment[]
+  adjustments          SaleAdjustment[]
+  items                SaleItem[]
+  cashSession          CashSession           @relation(fields: [cashSessionId], references: [id])
+  createdBy            User                  @relation("SaleCreator", fields: [createdById], references: [id])
+  customer             Customer?             @relation(fields: [customerId], references: [id])
+
+  @@index([saleDate])
+  @@index([customerId])
+  @@index([cashSessionId])
+  @@index([saleType])
+  @@index([status])
+  @@map("sales")
+}
+
+model SaleItem {
+  id                  String   @id @default(uuid()) @db.Uuid
+  saleId              String   @map("sale_id") @db.Uuid
+  productId           String   @map("product_id") @db.Uuid
+  productName         String   @map("product_name") @db.VarChar(255)
+  quantity            Decimal  @db.Decimal(10, 3)
+  unitPrice           Decimal  @map("unit_price") @db.Decimal(10, 2)
+  costPrice           Decimal? @map("cost_price") @db.Decimal(10, 2)
+  subtotal            Decimal  @db.Decimal(10, 2)
+  discount            Decimal  @default(0) @db.Decimal(10, 2)
+  total               Decimal  @db.Decimal(10, 2)
+  loyaltyPointsEarned Int      @default(0) @map("loyalty_points_earned")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  product             Product  @relation(fields: [productId], references: [id])
+  sale                Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+  @@index([productId])
+  @@map("sale_items")
+}
+
+model Payment {
+  id               String        @id @default(uuid()) @db.Uuid
+  saleId           String        @map("sale_id") @db.Uuid
+  paymentMethod    PaymentMethod @map("payment_method")
+  amount           Decimal       @db.Decimal(10, 2)
+  cardBrand        String?       @map("card_brand") @db.VarChar(50)
+  cardLastDigits   String?       @map("card_last_digits") @db.VarChar(4)
+  installments     Int           @default(1)
+  pixKey           String?       @map("pix_key") @db.VarChar(255)
+  pixTransactionId String?       @map("pix_transaction_id") @db.VarChar(255)
+  transactionDate  DateTime      @default(now()) @map("transaction_date") @db.Timestamptz(6)
+  sale             Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+  @@index([paymentMethod])
+  @@map("payments")
+}
+
+model SaleAdjustment {
+  id             String         @id @default(uuid()) @db.Uuid
+  saleId         String         @map("sale_id") @db.Uuid
+  adjustmentType AdjustmentType @map("adjustment_type")
+  reason         String
+  oldTotal       Decimal?       @map("old_total") @db.Decimal(10, 2)
+  newTotal       Decimal?       @map("new_total") @db.Decimal(10, 2)
+  oldData        Json?          @map("old_data")
+  newData        Json?          @map("new_data")
+  adjustedById   String         @map("adjusted_by") @db.Uuid
+  adjustedAt     DateTime       @default(now()) @map("adjusted_at") @db.Timestamptz(6)
+  approvedById   String?        @map("approved_by") @db.Uuid
+  adjustedBy     User           @relation(fields: [adjustedById], references: [id])
+  sale           Sale           @relation(fields: [saleId], references: [id])
+
+  @@index([saleId])
+  @@index([adjustedAt])
+  @@map("sale_adjustments")
+}
+
+model Comanda {
+  id               String           @id @default(uuid()) @db.Uuid
+  comandaNumber    Int              @map("comanda_number")
+  tableNumber      String?          @map("table_number") @db.VarChar(20)
+  customerName     String?          @map("customer_name") @db.VarChar(255)
+  customerId       String?          @map("customer_id") @db.Uuid
+  cashSessionId    String           @map("cash_session_id") @db.Uuid
+  subtotal         Decimal          @default(0) @db.Decimal(10, 2)
+  discount         Decimal          @default(0) @db.Decimal(10, 2)
+  total            Decimal          @default(0) @db.Decimal(10, 2)
+  status           ComandaStatus    @default(open)
+  openedAt         DateTime         @default(now()) @map("opened_at") @db.Timestamptz(6)
+  openedById       String           @map("opened_by") @db.Uuid
+  closedAt         DateTime?        @map("closed_at") @db.Timestamptz(6)
+  closedById       String?          @map("closed_by") @db.Uuid
+  isAdjusted       Boolean          @default(false) @map("is_adjusted")
+  adjustmentReason String?          @map("adjustment_reason")
+  items            ComandaItem[]
+  payments         ComandaPayment[]
+  cashSession      CashSession      @relation(fields: [cashSessionId], references: [id])
+  closedBy         User?            @relation("ComandaCloser", fields: [closedById], references: [id])
+  customer         Customer?        @relation(fields: [customerId], references: [id])
+  openedBy         User             @relation("ComandaOpener", fields: [openedById], references: [id])
+
+  @@unique([comandaNumber, openedAt])
+  @@index([status])
+  @@index([comandaNumber])
+  @@index([customerId])
+  @@index([openedAt])
+  @@map("comandas")
+}
+
+model ComandaItem {
+  id                 String    @id @default(uuid()) @db.Uuid
+  comandaId          String    @map("comanda_id") @db.Uuid
+  productId          String    @map("product_id") @db.Uuid
+  productName        String    @map("product_name") @db.VarChar(255)
+  quantity           Decimal   @db.Decimal(10, 3)
+  unitPrice          Decimal   @map("unit_price") @db.Decimal(10, 2)
+  costPrice          Decimal?  @map("cost_price") @db.Decimal(10, 2)
+  subtotal           Decimal   @db.Decimal(10, 2)
+  addedAt            DateTime  @default(now()) @map("added_at") @db.Timestamptz(6)
+  addedById          String    @map("added_by") @db.Uuid
+  isCancelled        Boolean   @default(false) @map("is_cancelled")
+  cancelledAt        DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelledById      String?   @map("cancelled_by") @db.Uuid
+  cancellationReason String?   @map("cancellation_reason")
+  addedBy            User      @relation(fields: [addedById], references: [id])
+  comanda            Comanda   @relation(fields: [comandaId], references: [id], onDelete: Cascade)
+  product            Product   @relation(fields: [productId], references: [id])
+
+  @@index([comandaId])
+  @@index([productId])
+  @@map("comanda_items")
+}
+
+model ComandaPayment {
+  id              String        @id @default(uuid()) @db.Uuid
+  comandaId       String        @map("comanda_id") @db.Uuid
+  paymentMethod   PaymentMethod @map("payment_method")
+  amount          Decimal       @db.Decimal(10, 2)
+  transactionDate DateTime      @default(now()) @map("transaction_date") @db.Timestamptz(6)
+  comanda         Comanda       @relation(fields: [comandaId], references: [id], onDelete: Cascade)
+
+  @@index([comandaId])
+  @@map("comanda_payments")
+}
+
+model DeliveryOrder {
+  id                String          @id @default(uuid()) @db.Uuid
+  orderNumber       Int             @default(autoincrement()) @map("order_number")
+  customerId        String          @map("customer_id") @db.Uuid
+  customerAddressId String          @map("customer_address_id") @db.Uuid
+  cashSessionId     String          @map("cash_session_id") @db.Uuid
+  subtotal          Decimal         @db.Decimal(10, 2)
+  deliveryFee       Decimal         @default(0) @map("delivery_fee") @db.Decimal(10, 2)
+  discount          Decimal         @default(0) @db.Decimal(10, 2)
+  total             Decimal         @db.Decimal(10, 2)
+  deliveryStatus    DeliveryStatus  @default(received) @map("delivery_status")
+  estimatedTime     Int?            @map("estimated_time")
+  deliveryPerson    String?         @map("delivery_person") @db.VarChar(255)
+  customerNotes     String?         @map("customer_notes")
+  internalNotes     String?         @map("internal_notes")
+  orderedAt         DateTime        @default(now()) @map("ordered_at") @db.Timestamptz(6)
+  preparingAt       DateTime?       @map("preparing_at") @db.Timestamptz(6)
+  outForDeliveryAt  DateTime?       @map("out_for_delivery_at") @db.Timestamptz(6)
+  deliveredAt       DateTime?       @map("delivered_at") @db.Timestamptz(6)
+  createdById       String          @map("created_by") @db.Uuid
+  cashSession       CashSession     @relation(fields: [cashSessionId], references: [id])
+  createdBy         User            @relation(fields: [createdById], references: [id])
+  customerAddress   CustomerAddress @relation(fields: [customerAddressId], references: [id])
+  customer          Customer        @relation(fields: [customerId], references: [id])
+
+  @@index([customerId])
+  @@index([deliveryStatus])
+  @@index([orderedAt])
+  @@map("delivery_orders")
+}
+
+model DeliveryFee {
+  id                String   @id @default(uuid()) @db.Uuid
+  neighborhood      String   @db.VarChar(100)
+  city              String   @db.VarChar(100)
+  fee               Decimal  @db.Decimal(10, 2)
+  minOrderValue     Decimal  @default(0) @map("min_order_value") @db.Decimal(10, 2)
+  freeDeliveryAbove Decimal? @map("free_delivery_above") @db.Decimal(10, 2)
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([city, neighborhood])
+  @@map("delivery_fees")
+}
+
+model LoyaltyConfig {
+  id                   String   @id @default(uuid()) @db.Uuid
+  pointsPerReal        Decimal  @map("points_per_real") @db.Decimal(5, 2)
+  minPurchaseValue     Decimal  @default(0) @map("min_purchase_value") @db.Decimal(10, 2)
+  pointsExpirationDays Int?     @map("points_expiration_days")
+  pointsToRealRatio    Decimal  @map("points_to_real_ratio") @db.Decimal(5, 2)
+  minPointsRedemption  Int      @default(100) @map("min_points_redemption")
+  isActive             Boolean  @unique(map: "idx_loyalty_config_active") @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("loyalty_config")
+}
+
+model LoyaltyReward {
+  id                String               @id @default(uuid()) @db.Uuid
+  productId         String?              @map("product_id") @db.Uuid
+  name              String               @db.VarChar(255)
+  description       String?
+  pointsRequired    Int                  @map("points_required")
+  quantityAvailable Int?                 @map("quantity_available")
+  isActive          Boolean              @default(true) @map("is_active")
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  product           Product?             @relation(fields: [productId], references: [id])
+  transactions      LoyaltyTransaction[]
+
+  @@index([isActive])
+  @@map("loyalty_rewards")
+}
+
+model LoyaltyTransaction {
+  id              String                 @id @default(uuid()) @db.Uuid
+  customerId      String                 @map("customer_id") @db.Uuid
+  transactionType LoyaltyTransactionType @map("transaction_type")
+  points          Int
+  balanceAfter    Int                    @map("balance_after")
+  saleId          String?                @map("sale_id") @db.Uuid
+  rewardId        String?                @map("reward_id") @db.Uuid
+  description     String?
+  expiresAt       DateTime?              @map("expires_at") @db.Timestamptz(6)
+  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdById     String?                @map("created_by") @db.Uuid
+  createdBy       User?                  @relation(fields: [createdById], references: [id])
+  customer        Customer               @relation(fields: [customerId], references: [id])
+  reward          LoyaltyReward?         @relation(fields: [rewardId], references: [id])
+
+  @@index([customerId])
+  @@index([createdAt])
+  @@index([expiresAt])
+  @@map("loyalty_transactions")
+}
+
+model FinancialCategory {
+  id              String                 @id @default(uuid()) @db.Uuid
+  name            String                 @unique @db.VarChar(100)
+  categoryType    CategoryType           @map("category_type")
+  dreGroup        String?                @map("dre_group") @db.VarChar(50)
+  parentId        String?                @map("parent_category_id") @db.Uuid
+  isActive        Boolean                @default(true) @map("is_active")
+  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  accountsPayable AccountPayable[]
+  parent          FinancialCategory?     @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children        FinancialCategory[]    @relation("CategoryHierarchy")
+  transactions    FinancialTransaction[]
+
+  @@index([categoryType])
+  @@map("financial_categories")
+}
+
+model FinancialTransaction {
+  id              String                   @id @default(uuid()) @db.Uuid
+  categoryId      String                   @map("category_id") @db.Uuid
+  transactionType TransactionFinancialType @map("transaction_type")
+  amount          Decimal                  @db.Decimal(10, 2)
+  description     String
+  referenceNumber String?                  @map("reference_number") @db.VarChar(100)
+  transactionDate DateTime                 @map("transaction_date") @db.Date
+  dueDate         DateTime?                @map("due_date") @db.Date
+  paidAt          DateTime?                @map("paid_at") @db.Timestamptz(6)
+  status          TransactionStatus        @default(pending)
+  saleId          String?                  @unique @map("sale_id") @db.Uuid
+  comandaId       String?                  @map("comanda_id") @db.Uuid
+  deliveryOrderId String?                  @map("delivery_order_id") @db.Uuid
+  tags            String[]
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdById     String                   @map("created_by") @db.Uuid
+  category        FinancialCategory        @relation(fields: [categoryId], references: [id])
+  createdBy       User                     @relation(fields: [createdById], references: [id])
+  sale            Sale?                    @relation(fields: [saleId], references: [id])
+
+  @@index([transactionDate])
+  @@index([categoryId])
+  @@index([transactionType])
+  @@index([status])
+  @@map("financial_transactions")
+}
+
+model AccountPayable {
+  id           String            @id @default(uuid()) @db.Uuid
+  supplierName String            @map("supplier_name") @db.VarChar(255)
+  description  String
+  amount       Decimal           @db.Decimal(10, 2)
+  dueDate      DateTime          @map("due_date") @db.Date
+  paidAt       DateTime?         @map("paid_at") @db.Timestamptz(6)
+  categoryId   String            @map("financial_category_id") @db.Uuid
+  status       TransactionStatus @default(pending)
+  notes        String?
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdById  String            @map("created_by") @db.Uuid
+  createdBy    User              @relation(fields: [createdById], references: [id])
+  category     FinancialCategory @relation(fields: [categoryId], references: [id])
+
+  @@index([dueDate])
+  @@index([status])
+  @@map("accounts_payable")
+}
+
+model AccountReceivable {
+  id           String            @id @default(uuid()) @db.Uuid
+  customerId   String?           @map("customer_id") @db.Uuid
+  customerName String            @map("customer_name") @db.VarChar(255)
+  description  String
+  amount       Decimal           @db.Decimal(10, 2)
+  dueDate      DateTime          @map("due_date") @db.Date
+  receivedAt   DateTime?         @map("received_at") @db.Timestamptz(6)
+  saleId       String?           @unique @map("sale_id") @db.Uuid
+  status       TransactionStatus @default(pending)
+  notes        String?
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdById  String            @map("created_by") @db.Uuid
+  createdBy    User              @relation(fields: [createdById], references: [id])
+  customer     Customer?         @relation(fields: [customerId], references: [id])
+  sale         Sale?             @relation(fields: [saleId], references: [id])
+
+  @@index([dueDate])
+  @@index([customerId])
+  @@index([status])
+  @@map("accounts_receivable")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String?  @map("user_id") @db.Uuid
+  userEmail   String?  @map("user_email") @db.VarChar(255)
+  action      String   @db.VarChar(100)
+  entityType  String   @map("entity_type") @db.VarChar(100)
+  entityId    String?  @map("entity_id") @db.Uuid
+  description String?
+  oldValues   Json?    @map("old_values")
+  newValues   Json?    @map("new_values")
+  ipAddress   String?  @map("ip_address") @db.VarChar(50)
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+enum UserRole {
+  admin
+  manager
+  cashier
+}
+
+enum SaleType {
+  unit
+  weight
+}
+
+enum CashSessionStatus {
+  open
+  cashier_closed
+  manager_closed
+}
+
+enum TransactionType {
+  pdv
+  comanda
+  delivery
+}
+
+enum SaleStatus {
+  completed
+  cancelled
+  adjusted
+}
+
+enum PaymentMethod {
+  cash
+  debit_card
+  credit_card
+  pix
+  other
+}
+
+enum AdjustmentType {
+  reopening
+  cancellation
+  value_correction
+  item_change
+}
+
+enum ComandaStatus {
+  open
+  closed
+  cancelled
+}
+
+enum DeliveryStatus {
+  received
+  preparing
+  out_for_delivery
+  delivered
+  cancelled
+}
+
+enum LoyaltyTransactionType {
+  earn
+  redeem
+  expire
+  adjustment
+  manual
+}
+
+enum CategoryType {
+  revenue
+  cost
+  expense
+}
+
+enum TransactionFinancialType {
+  revenue
+  expense
+  transfer
+}
+
+enum TransactionStatus {
+  pending
+  paid
+  cancelled
+  overdue
+}
