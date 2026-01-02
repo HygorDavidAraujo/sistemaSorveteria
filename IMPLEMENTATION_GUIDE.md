@@ -4,7 +4,7 @@ Este documento detalha tudo que foi implementado e o que ainda precisa ser desen
 
 ## 📊 Resumo do Progresso
 
-**Módulos Completos:** 8/11 (73%)
+**Módulos Completos:** 9/11 (82%)
 - ✅ Infraestrutura e Arquitetura
 - ✅ Banco de Dados
 - ✅ Autenticação
@@ -12,13 +12,13 @@ Este documento detalha tudo que foi implementado e o que ainda precisa ser desen
 - ✅ Documentação
 - ✅ **Produtos** (completo)
 - ✅ **Caixa** (completo)
-- ✅ **PDV** (recém-implementado)
+- ✅ **PDV** (completo)
+- ✅ **Comandas** (completo)
 
 **Próximos Passos:**
-1. 🟡 Comandas - Média prioridade
-2. 🟡 Delivery - Média prioridade
-3. 🟡 Fidelidade - Média prioridade
-4. 🟢 DRE e Relatórios - Baixa prioridade
+1. 🟡 Delivery - Média prioridade
+2. 🟡 Fidelidade - Média prioridade
+3. 🟢 DRE e Relatórios - Baixa prioridade
 
 ---
 
@@ -180,7 +180,7 @@ POST   /cash-sessions/:id/recalculate      // Recalcular totalizadores
 - Fluxo completo: open → cashier_closed → manager_closed
 - Cálculo automático de diferenças no fechamento
 - Totalizadores consolidados (totalCash, totalCard, totalPix, totalOther)
-- **Breakdown detalhado no relatório**: separa débito e crédito individualmente
+- **Breakdown detalhado no relatório**: separa débito e crédito individualmente e inclui pagamentos de vendas e comandas
 - Relatório inclui: totais agrupados + breakdown detalhado + contagem de vendas
 - Seed com sessão de exemplo e vendas
 - Histórico com filtros (status, terminal, datas)
@@ -206,6 +206,49 @@ backend/src/presentation/validators/
 
 backend/src/presentation/http/routes/
   └── cash-session.routes.ts ✅
+```
+
+---
+
+### 8. Módulo de Comandas ✅ COMPLETO
+
+#### ✅ APIs Implementadas
+```typescript
+POST   /comandas                        // Abrir comanda
+GET    /comandas                        // Listar comandas (filtros por status, sessão, cliente, mesa, datas)
+GET    /comandas/:id                    // Detalhes da comanda
+POST   /comandas/:id/items              // Adicionar item
+PUT    /comandas/:id/items/:itemId      // Editar quantidade do item
+DELETE /comandas/:id/items/:itemId      // Cancelar item com motivo
+POST   /comandas/:id/close              // Fechar comanda com pagamentos
+POST   /comandas/:id/reopen             // Reabrir (manager/admin)
+POST   /comandas/:id/cancel             // Cancelar comanda (manager/admin)
+```
+
+#### ✅ Funcionalidades
+- Geração de `comandaNumber` sequencial diário
+- Itens adicionados progressivamente; validação de estoque e atualização automática (quando trackStock=true)
+- Snapshot de preço e custo por item; recálculo de subtotal/total da comanda a cada operação
+- Pagamentos múltiplos (cash/debit_card/credit_card/pix/other) com validação de soma exata do total
+- Fechamento atualiza totalizadores do caixa (totalSales, totalCash, totalCard, totalPix, totalOther)
+- Relatório de caixa inclui pagamentos de comandas no breakdown
+- Cancelamento de item com reversão de estoque e histórico de cancelamento
+- Reabertura remove pagamentos e reverte totais de caixa/cliente; cancelamento de comanda reverte itens, estoque e totais
+- Autorização: cashier/manager/admin para operações; reopen/cancel apenas manager/admin
+
+#### ✅ Arquivos Criados
+```
+backend/src/application/use-cases/comandas/
+  └── comanda.service.ts ✅
+
+backend/src/presentation/http/controllers/
+  └── comanda.controller.ts ✅
+
+backend/src/presentation/validators/
+  └── comanda.validator.ts ✅
+
+backend/src/presentation/http/routes/
+  └── comanda.routes.ts ✅
 ```
 
 ---
@@ -267,29 +310,7 @@ backend/src/presentation/http/routes/
   └── sale.routes.ts ✅
 ```
 
-### 2. Módulo de Comandas 🟡 MÉDIA PRIORIDADE
-
-#### APIs a Implementar
-```typescript
-POST   /comandas                        // Abrir comanda
-GET    /comandas                        // Listar comandas abertas
-GET    /comandas/:id                    // Detalhes da comanda
-POST   /comandas/:id/items              // Adicionar item
-PUT    /comandas/:id/items/:itemId      // Editar item
-DELETE /comandas/:id/items/:itemId      // Cancelar item
-POST   /comandas/:id/close              // Fechar comanda
-POST   /comandas/:id/print-partial      // Imprimir pré-conta
-POST   /comandas/:id/reopen             // Reabrir (manager)
-```
-
-#### Funcionalidades
-- Comanda sem cliente (opcional)
-- Adicionar itens progressivamente
-- Impressão de pré-conta (sem fechar)
-- Múltiplas formas de pagamento
-- Conversão para venda ao fechar
-
-### 3. Módulo de Delivery 🟡 MÉDIA PRIORIDADE
+### 2. Módulo de Delivery 🟡 MÉDIA PRIORIDADE
 
 #### APIs a Implementar
 ```typescript
@@ -309,7 +330,7 @@ received → preparing → out_for_delivery → delivered
             cancelled
 ```
 
-### 4. Módulo de Fidelidade 🟡 MÉDIA PRIORIDADE
+### 3. Módulo de Fidelidade 🟡 MÉDIA PRIORIDADE
 
 #### APIs a Implementar
 ```typescript
@@ -330,7 +351,7 @@ POST   /loyalty/adjust              // Ajuste manual (admin)
 - Expiração de pontos
 - Conversão pontos → reais
 
-### 5. Módulo Financeiro 🟢 BAIXA PRIORIDADE
+### 4. Módulo Financeiro 🟢 BAIXA PRIORIDADE
 
 #### APIs a Implementar
 ```typescript
@@ -352,7 +373,7 @@ GET    /financial/categories         // Categorias
 POST   /financial/categories         // Criar categoria
 ```
 
-### 6. Módulo DRE (Income Statement) 🟢 BAIXA PRIORIDADE
+### 5. Módulo DRE (Income Statement) 🟢 BAIXA PRIORIDADE
 
 #### APIs a Implementar
 ```typescript
@@ -375,7 +396,7 @@ SELECT SUM(quantity * cost_price) FROM sale_items
 SELECT SUM(amount) FROM financial_transactions WHERE category_type = 'expense'
 ```
 
-### 7. Módulo Dashboard 🟢 BAIXA PRIORIDADE
+### 6. Módulo Dashboard 🟢 BAIXA PRIORIDADE
 
 #### APIs a Implementar
 ```typescript
@@ -387,7 +408,7 @@ GET    /dashboard/alerts             // Alertas (estoque, vencimentos)
 GET    /dashboard/realtime           // Métricas em tempo real
 ```
 
-### 8. Integração com Balança Toledo 🔵 FUTURA
+### 7. Integração com Balança Toledo 🔵 FUTURA
 
 #### Implementação
 ```typescript

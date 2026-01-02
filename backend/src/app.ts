@@ -12,6 +12,7 @@ import customerRoutes from '@presentation/http/routes/customer.routes';
 import productRoutes from '@presentation/http/routes/product.routes';
 import cashSessionRoutes from '@presentation/http/routes/cash-session.routes';
 import saleRoutes from '@presentation/http/routes/sale.routes';
+import comandaRoutes from '@presentation/http/routes/comanda.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -68,6 +69,7 @@ export function createApp(): Application {
   app.use(`${apiPrefix}`, productRoutes);
   app.use(`${apiPrefix}/cash-sessions`, cashSessionRoutes);
   app.use(`${apiPrefix}/sales`, saleRoutes);
+  app.use(`${apiPrefix}/comandas`, comandaRoutes);
 
   // 404 handler
   app.use((req: Request, res: Response) => {

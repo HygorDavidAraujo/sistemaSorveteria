@@ -230,16 +230,27 @@ export class CashSessionService {
   async getReport(id: string) {
     const session = await this.getById(id);
 
-    // Buscar todas as vendas e pagamentos para breakdown detalhado
-    const sales = await this.prismaClient.sale.findMany({
-      where: {
-        cashSessionId: id,
-        status: 'completed',
-      },
-      include: {
-        payments: true,
-      },
-    });
+    // Buscar vendas e comandas fechadas para breakdown detalhado
+    const [sales, comandas] = await Promise.all([
+      this.prismaClient.sale.findMany({
+        where: {
+          cashSessionId: id,
+          status: 'completed',
+        },
+        include: {
+          payments: true,
+        },
+      }),
+      this.prismaClient.comanda.findMany({
+        where: {
+          cashSessionId: id,
+          status: 'closed',
+        },
+        include: {
+          payments: true,
+        },
+      }),
+    ]);
 
     // Calcular breakdown detalhado por método de pagamento
     const paymentBreakdown = {
@@ -252,9 +263,8 @@ export class CashSessionService {
 
     let totalSalesCount = 0;
 
-    for (const sale of sales) {
-      totalSalesCount++;
-      for (const payment of sale.payments) {
+    const accumulatePayments = (payments: Array<{ paymentMethod: PaymentMethod; amount: any }>) => {
+      for (const payment of payments) {
         const amount = Number(payment.amount);
         switch (payment.paymentMethod) {
           case 'cash':
@@ -274,6 +284,16 @@ export class CashSessionService {
             break;
         }
       }
+    };
+
+    for (const sale of sales) {
+      totalSalesCount++;
+      accumulatePayments(sale.payments);
+    }
+
+    for (const comanda of comandas) {
+      totalSalesCount++;
+      accumulatePayments(comanda.payments as any);
     }
 
     return {
@@ -298,15 +318,26 @@ export class CashSessionService {
   }
 
   async recalculateTotals(sessionId: string) {
-    const sales = await this.prismaClient.sale.findMany({
-      where: {
-        cashSessionId: sessionId,
-        status: 'completed',
-      },
-      include: {
-        payments: true,
-      },
-    });
+    const [sales, comandas] = await Promise.all([
+      this.prismaClient.sale.findMany({
+        where: {
+          cashSessionId: sessionId,
+          status: 'completed',
+        },
+        include: {
+          payments: true,
+        },
+      }),
+      this.prismaClient.comanda.findMany({
+        where: {
+          cashSessionId: sessionId,
+          status: 'closed',
+        },
+        include: {
+          payments: true,
+        },
+      }),
+    ]);
 
     let totalSales = 0;
     let totalCash = 0;
@@ -314,10 +345,8 @@ export class CashSessionService {
     let totalPix = 0;
     let totalOther = 0;
 
-    for (const sale of sales) {
-      totalSales += Number(sale.total);
-
-      for (const payment of sale.payments) {
+    const accumulatePayments = (payments: Array<{ paymentMethod: PaymentMethod; amount: any }>) => {
+      for (const payment of payments) {
         const amount = Number(payment.amount);
         switch (payment.paymentMethod) {
           case 'cash':
@@ -335,6 +364,16 @@ export class CashSessionService {
             break;
         }
       }
+    };
+
+    for (const sale of sales) {
+      totalSales += Number(sale.total);
+      accumulatePayments(sale.payments);
+    }
+
+    for (const comanda of comandas) {
+      totalSales += Number(comanda.total);
+      accumulatePayments(comanda.payments as any);
     }
 
     return this.prismaClient.cashSession.update({
