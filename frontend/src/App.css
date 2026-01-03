@@ -1,0 +1,52 @@
+/* Main Layout */
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* Responsive adjustments for mobile */
+@media (max-width: 768px) {
+  .md\:ml-64 {
+    margin-left: 0;
+  }
+
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+  }
+
+  main {
+    padding-top: 4rem;
+  }
+}
+
+/* Utility animations */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+

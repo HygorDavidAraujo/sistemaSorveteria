@@ -17,6 +17,7 @@ import deliveryRoutes from '@presentation/http/routes/delivery.routes';
 import couponRoutes from '@presentation/http/routes/coupon.routes';
 import loyaltyRoutes from '@presentation/http/routes/loyalty.routes';
 import cashbackRoutes from '@presentation/http/routes/cashback.routes';
+import financialRoutes from '@presentation/http/routes/financial.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -78,6 +79,7 @@ export function createApp(): Application {
   app.use(`${apiPrefix}/coupons`, couponRoutes);
   app.use(`${apiPrefix}/loyalty`, loyaltyRoutes);
   app.use(`${apiPrefix}/cashback`, cashbackRoutes);
+  app.use(`${apiPrefix}/financial`, financialRoutes);
 
   // 404 handler
   app.use((req: Request, res: Response) => {

@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { UnauthorizedError } from '@shared/errors/app-error';
 
 interface JwtPayload {
+  id: string;
   userId: string;
   email: string;
   role: string;

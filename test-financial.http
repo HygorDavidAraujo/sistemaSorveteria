@@ -1,0 +1,459 @@
+@baseUrl = http://localhost:3000/api
+@token = Bearer {seu_token_aqui}
+
+###############################################################################
+# FINANCIAL MODULE - TEST FILE
+# Sistema Sorveteria - Módulo Financeiro
+###############################################################################
+
+###############################################################################
+# FINANCIAL CATEGORIES - Categorias Financeiras
+###############################################################################
+
+### Criar categoria - Receita de Vendas
+POST {{baseUrl}}/financial/categories
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "name": "Vendas",
+  "categoryType": "revenue",
+  "dreGroup": "gross_revenue",
+  "isActive": true
+}
+
+### Criar categoria - Aluguel
+POST {{baseUrl}}/financial/categories
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "name": "Aluguel",
+  "categoryType": "operating_expenses",
+  "dreGroup": "operating_profit"
+}
+
+### Criar categoria - Custo de Produtos
+POST {{baseUrl}}/financial/categories
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "name": "Custo dos Produtos",
+  "categoryType": "cogs",
+  "dreGroup": "gross_profit"
+}
+
+### Criar categoria - Despesas Financeiras
+POST {{baseUrl}}/financial/categories
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "name": "Juros Bancários",
+  "categoryType": "financial_expenses",
+  "dreGroup": "financial_result"
+}
+
+### Listar todas as categorias
+GET {{baseUrl}}/financial/categories
+Authorization: {{token}}
+
+### Listar categorias ativas
+GET {{baseUrl}}/financial/categories?isActive=true
+Authorization: {{token}}
+
+### Obter categorias por tipo - Revenue
+GET {{baseUrl}}/financial/categories/type/revenue
+Authorization: {{token}}
+
+### Obter categorias por tipo - Operating Expenses
+GET {{baseUrl}}/financial/categories/type/operating_expenses
+Authorization: {{token}}
+
+### Atualizar categoria
+PUT {{baseUrl}}/financial/categories/{categoryId}
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "name": "Aluguel - Loja Principal",
+  "isActive": true
+}
+
+###############################################################################
+# FINANCIAL TRANSACTIONS - Transações Financeiras
+###############################################################################
+
+### Criar transação - Despesa
+POST {{baseUrl}}/financial/transactions
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "categoryId": "{categoria_aluguel_id}",
+  "transactionType": "EXPENSE",
+  "amount": 2000.00,
+  "description": "Aluguel da loja - Janeiro/2024",
+  "referenceNumber": "ALG-2024-01",
+  "transactionDate": "2024-01-05T10:00:00Z",
+  "dueDate": "2024-01-20T10:00:00Z"
+}
+
+### Criar transação - Receita
+POST {{baseUrl}}/financial/transactions
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "categoryId": "{categoria_vendas_id}",
+  "transactionType": "INCOME",
+  "amount": 5000.00,
+  "description": "Vendas do dia 05/01",
+  "transactionDate": "2024-01-05T18:00:00Z"
+}
+
+### Criar transação - Custo de Produto
+POST {{baseUrl}}/financial/transactions
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "categoryId": "{categoria_cogs_id}",
+  "transactionType": "EXPENSE",
+  "amount": 1500.00,
+  "description": "Compra de matéria prima",
+  "referenceNumber": "CP-2024-001",
+  "transactionDate": "2024-01-03T14:00:00Z"
+}
+
+### Buscar transações - Despesas do mês
+GET {{baseUrl}}/financial/transactions?transactionType=EXPENSE&startDate=2024-01-01T00:00:00Z&endDate=2024-01-31T23:59:59Z&page=1&limit=20
+Authorization: {{token}}
+
+### Buscar transações - Pendentes
+GET {{baseUrl}}/financial/transactions?status=pending&page=1&limit=20
+Authorization: {{token}}
+
+### Buscar transações - Vencidas
+GET {{baseUrl}}/financial/transactions?status=overdue
+Authorization: {{token}}
+
+### Obter uma transação específica
+GET {{baseUrl}}/financial/transactions/{transactionId}
+Authorization: {{token}}
+
+### Atualizar transação
+PUT {{baseUrl}}/financial/transactions/{transactionId}
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "description": "Aluguel da loja - Janeiro/2024 (Atualizado)",
+  "dueDate": "2024-01-25T10:00:00Z"
+}
+
+### Marcar transação como paga
+PATCH {{baseUrl}}/financial/transactions/{transactionId}/mark-paid
+Authorization: {{token}}
+
+### Cancelar transação
+POST {{baseUrl}}/financial/transactions/{transactionId}/cancel
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "reason": "Pagamento duplicado - cancelado"
+}
+
+### Resumo de transações
+GET {{baseUrl}}/financial/transactions/summary?startDate=2024-01-01T00:00:00Z&endDate=2024-01-31T23:59:59Z
+Authorization: {{token}}
+
+###############################################################################
+# ACCOUNTS PAYABLE - Contas a Pagar
+###############################################################################
+
+### Criar conta a pagar
+POST {{baseUrl}}/financial/accounts-payable
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "supplierId": "FORNEC-001",
+  "invoiceNumber": "NFE-2024-001",
+  "description": "Fornecimento de insumos - janeiro",
+  "amount": 3500.00,
+  "dueDate": "2024-02-15T10:00:00Z",
+  "paymentMethod": "Crédito",
+  "categoryId": "{categoria_cogs_id}",
+  "notes": "Entrega em 5 parcelas"
+}
+
+### Criar conta a pagar - Com parcelamento
+POST {{baseUrl}}/financial/accounts-payable
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "supplierId": "FORNEC-002",
+  "invoiceNumber": "NFE-2024-002",
+  "description": "Equipamento de refrigeração",
+  "amount": 5000.00,
+  "dueDate": "2024-02-15T10:00:00Z",
+  "categoryId": "{categoria_operacional_id}",
+  "installmentNumber": 1,
+  "totalInstallments": 12,
+  "notes": "Parcelado em 12x"
+}
+
+### Listar contas a pagar
+GET {{baseUrl}}/financial/accounts-payable?page=1&limit=20
+Authorization: {{token}}
+
+### Listar contas a pagar - Pendentes
+GET {{baseUrl}}/financial/accounts-payable?status=pending
+Authorization: {{token}}
+
+### Listar contas a receber - Com filtro de fornecedor
+GET {{baseUrl}}/financial/accounts-payable?supplierId=FORNEC-001
+Authorization: {{token}}
+
+### Obter conta a pagar específica
+GET {{baseUrl}}/financial/accounts-payable/{accountPayableId}
+Authorization: {{token}}
+
+### Contas a vencer nos próximos 7 dias
+GET {{baseUrl}}/financial/accounts-payable/upcoming?days=7
+Authorization: {{token}}
+
+### Contas vencidas
+GET {{baseUrl}}/financial/accounts-payable/overdue
+Authorization: {{token}}
+
+### Resumo de contas a pagar
+GET {{baseUrl}}/financial/accounts-payable/summary
+Authorization: {{token}}
+
+### Registrar pagamento - Pagamento completo
+POST {{baseUrl}}/financial/accounts-payable/{accountPayableId}/payment
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "paidAmount": 3500.00,
+  "paymentDate": "2024-02-10T14:30:00Z",
+  "paymentMethod": "Transferência Bancária",
+  "notes": "Pagamento antecipado - 5% desconto aplicado"
+}
+
+### Registrar pagamento - Parcial
+POST {{baseUrl}}/financial/accounts-payable/{accountPayableId}/payment
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "paidAmount": 416.67,
+  "paymentDate": "2024-02-15T10:00:00Z",
+  "paymentMethod": "Débito",
+  "notes": "Primeira parcela"
+}
+
+### Atualizar conta a pagar
+PUT {{baseUrl}}/financial/accounts-payable/{accountPayableId}
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "description": "Fornecimento de insumos - janeiro (Atualizado)",
+  "dueDate": "2024-02-20T10:00:00Z"
+}
+
+### Cancelar conta a pagar
+POST {{baseUrl}}/financial/accounts-payable/{accountPayableId}/cancel
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "reason": "Nota fiscal cancelada pelo fornecedor"
+}
+
+###############################################################################
+# ACCOUNTS RECEIVABLE - Contas a Receber
+###############################################################################
+
+### Criar conta a receber
+POST {{baseUrl}}/financial/accounts-receivable
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "customerId": "{customerId}",
+  "saleId": "{saleId}",
+  "invoiceNumber": "REC-2024-001",
+  "amount": 500.00,
+  "dueDate": "2024-02-10T10:00:00Z",
+  "paymentMethod": "Crediário"
+}
+
+### Criar conta a receber - Com parcelamento
+POST {{baseUrl}}/financial/accounts-receivable
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "customerId": "{customerId}",
+  "saleId": "{saleId}",
+  "invoiceNumber": "REC-2024-002",
+  "amount": 1000.00,
+  "dueDate": "2024-02-28T10:00:00Z",
+  "installmentNumber": 1,
+  "totalInstallments": 3,
+  "notes": "Parcelado em 3x"
+}
+
+### Listar contas a receber
+GET {{baseUrl}}/financial/accounts-receivable?page=1&limit=20
+Authorization: {{token}}
+
+### Listar contas a receber - Por cliente
+GET {{baseUrl}}/financial/accounts-receivable/customer/{customerId}
+Authorization: {{token}}
+
+### Contas a receber por vencer
+GET {{baseUrl}}/financial/accounts-receivable/upcoming?days=7
+Authorization: {{token}}
+
+### Contas vencidas
+GET {{baseUrl}}/financial/accounts-receivable/overdue
+Authorization: {{token}}
+
+### Resumo de contas a receber
+GET {{baseUrl}}/financial/accounts-receivable/summary
+Authorization: {{token}}
+
+### Calcular DSO (Days Sales Outstanding)
+GET {{baseUrl}}/financial/accounts-receivable/analytics/dso
+Authorization: {{token}}
+
+### Obter conta a receber específica
+GET {{baseUrl}}/financial/accounts-receivable/{accountReceivableId}
+Authorization: {{token}}
+
+### Registrar recebimento - Completo
+POST {{baseUrl}}/financial/accounts-receivable/{accountReceivableId}/payment
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "paidAmount": 500.00,
+  "paymentDate": "2024-02-08T10:00:00Z",
+  "paymentMethod": "Dinheiro"
+}
+
+### Registrar recebimento - Parcial
+POST {{baseUrl}}/financial/accounts-receivable/{accountReceivableId}/payment
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "paidAmount": 333.33,
+  "paymentDate": "2024-02-28T15:00:00Z",
+  "paymentMethod": "Débito",
+  "notes": "Primeira parcela recebida"
+}
+
+### Atualizar conta a receber
+PUT {{baseUrl}}/financial/accounts-receivable/{accountReceivableId}
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "dueDate": "2024-02-15T10:00:00Z",
+  "notes": "Cliente solicitou prorrogação"
+}
+
+### Cancelar conta a receber
+POST {{baseUrl}}/financial/accounts-receivable/{accountReceivableId}/cancel
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "reason": "Cliente não compareceu mais"
+}
+
+###############################################################################
+# FINANCIAL REPORTS - DRE, Cash Flow, Análises
+###############################################################################
+
+### Gerar DRE (Demonstração de Resultado)
+GET {{baseUrl}}/financial/reports/dre?startDate=2024-01-01T00:00:00Z&endDate=2024-01-31T23:59:59Z
+Authorization: {{token}}
+
+### Gerar Fluxo de Caixa
+GET {{baseUrl}}/financial/reports/cash-flow?startDate=2024-01-01T00:00:00Z&endDate=2024-01-31T23:59:59Z
+Authorization: {{token}}
+
+### Análise de Lucratividade
+GET {{baseUrl}}/financial/reports/profitability?startDate=2024-01-01T00:00:00Z&endDate=2024-01-31T23:59:59Z
+Authorization: {{token}}
+
+### Indicadores Financeiros
+GET {{baseUrl}}/financial/reports/indicators
+Authorization: {{token}}
+
+### Relatório Comparativo - Mês atual vs Mês anterior
+GET {{baseUrl}}/financial/reports/comparative?startDate=2024-01-01T00:00:00Z&endDate=2024-01-31T23:59:59Z
+Authorization: {{token}}
+
+###############################################################################
+# EXEMPLOS DE RESPOSTAS
+###############################################################################
+
+# DRE Response Example (200 OK)
+@dre_response = {
+  "success": true,
+  "data": {
+    "period": {
+      "startDate": "2024-01-01T00:00:00Z",
+      "endDate": "2024-01-31T23:59:59Z"
+    },
+    "grossRevenue": 15000,
+    "discounts": 500,
+    "netRevenue": 14500,
+    "costOfGoodsSold": 5000,
+    "grossProfit": 9500,
+    "grossProfitMargin": 65.52,
+    "operatingExpenses": 3000,
+    "operatingProfit": 6500,
+    "operatingMargin": 44.83,
+    "financialIncome": 100,
+    "financialExpenses": 50,
+    "financialResult": 50,
+    "otherIncome": 0,
+    "otherExpenses": 0,
+    "profitBeforeTaxes": 6550,
+    "taxes": 1310,
+    "netProfit": 5240,
+    "netMargin": 36.1
+  }
+}
+
+# Accounts Payable Summary Response (200 OK)
+@payable_summary = {
+  "success": true,
+  "data": {
+    "totalAmount": 8500,
+    "paid": 2,
+    "pending": 3,
+    "overdue": 1,
+    "scheduled": 5
+  }
+}
+
+# Error Response (400 Bad Request)
+@error_response = {
+  "success": false,
+  "error": "Valor deve ser maior que zero",
+  "code": 400
+}

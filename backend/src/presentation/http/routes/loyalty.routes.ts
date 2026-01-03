@@ -83,8 +83,8 @@ router.get(
 // Listar prêmios (todos os usuários autenticados)
 router.get('/rewards', asyncHandler(loyaltyController.listRewards.bind(loyaltyController)));
 
-// Obter prêmio por ID (todos os usuários autenticados)
-router.get('/rewards/:rewardId', asyncHandler(loyaltyController.getRewardById.bind(loyaltyController)));
+// TODO: Implementar getRewardById
+// router.get('/rewards/:rewardId', asyncHandler(loyaltyController.getRewardById.bind(loyaltyController)));
 
 // Criar prêmio (admin/manager)
 router.post(

@@ -22,7 +22,7 @@ router.post(
 router.get(
   '/current',
   authorize(['admin', 'manager', 'cashier']),
-  validate(cashSessionValidators.current, 'query'),
+  validate(cashSessionValidators.current),
   controller.getCurrent.bind(controller)
 );
 
@@ -30,7 +30,7 @@ router.get(
 router.get(
   '/history',
   authorize(['admin', 'manager']),
-  validate(cashSessionValidators.history, 'query'),
+  validate(cashSessionValidators.history),
   controller.history.bind(controller)
 );
 
@@ -38,7 +38,7 @@ router.get(
 router.get(
   '/:id',
   authorize(['admin', 'manager', 'cashier']),
-  validate(cashSessionValidators.idParam, 'params'),
+  validate(cashSessionValidators.idParam),
   controller.getById.bind(controller)
 );
 
@@ -46,7 +46,7 @@ router.get(
 router.post(
   '/:id/cashier-close',
   authorize(['admin', 'manager', 'cashier']),
-  validate(cashSessionValidators.idParam, 'params'),
+  validate(cashSessionValidators.idParam),
   validate(cashSessionValidators.cashierClose),
   controller.cashierClose.bind(controller)
 );
@@ -55,7 +55,7 @@ router.post(
 router.post(
   '/:id/manager-close',
   authorize(['admin', 'manager']),
-  validate(cashSessionValidators.idParam, 'params'),
+  validate(cashSessionValidators.idParam),
   validate(cashSessionValidators.managerClose),
   controller.managerClose.bind(controller)
 );
@@ -64,7 +64,7 @@ router.post(
 router.get(
   '/:id/report',
   authorize(['admin', 'manager']),
-  validate(cashSessionValidators.idParam, 'params'),
+  validate(cashSessionValidators.idParam),
   controller.report.bind(controller)
 );
 
@@ -72,7 +72,7 @@ router.get(
 router.post(
   '/:id/recalculate',
   authorize(['admin', 'manager']),
-  validate(cashSessionValidators.idParam, 'params'),
+  validate(cashSessionValidators.idParam),
   controller.recalculateTotals.bind(controller)
 );
 

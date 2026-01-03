@@ -818,11 +818,8 @@ export class ComandaService {
         await tx.customer.update({
           where: { id: comanda.customerId },
           data: {
-            totalPurchases: {
+            purchaseCount: {
               decrement: 1,
-            },
-            totalSpent: {
-              decrement: Number(comanda.total),
             },
           },
         });
@@ -935,11 +932,8 @@ export class ComandaService {
           await tx.customer.update({
             where: { id: comanda.customerId },
             data: {
-              totalPurchases: {
+              purchaseCount: {
                 decrement: 1,
-              },
-              totalSpent: {
-                decrement: Number(comanda.total),
               },
             },
           });

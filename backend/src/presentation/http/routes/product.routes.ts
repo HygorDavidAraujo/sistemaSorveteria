@@ -33,7 +33,7 @@ router.get(
  */
 router.get(
   '/products',
-  validate(productValidators.searchProducts, 'query'),
+  validate(productValidators.searchProducts),
   productController.searchProducts.bind(productController)
 );
 
@@ -44,7 +44,7 @@ router.get(
  */
 router.get(
   '/products/:id',
-  validate(productValidators.uuidParam, 'params'),
+  validate(productValidators.uuidParam),
   productController.getProductById.bind(productController)
 );
 
@@ -68,7 +68,7 @@ router.post(
 router.put(
   '/products/:id',
   authorize(['admin', 'manager']),
-  validate(productValidators.uuidParam, 'params'),
+  validate(productValidators.uuidParam),
   validate(productValidators.updateProduct),
   productController.updateProduct.bind(productController)
 );
@@ -81,7 +81,7 @@ router.put(
 router.delete(
   '/products/:id',
   authorize(['admin']),
-  validate(productValidators.uuidParam, 'params'),
+  validate(productValidators.uuidParam),
   productController.deactivateProduct.bind(productController)
 );
 
@@ -93,7 +93,7 @@ router.delete(
 router.post(
   '/products/:id/costs',
   authorize(['admin', 'manager']),
-  validate(productValidators.uuidParam, 'params'),
+  validate(productValidators.uuidParam),
   validate(productValidators.addCost),
   productController.addProductCost.bind(productController)
 );
@@ -106,7 +106,7 @@ router.post(
 router.patch(
   '/products/:id/stock',
   authorize(['admin', 'manager']),
-  validate(productValidators.uuidParam, 'params'),
+  validate(productValidators.uuidParam),
   validate(productValidators.updateStock),
   productController.updateStock.bind(productController)
 );
@@ -142,7 +142,7 @@ router.get(
  */
 router.get(
   '/categories/:id',
-  validate(productValidators.uuidParam, 'params'),
+  validate(productValidators.uuidParam),
   productController.getCategoryById.bind(productController)
 );
 
@@ -166,7 +166,7 @@ router.post(
 router.put(
   '/categories/:id',
   authorize(['admin', 'manager']),
-  validate(productValidators.uuidParam, 'params'),
+  validate(productValidators.uuidParam),
   validate(productValidators.updateCategory),
   productController.updateCategory.bind(productController)
 );
@@ -179,7 +179,7 @@ router.put(
 router.delete(
   '/categories/:id',
   authorize(['admin']),
-  validate(productValidators.uuidParam, 'params'),
+  validate(productValidators.uuidParam),
   productController.deactivateCategory.bind(productController)
 );
 

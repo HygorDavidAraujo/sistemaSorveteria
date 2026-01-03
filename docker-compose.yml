@@ -55,21 +55,23 @@ services:
     command: npm run dev
 
   # Frontend (React)
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #     dockerfile: Dockerfile
-  #   container_name: gelatini-frontend
-  #   environment:
-  #     - VITE_API_URL=http://localhost:3000/api/v1
-  #   ports:
-  #     - "5173:5173"
-  #   depends_on:
-  #     - backend
-  #   volumes:
-  #     - ./frontend:/app
-  #     - /app/node_modules
-  #   command: npm run dev
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: gelatini-frontend
+    environment:
+      - VITE_API_URL=http://backend:3000/api/v1
+    ports:
+      - "5173:5173"
+    depends_on:
+      backend:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5173"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
 volumes:
   postgres_data:

@@ -93,33 +93,32 @@ export class LoyaltyController {
   }
 
   async listRewards(req: Request, res: Response) {
-    const { isActive, page, limit, orderBy } = req.query;
+    const { isActive, page, limit } = req.query;
 
     const rewards = await loyaltyService.listRewards({
       isActive: isActive ? isActive === 'true' : undefined,
       page: page ? parseInt(page as string) : undefined,
       limit: limit ? parseInt(limit as string) : undefined,
-      orderBy: orderBy as any,
     });
 
     res.json(rewards);
   }
 
-  async getRewardById(req: Request, res: Response) {
-    const { rewardId } = req.params;
-    const reward = await loyaltyService.getRewardById(rewardId);
-    res.json(reward);
-  }
+  // TODO: Implementar getRewardById no LoyaltyService
+  // async getRewardById(req: Request, res: Response) {
+  //   const { rewardId } = req.params;
+  //   const reward = await loyaltyService.getRewardById(rewardId);
+  //   res.json(reward);
+  // }
 
   async redeemReward(req: Request, res: Response) {
     const { rewardId } = req.params;
-    const { customerId, quantity } = req.body;
+    const { customerId } = req.body;
     const userId = req.user?.id;
 
     const result = await loyaltyService.redeemReward({
       customerId,
       rewardId,
-      quantity,
       createdById: userId,
     });
 

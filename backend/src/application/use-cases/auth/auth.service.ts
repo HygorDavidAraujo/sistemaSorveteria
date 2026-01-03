@@ -33,17 +33,17 @@ interface TokenResponse {
 export class AuthService {
   private generateAccessToken(userId: string, email: string, role: string): string {
     return jwt.sign(
-      { userId, email, role },
-      process.env.JWT_SECRET!,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '15m' }
+      { id: userId, userId, email, role },
+      process.env.JWT_SECRET as string,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '15m' } as jwt.SignOptions
     );
   }
 
   private generateRefreshToken(userId: string): string {
     return jwt.sign(
-      { userId },
-      process.env.JWT_REFRESH_SECRET!,
-      { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
+      { id: userId, userId },
+      process.env.JWT_REFRESH_SECRET as string,
+      { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' } as jwt.SignOptions
     );
   }
 
@@ -71,6 +71,11 @@ export class AuthService {
     // Generate tokens
     const accessToken = this.generateAccessToken(user.id, user.email, user.role);
     const refreshToken = this.generateRefreshToken(user.id);
+
+    // Delete old refresh tokens for this user
+    await prisma.refreshToken.deleteMany({
+      where: { userId: user.id },
+    });
 
     // Store refresh token
     const expiresAt = new Date();

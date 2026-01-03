@@ -397,7 +397,7 @@ export class LoyaltyService {
           select: {
             id: true,
             name: true,
-            price: true,
+            salePrice: true,
           },
         },
       },
@@ -444,7 +444,7 @@ export class LoyaltyService {
             select: {
               id: true,
               name: true,
-              price: true,
+              salePrice: true,
               code: true,
             },
           },
@@ -516,7 +516,7 @@ export class LoyaltyService {
       this.prismaClient.loyaltyTransaction.create({
         data: {
           customerId: data.customerId,
-          transactionType: 'reward_redeem',
+          transactionType: 'redeem',
           points: -reward.pointsRequired,
           balanceAfter,
           rewardId: data.rewardId,
@@ -585,7 +585,7 @@ export class LoyaltyService {
           select: {
             id: true,
             name: true,
-            price: true,
+            salePrice: true,
           },
         },
       },
@@ -706,7 +706,7 @@ export class LoyaltyService {
         _sum: { points: true },
       }),
       this.prismaClient.loyaltyTransaction.aggregate({
-        where: { transactionType: { in: ['redeem', 'reward_redeem'] } },
+        where: { transactionType: 'redeem' },
         _sum: { points: true },
       }),
       this.prismaClient.loyaltyReward.count({
@@ -734,7 +734,7 @@ export class LoyaltyService {
       totalCustomers,
       customersWithPoints,
       totalPointsIssued: totalPointsIssued._sum.points || 0,
-      totalPointsRedeemed: Math.abs(totalPointsRedeemed._sum.points || 0),
+      totalPointsRedeemed: Math.abs(totalPointsRedeemed._sum?.points || 0),
       currentTotalBalance: currentBalance._sum.loyaltyPoints || 0,
       activeRewards,
       recentTransactions,
