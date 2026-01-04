@@ -3,6 +3,7 @@ import { apiClient } from '@/services/api';
 import { Card, Button, Input, Modal, Loading, Alert, Badge } from '@/components/common';
 import { Gift, Search, TrendingUp } from 'lucide-react';
 import type { Customer, LoyaltyTransaction } from '@/types';
+import './LoyaltyPage.css';
 
 export const LoyaltyPage: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -22,8 +23,9 @@ export const LoyaltyPage: React.FC = () => {
   const loadCustomers = async () => {
     try {
       setLoading(true);
-      const data = await apiClient.getCustomers();
-      setCustomers(data.filter((c: any) => c.loyaltyPoints > 0));
+      const response = await apiClient.getCustomers();
+      const customersList = response.data || response;
+      setCustomers(customersList.filter((c: any) => c.loyaltyPoints > 0));
     } catch (err) {
       setError('Erro ao carregar clientes');
     } finally {
@@ -34,8 +36,8 @@ export const LoyaltyPage: React.FC = () => {
   const handleSelectCustomer = async (customer: Customer) => {
     setSelectedCustomer(customer);
     try {
-      const txs = await apiClient.getLoyaltyTransactions(customer.id);
-      setTransactions(txs);
+      const response = await apiClient.getLoyaltyTransactions(customer.id);
+      setTransactions(response.data || response);
     } catch (err) {
       setError('Erro ao carregar transações');
     }
@@ -58,8 +60,8 @@ export const LoyaltyPage: React.FC = () => {
       setRedeemAmount('');
       
       // Reload customer data
-      const updated = await apiClient.getCustomer(selectedCustomer.id);
-      setSelectedCustomer(updated);
+      const response = await apiClient.getCustomer(selectedCustomer.id);
+      setSelectedCustomer(response.data || response);
       loadCustomers();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
@@ -75,20 +77,20 @@ export const LoyaltyPage: React.FC = () => {
   if (loading) return <Loading message="Carregando dados de lealdade..." />;
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-dark mb-8 flex items-center gap-2">
+    <div className="max-w-7xl mx-auto space-y-8">
+      <div className="flex items-center gap-3 text-dark">
         <Gift size={32} />
-        Sistema de Lealdade
-      </h1>
+        <h1 className="text-3xl font-bold leading-tight">Sistema de Lealdade</h1>
+      </div>
 
       {error && <Alert variant="danger" onClose={() => setError(null)}>{error}</Alert>}
       {success && <Alert variant="success" onClose={() => setSuccess(null)}>{success}</Alert>}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
         {/* Customers List */}
         <div className="lg:col-span-1">
-          <Card className="sticky top-20">
-            <h2 className="text-xl font-bold mb-4">Clientes com Pontos</h2>
+          <Card className="lg:sticky lg:top-24 space-y-4">
+            <h2 className="text-xl font-semibold leading-tight">Clientes com Pontos</h2>
 
             <Input
               type="text"

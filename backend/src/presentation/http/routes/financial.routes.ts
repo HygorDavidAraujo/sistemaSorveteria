@@ -108,6 +108,15 @@ router.get(
   financialController.getTransactionsSummary
 );
 
+/**
+ * GET /financial/daily - Relatório diário
+ */
+router.get(
+  '/daily',
+  authorize(['admin', 'manager']),
+  financialController.getDailyReport
+);
+
 // ============================================================================
 // FINANCIAL CATEGORIES
 // ============================================================================

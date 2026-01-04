@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useCashSessionStore } from '@/store';
 import { Card, Button, Input, Modal, Loading, Alert } from '@/components/common';
 import { CreditCard, Play, Square } from 'lucide-react';
+import './CashPage.css';
 
 export const CashPage: React.FC = () => {
   const { currentSession, openSession, closeSession, loadSession } = useCashSessionStore();
@@ -47,22 +48,23 @@ export const CashPage: React.FC = () => {
   if (loading) return <Loading message="Carregando sessão de caixa..." />;
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-dark mb-8 flex items-center gap-2">
+    <div className="space-y-8">
+      <div className="flex items-center gap-3 text-dark">
         <CreditCard size={32} />
-        Gerenciar Caixa
-      </h1>
+        <h1 className="text-3xl font-bold leading-tight">Gerenciar Caixa</h1>
+      </div>
 
       {error && <Alert variant="danger" onClose={() => setError(null)}>{error}</Alert>}
       {success && <Alert variant="success" onClose={() => setSuccess(null)}>{success}</Alert>}
 
       {/* Session Status */}
-      <Card className="mb-8">
-        <div className="flex justify-between items-center">
-          <div>
-            <h2 className="text-2xl font-bold">Sessão de Caixa</h2>
-            <p className="text-gray-600 mt-2">
-              Status: <strong>
+      <Card>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <h2 className="text-2xl font-semibold leading-tight">Sessão de Caixa</h2>
+            <p className="text-gray-600 leading-relaxed">
+              Status:{' '}
+              <strong>
                 {currentSession?.status === 'open' ? (
                   <span className="text-success">Aberta</span>
                 ) : (
@@ -96,24 +98,24 @@ export const CashPage: React.FC = () => {
 
       {/* Current Session Details */}
       {currentSession && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card className="bg-gradient-to-br from-primary to-secondary text-white">
-            <p className="text-sm opacity-90">Saldo de Abertura</p>
-            <p className="text-3xl font-bold mt-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="bg-gray-50">
+            <p className="text-sm text-gray-600">Saldo de Abertura</p>
+            <p className="text-3xl font-semibold mt-2 text-gray-900 leading-tight">
               R$ {currentSession.openingBalance?.toFixed(2) || '0.00'}
             </p>
           </Card>
 
-          <Card className="bg-gradient-to-br from-success to-primary text-white">
-            <p className="text-sm opacity-90">Saldo Atual</p>
-            <p className="text-3xl font-bold mt-2">
+          <Card className="bg-gray-50">
+            <p className="text-sm text-gray-600">Saldo Atual</p>
+            <p className="text-3xl font-semibold mt-2 text-gray-900 leading-tight">
               R$ {currentSession.currentBalance?.toFixed(2) || '0.00'}
             </p>
           </Card>
 
-          <Card className="bg-gradient-to-br from-warning to-accent text-white">
-            <p className="text-sm opacity-90">Variação</p>
-            <p className="text-3xl font-bold mt-2">
+          <Card className="bg-gray-50">
+            <p className="text-sm text-gray-600">Variação</p>
+            <p className="text-3xl font-semibold mt-2 text-gray-900 leading-tight">
               R${' '}
               {(
                 (currentSession.currentBalance || 0) - (currentSession.openingBalance || 0)
@@ -125,8 +127,8 @@ export const CashPage: React.FC = () => {
 
       {/* Transaction History */}
       <Card>
-        <h3 className="text-xl font-bold mb-4">Histórico de Transações</h3>
-        <div className="text-center py-8 text-gray-500">
+        <h3 className="text-xl font-semibold mb-4 leading-tight">Histórico de Transações</h3>
+        <div className="text-center py-8 text-gray-500 leading-relaxed">
           <p>Nenhuma transação registrada ainda</p>
         </div>
       </Card>

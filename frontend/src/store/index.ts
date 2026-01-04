@@ -144,7 +144,8 @@ export const useCashSessionStore = create<CashSessionStore>((set) => ({
 
   loadSession: async () => {
     try {
-      const session = await apiClient.getCurrentCashSession();
+      const terminalId = localStorage.getItem('terminalId') || 'TERMINAL_01';
+      const session = await apiClient.getCurrentCashSession(terminalId);
       set({ currentSession: session, isOpen: session?.status === 'open' });
     } catch {
       set({ currentSession: null, isOpen: false });
@@ -152,7 +153,8 @@ export const useCashSessionStore = create<CashSessionStore>((set) => ({
   },
 
   openSession: async (openingBalance: number) => {
-    const session = await apiClient.openCashSession(openingBalance);
+    const terminalId = localStorage.getItem('terminalId') || 'TERMINAL_01';
+    const session = await apiClient.openCashSession(openingBalance, terminalId);
     set({ currentSession: session, isOpen: true });
   },
 

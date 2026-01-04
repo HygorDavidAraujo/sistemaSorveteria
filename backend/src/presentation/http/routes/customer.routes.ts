@@ -19,6 +19,12 @@ const controller = new CustomerController();
 // All routes require authentication
 router.use(authenticate);
 
+// Get all customers (list view)
+router.get(
+  '/',
+  controller.search
+);
+
 // Search customers (fast lookup during sales)
 router.get(
   '/search',

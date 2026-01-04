@@ -4,6 +4,7 @@ import { Card, Button, Alert } from '@/components/common';
 import { Settings, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import './SettingsPage.css';
 
 export const SettingsPage: React.FC = () => {
   const { user, logout } = useAuthStore();
@@ -23,11 +24,11 @@ export const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-dark mb-8 flex items-center gap-2">
+    <div className="max-w-7xl mx-auto space-y-8">
+      <div className="flex items-center gap-3 text-dark">
         <Settings size={32} />
-        Configurações
-      </h1>
+        <h1 className="text-3xl font-bold leading-tight">Configurações</h1>
+      </div>
 
       {success && <Alert variant="success" onClose={() => setSuccess(null)}>{success}</Alert>}
 

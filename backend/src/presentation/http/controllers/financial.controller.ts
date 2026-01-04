@@ -181,6 +181,25 @@ export class FinancialController {
   });
 
   /**
+   * Relatório diário
+   * GET /financial/daily
+   */
+  getDailyReport = asyncHandler(async (req: Request, res: Response) => {
+    const { date } = req.query;
+    const reportDate = date ? new Date(date as string) : new Date();
+
+    const summary = await this.financialService.getTransactionsSummary(
+      reportDate,
+      reportDate
+    );
+
+    res.json({
+      success: true,
+      data: summary,
+    });
+  });
+
+  /**
    * Listar categorias financeiras
    * GET /financial/categories
    */

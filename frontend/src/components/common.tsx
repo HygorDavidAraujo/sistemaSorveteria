@@ -16,20 +16,20 @@ export const Button: React.FC<ButtonProps> = ({
   className,
   ...props
 }) => {
-  const baseStyles = 'font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed';
+  const baseStyles = 'inline-flex items-center justify-center gap-2 font-semibold rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2';
 
   const variantStyles = {
-    primary: 'bg-primary text-white hover:bg-opacity-90',
-    secondary: 'bg-secondary text-white hover:bg-opacity-90',
-    danger: 'bg-danger text-white hover:bg-opacity-90',
-    success: 'bg-success text-white hover:bg-opacity-90',
-    warning: 'bg-warning text-white hover:bg-opacity-90',
+    primary: 'bg-primary text-white hover:bg-primary/90 focus-visible:outline-primary',
+    secondary: 'bg-secondary text-white hover:bg-secondary/90 focus-visible:outline-secondary',
+    danger: 'bg-danger text-white hover:bg-danger/90 focus-visible:outline-danger',
+    success: 'bg-success text-white hover:bg-success/90 focus-visible:outline-success',
+    warning: 'bg-warning text-white hover:bg-warning/90 focus-visible:outline-warning',
   };
 
   const sizeStyles = {
-    sm: 'px-3 py-1 text-sm',
-    md: 'px-4 py-2 text-base',
-    lg: 'px-6 py-3 text-lg',
+    sm: 'px-3 py-2 text-sm',
+    md: 'px-4 py-2.5 text-[15px]',
+    lg: 'px-5 py-3 text-base',
   };
 
   return (
@@ -49,18 +49,18 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input: React.FC<InputProps> = ({ label, error, className, ...props }) => (
-  <div className="flex flex-col gap-1">
-    {label && <label className="font-semibold text-sm text-dark">{label}</label>}
+  <div className="flex flex-col gap-1.5">
+    {label && <label className="font-semibold text-sm text-dark leading-relaxed">{label}</label>}
     <input
       className={clsx(
-        'px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary',
-        error && 'border-danger',
-        !error && 'border-light',
+        'px-4 py-2.5 rounded-lg border bg-white text-gray-900 placeholder:text-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition',
+        error && 'border-danger/80 focus:ring-danger/70',
+        !error && 'border-gray-200',
         className
       )}
       {...props}
     />
-    {error && <span className="text-danger text-sm">{error}</span>}
+    {error && <span className="text-danger text-sm leading-relaxed">{error}</span>}
   </div>
 );
 
@@ -71,13 +71,13 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
 }
 
 export const Select: React.FC<SelectProps> = ({ label, error, options, className, ...props }) => (
-  <div className="flex flex-col gap-1">
-    {label && <label className="font-semibold text-sm text-dark">{label}</label>}
+  <div className="flex flex-col gap-1.5">
+    {label && <label className="font-semibold text-sm text-dark leading-relaxed">{label}</label>}
     <select
       className={clsx(
-        'px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary',
-        error && 'border-danger',
-        !error && 'border-light',
+        'px-4 py-2.5 rounded-lg border bg-white text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition',
+        error && 'border-danger/80 focus:ring-danger/70',
+        !error && 'border-gray-200',
         className
       )}
       {...props}
@@ -99,7 +99,7 @@ interface CardProps {
 }
 
 export const Card: React.FC<CardProps> = ({ children, className }) => (
-  <div className={clsx('bg-white rounded-lg shadow-md p-6', className)}>
+  <div className={clsx('bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow p-6', className)}>
     {children}
   </div>
 );
@@ -169,21 +169,21 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, title, children, onClose, 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
-        <div className="flex justify-between items-center p-6 border-b">
-          <h2 className="text-xl font-bold">{title}</h2>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-auto overflow-hidden">
+        <div className="flex justify-between items-center p-6 border-b border-gray-100">
+          <h2 className="text-xl font-semibold text-gray-900 leading-relaxed">{title}</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-2xl"
+            className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
           >
             ✕
           </button>
         </div>
 
-        <div className="p-6 max-h-96 overflow-y-auto">{children}</div>
+        <div className="p-6 max-h-[70vh] overflow-y-auto leading-relaxed">{children}</div>
 
-        {footer && <div className="p-6 border-t bg-gray-50">{footer}</div>}
+        {footer && <div className="p-6 border-t border-gray-100 bg-gray-50">{footer}</div>}
       </div>
     </div>
   );
@@ -194,8 +194,8 @@ interface LoadingProps {
 }
 
 export const Loading: React.FC<LoadingProps> = ({ message = 'Carregando...' }) => (
-  <div className="flex flex-col items-center justify-center py-12">
-    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-    <p className="mt-4 text-gray-600">{message}</p>
+  <div className="flex flex-col items-center justify-center py-12 gap-3">
+    <div className="animate-spin rounded-full h-12 w-12 border-2 border-gray-200 border-t-primary"></div>
+    <p className="text-gray-700 text-base leading-relaxed">{message}</p>
   </div>
 );

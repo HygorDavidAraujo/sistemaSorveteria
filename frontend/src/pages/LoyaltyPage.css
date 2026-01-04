@@ -1,0 +1,289 @@
+/* Loyalty Page Layout */
+.loyalty {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* Header */
+.loyalty__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.loyalty__header-icon {
+  width: 32px;
+  height: 32px;
+  color: #1f2937;
+}
+
+.loyalty__title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+/* Main Grid */
+.loyalty__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 1024px) {
+  .loyalty__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Card */
+.loyalty__card {
+  padding: 24px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Card Title */
+.loyalty__card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0 0 16px 0;
+}
+
+/* Customer List */
+.loyalty__customer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.loyalty__customer-item {
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.loyalty__customer-item:hover {
+  background-color: #f9fafb;
+  border-color: #2563eb;
+}
+
+.loyalty__customer-item.active {
+  background-color: #eff6ff;
+  border-color: #2563eb;
+}
+
+.loyalty__customer-name {
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0 0 4px 0;
+  font-size: 14px;
+}
+
+.loyalty__customer-email {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0 0 4px 0;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.loyalty__customer-points {
+  font-size: 13px;
+  font-weight: 600;
+  color: #059669;
+}
+
+/* Search */
+.loyalty__search {
+  margin-bottom: 16px;
+}
+
+.loyalty__search input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.loyalty__search input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* Transaction List */
+.loyalty__transaction-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.loyalty__transaction-item {
+  padding: 12px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  border-left: 4px solid;
+}
+
+.loyalty__transaction-item.credit {
+  border-left-color: #059669;
+}
+
+.loyalty__transaction-item.debit {
+  border-left-color: #dc2626;
+}
+
+.loyalty__transaction-date {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0 0 4px 0;
+}
+
+.loyalty__transaction-description {
+  font-size: 14px;
+  color: #0f172a;
+  font-weight: 500;
+  margin: 0 0 4px 0;
+}
+
+.loyalty__transaction-amount {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.loyalty__transaction-amount.credit {
+  color: #059669;
+}
+
+.loyalty__transaction-amount.debit {
+  color: #dc2626;
+}
+
+/* Customer Details */
+.loyalty__customer-details {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.loyalty__detail-row {
+  padding: 16px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.loyalty__detail-label {
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.loyalty__detail-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* Balance Card */
+.loyalty__balance-card {
+  padding: 24px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  border: 1px solid #dcfce7;
+  border-radius: 12px;
+  text-align: center;
+  margin: 24px 0;
+}
+
+.loyalty__balance-label {
+  font-size: 14px;
+  color: #059669;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin: 0 0 8px 0;
+}
+
+.loyalty__balance-value {
+  font-size: 36px;
+  font-weight: 700;
+  color: #15803d;
+  margin: 0;
+}
+
+/* Redeem Form */
+.loyalty__redeem-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.loyalty__form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.loyalty__form-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.loyalty__form-input {
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.loyalty__form-input:focus {
+  outline: none;
+  border-color: #059669;
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+}
+
+/* Actions */
+.loyalty__actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.loyalty__actions button {
+  flex: 1;
+}
+
+/* Empty State */
+.loyalty__empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: #64748b;
+}
+
+.loyalty__empty-message {
+  font-size: 16px;
+  margin: 0;
+}
+
+/* Loading */
+.loyalty__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+}

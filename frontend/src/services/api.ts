@@ -115,9 +115,12 @@ export class ApiClient {
   }
 
   // Cash Sessions
-  async openCashSession(openingBalance: number) {
-    const response = await this.client.post('/cash-sessions/open', { openingBalance });
-    return response.data;
+  async openCashSession(openingBalance: number, terminalId: string = 'TERMINAL_01') {
+    const response = await this.client.post('/cash-sessions', { 
+      initialCash: openingBalance,
+      terminalId 
+    });
+    return response.data.data;
   }
 
   async closeCashSession(closingBalance: number) {
@@ -125,9 +128,9 @@ export class ApiClient {
     return response.data;
   }
 
-  async getCurrentCashSession() {
-    const response = await this.client.get('/cash-sessions/current');
-    return response.data;
+  async getCurrentCashSession(terminalId: string = 'TERMINAL_01') {
+    const response = await this.client.get(`/cash-sessions/current?terminalId=${terminalId}`);
+    return response.data.data;
   }
 
   // Comandas

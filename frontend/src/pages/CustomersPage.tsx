@@ -3,6 +3,7 @@ import { apiClient } from '@/services/api';
 import { Card, Button, Input, Modal, Loading, Alert, Badge } from '@/components/common';
 import { Users, Plus, Eye, Gift } from 'lucide-react';
 import type { Customer } from '@/types';
+import './CustomersPage.css';
 
 export const CustomersPage: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -27,8 +28,8 @@ export const CustomersPage: React.FC = () => {
   const loadCustomers = async () => {
     try {
       setLoading(true);
-      const data = await apiClient.getCustomers();
-      setCustomers(data);
+      const response = await apiClient.getCustomers();
+      setCustomers(response.data || response);
     } catch (err) {
       setError('Erro ao carregar clientes');
     } finally {
@@ -64,12 +65,12 @@ export const CustomersPage: React.FC = () => {
   if (loading) return <Loading message="Carregando clientes..." />;
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-dark flex items-center gap-2">
+    <div className="max-w-7xl mx-auto space-y-8">
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 text-dark">
           <Users size={32} />
-          Gerenciar Clientes
-        </h1>
+          <h1 className="text-3xl font-bold leading-tight">Gerenciar Clientes</h1>
+        </div>
         <Button
           variant="primary"
           onClick={() => {
@@ -85,7 +86,7 @@ export const CustomersPage: React.FC = () => {
       {error && <Alert variant="danger" onClose={() => setError(null)}>{error}</Alert>}
       {success && <Alert variant="success" onClose={() => setSuccess(null)}>{success}</Alert>}
 
-      <Card className="mb-6">
+      <Card>
         <Input
           label="Buscar Clientes"
           type="text"
@@ -116,15 +117,16 @@ export const CustomersPage: React.FC = () => {
                 <td className="px-6 py-4 text-sm">{customer.phone || '-'}</td>
                 <td className="px-6 py-4 text-sm">{customer.cpf || '-'}</td>
                 <td className="px-6 py-4 text-center">
-                  <Badge variant="secondary">{customer.loyaltyPoints} pts</Badge>
+                  <Badge variant="secondary">{customer.loyaltyPoints || 0} pts</Badge>
                 </td>
                 <td className="px-6 py-4 text-center">
-                  <Badge variant="success">R$ {customer.cashbackBalance.toFixed(2)}</Badge>
+                  <Badge variant="success">R$ {(customer.cashbackBalance || 0).toFixed(2)}</Badge>
                 </td>
                 <td className="px-6 py-4">
                   <button
                     onClick={() => handleViewDetails(customer)}
                     className="text-primary hover:text-secondary mr-4"
+                    title="Ver detalhes do cliente"
                   >
                     <Eye size={18} />
                   </button>
@@ -230,12 +232,12 @@ export const CustomersPage: React.FC = () => {
                   <Gift size={20} />
                   <p className="text-sm opacity-90">Pontos de Lealdade</p>
                 </div>
-                <p className="text-2xl font-bold">{selectedCustomer.loyaltyPoints}</p>
+                <p className="text-2xl font-bold">{selectedCustomer.loyaltyPoints || 0}</p>
               </Card>
 
               <Card className="bg-gradient-to-br from-success to-primary text-white">
                 <p className="text-sm opacity-90">Cashback Disponível</p>
-                <p className="text-2xl font-bold">R$ {selectedCustomer.cashbackBalance.toFixed(2)}</p>
+                <p className="text-2xl font-bold">R$ {(selectedCustomer.cashbackBalance || 0).toFixed(2)}</p>
               </Card>
             </div>
           </div>

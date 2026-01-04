@@ -31,12 +31,12 @@ function App() {
   return (
     <Router>
       {user ? (
-        <div className="flex h-screen bg-gray-50">
+        <div className="app-container">
           <Sidebar />
-          <div className="flex-1 flex flex-col ml-64 md:ml-64">
+          <div className="app-layout">
             <Header />
-            <main className="flex-1 overflow-auto bg-gray-50 pt-20">
-              <div className="p-8">
+            <main className="app-main">
+              <div className="app-content">
                 <Routes>
                   <Route
                     path="/"

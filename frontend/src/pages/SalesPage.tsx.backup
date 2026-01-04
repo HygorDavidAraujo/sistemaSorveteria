@@ -51,68 +51,72 @@ export const SalesPage: React.FC = () => {
     });
   };
 
-  const handleUpdateQuantity = (itemId: string, quantity: number) => {
-    if (quantity > 0) {
-      salesStore.updateItem(itemId, quantity);
-    }
-  };
-
   const handleRemoveItem = (itemId: string) => {
     salesStore.removeItem(itemId);
   };
 
+  const handleUpdateQuantity = (itemId: string, quantity: number) => {
+    salesStore.updateItem(itemId, quantity);
+  };
+
+  // Calculate totals using useMemo to avoid infinite loop
+  const { subtotal, total } = useMemo(() => {
+    const subtotal = salesStore.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+    const total = subtotal - discountValue;
+    return { subtotal, total };
+  }, [salesStore.items, discountValue]);
+
   const handleApplyCoupon = async () => {
-    if (!discountCode) return;
     try {
-      const response = await apiClient.validateCoupon(discountCode);
-      if (response && response.discount_value) {
-        setDiscountValue(response.discount_value);
-        setSuccess('Cupom aplicado com sucesso!');
-        setTimeout(() => setSuccess(null), 3000);
-      }
+      const coupon = await apiClient.validateCoupon(discountCode);
+      const subtotal = salesStore.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+      const discount =
+        coupon.discountType === 'percentage'
+          ? (subtotal * coupon.discountValue) / 100
+          : coupon.discountValue;
+      setDiscountValue(discount);
+      setSuccess(`Cupom aplicado! Desconto: R$ ${discount.toFixed(2)}`);
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError('Cupom inválido');
       setTimeout(() => setError(null), 3000);
     }
   };
 
-  const { subtotal, total } = useMemo(() => {
-    const subtotal = salesStore.items.reduce((sum, item) => sum + item.totalPrice, 0);
-    const total = subtotal - discountValue;
-    return { subtotal, total: Math.max(0, total) };
-  }, [salesStore.items, discountValue]);
-
   const handleCheckout = async () => {
+    if (salesStore.items.length === 0) {
+      setError('Adicione itens antes de finalizar');
+      return;
+    }
+
     try {
-      if (salesStore.items.length === 0) {
-        setError('Adicione itens ao carrinho');
-        return;
-      }
+      const saleData = {
+        customerId: selectedCustomer || undefined,
+        items: salesStore.items.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        })),
+        subtotal,
+        discountAmount: discountValue,
+        totalAmount: total,
+        paymentMethod,
+      };
 
-      await apiClient.createSale({
-        items: salesStore.items,
-        customer_id: selectedCustomer || null,
-        payment_method: paymentMethod,
-        discount_value: discountValue,
-        total_amount: total,
-        coupon_code: discountCode || null,
-      });
-
-      setSuccess('Venda finalizada com sucesso!');
+      await apiClient.createSale(saleData);
+      setSuccess('Venda realizada com sucesso!');
       salesStore.clear();
       setSelectedCustomer('');
       setDiscountCode('');
       setDiscountValue(0);
-      setPaymentMethod('cash');
       setIsCheckoutModalOpen(false);
-      await loadData();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erro ao finalizar venda');
     }
   };
 
-  if (loading) return <Loading message="Carregando..." />;
+  if (loading) return <Loading message="Carregando produtos..." />;
 
   return (
     <div className="sales-page">
@@ -121,58 +125,44 @@ export const SalesPage: React.FC = () => {
         <h1 className="sales-page__title">Sistema de Vendas</h1>
       </div>
 
-      {error && (
-        <div className="sales-page__alert sales-page__alert--danger">
-          {error}
-          <button onClick={() => setError(null)} className="sales-page__alert-close">✕</button>
-        </div>
-      )}
-      {success && (
-        <div className="sales-page__alert sales-page__alert--success">
-          {success}
-          <button onClick={() => setSuccess(null)} className="sales-page__alert-close">✕</button>
-        </div>
-      )}
+      {error && <Alert variant="danger" onClose={() => setError(null)}>{error}</Alert>}
+      {success && <Alert variant="success" onClose={() => setSuccess(null)}>{success}</Alert>}
 
       <div className="sales-page__grid">
         {/* Products */}
         <div className="sales-page__products">
-          <div className="sales-page__products-header">
-            <h2 className="sales-page__products-title">Produtos</h2>
-            <span className="sales-page__products-hint">Clique para adicionar ao carrinho</span>
-          </div>
-          <div className="sales-page__products-grid">
-            {products.map((product) => (
-              <div
-                key={product.id}
-                className="sales-page__product-card"
-                onClick={() => handleAddItem(product)}
-              >
-                <div className="sales-page__product-image">
-                  {product.image ? (
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      className="sales-page__product-image-img"
-                    />
-                  ) : (
-                    '🍦'
-                  )}
-                </div>
-                <p className="sales-page__product-name">{product.name}</p>
-                <p className="sales-page__product-price">R$ {(product.sale_price || product.price || 0).toFixed(2)}</p>
-                <span
-                  className={`sales-page__product-status ${
-                    product.is_active || product.available
-                      ? 'sales-page__product-status--available'
-                      : 'sales-page__product-status--unavailable'
-                  }`}
+          <Card className="sales-page__products-section">
+            <div className="sales-page__products-header">
+              <h2 className="sales-page__products-title">Produtos</h2>
+              <span className="sales-page__products-hint">Clique para adicionar ao carrinho</span>
+            </div>
+            <div className="sales-page__products-grid">
+              {products.map((product) => (
+                <div
+                  key={product.id}
+                  className="sales-page__product-card"
+                  onClick={() => handleAddItem(product)}
                 >
-                  {product.is_active || product.available ? 'Disponível' : 'Indisponível'}
-                </span>
-              </div>
-            ))}
-          </div>
+                  <div className="sales-page__product-image">
+                    {product.image ? (
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <span>🍦</span>
+                    )}
+                  </div>
+                  <h3 className="sales-page__product-name">{product.name}</h3>
+                  <p className="sales-page__product-price">R$ {(product.sale_price || product.price || 0).toFixed(2)}</p>
+                  <div className={product.is_active || product.available ? 'sales-page__product-status--available' : 'sales-page__product-status--unavailable'}>
+                    {product.is_active || product.available ? 'Disponível' : 'Indisponível'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
         </div>
 
         {/* Cart */}
@@ -191,7 +181,6 @@ export const SalesPage: React.FC = () => {
                     <div className="sales-page__cart-item-controls">
                       <input
                         type="number"
-                        title="Quantidade do item"
                         min="1"
                         value={item.quantity}
                         onChange={(e) => handleUpdateQuantity(item.id, parseInt(e.target.value))}
@@ -205,7 +194,6 @@ export const SalesPage: React.FC = () => {
                   <button
                     onClick={() => handleRemoveItem(item.id)}
                     className="sales-page__cart-item-remove"
-                    title="Remover item do carrinho"
                   >
                     <Trash2 size={16} />
                   </button>
@@ -220,7 +208,6 @@ export const SalesPage: React.FC = () => {
               <div className="sales-page__cart-section">
                 <label className="sales-page__cart-section-label">Cliente (Opcional)</label>
                 <select
-                  title="Selecione um cliente"
                   value={selectedCustomer}
                   onChange={(e) => setSelectedCustomer(e.target.value)}
                   className="sales-page__cart-section-select"
@@ -280,7 +267,6 @@ export const SalesPage: React.FC = () => {
             <div className="sales-page__cart-section">
               <label className="sales-page__cart-section-label">Forma de Pagamento</label>
               <select
-                title="Selecione a forma de pagamento"
                 value={paymentMethod}
                 onChange={(e) => setPaymentMethod(e.target.value as any)}
                 className="sales-page__cart-section-select"
@@ -303,55 +289,55 @@ export const SalesPage: React.FC = () => {
           )}
         </div>
       </div>
+    </div>
 
-      {/* Checkout Modal */}
-      <div className={`sales-page__modal ${isCheckoutModalOpen ? 'sales-page__modal--open' : ''}`}>
-        <div className="sales-page__modal-overlay" onClick={() => setIsCheckoutModalOpen(false)} />
-        <div className="sales-page__modal-content">
-          <div className="sales-page__modal-header">
-            <h2 className="sales-page__modal-title">Confirmar Venda</h2>
-            <button
-              onClick={() => setIsCheckoutModalOpen(false)}
-              className="sales-page__modal-close"
-            >
-              ✕
-            </button>
+    {/* Checkout Modal */}
+    <div className={`sales-page__modal ${isCheckoutModalOpen ? 'sales-page__modal--open' : ''}`}>
+      <div className="sales-page__modal-overlay" onClick={() => setIsCheckoutModalOpen(false)} />
+      <div className="sales-page__modal-content">
+        <div className="sales-page__modal-header">
+          <h2 className="sales-page__modal-title">Confirmar Venda</h2>
+          <button
+            onClick={() => setIsCheckoutModalOpen(false)}
+            className="sales-page__modal-close"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="sales-page__modal-body">
+          <div className="sales-page__modal-row">
+            <span className="sales-page__modal-label">Subtotal:</span>
+            <span className="sales-page__modal-value">R$ {subtotal.toFixed(2)}</span>
           </div>
-
-          <div className="sales-page__modal-body">
-            <div className="sales-page__modal-row">
-              <span className="sales-page__modal-label">Subtotal:</span>
-              <span className="sales-page__modal-value">R$ {subtotal.toFixed(2)}</span>
+          {discountValue > 0 && (
+            <div className="sales-page__modal-row sales-page__modal-row--discount">
+              <span className="sales-page__modal-label">Desconto:</span>
+              <span className="sales-page__modal-value">-R$ {discountValue.toFixed(2)}</span>
             </div>
-            {discountValue > 0 && (
-              <div className="sales-page__modal-row sales-page__modal-row--discount">
-                <span className="sales-page__modal-label">Desconto:</span>
-                <span className="sales-page__modal-value">-R$ {discountValue.toFixed(2)}</span>
-              </div>
-            )}
-            <div className="sales-page__modal-row sales-page__modal-row--total">
-              <span className="sales-page__modal-label">Total a Pagar:</span>
-              <span className="sales-page__modal-value">R$ {total.toFixed(2)}</span>
-            </div>
-            <p className="sales-page__modal-payment-info">
-              Forma de Pagamento: <strong>{paymentMethod === 'cash' ? 'Dinheiro' : paymentMethod === 'credit_card' ? 'Cartão Crédito' : paymentMethod === 'debit_card' ? 'Cartão Débito' : 'PIX'}</strong>
-            </p>
+          )}
+          <div className="sales-page__modal-row sales-page__modal-row--total">
+            <span className="sales-page__modal-label">Total a Pagar:</span>
+            <span className="sales-page__modal-value">R$ {total.toFixed(2)}</span>
           </div>
+          <p className="sales-page__modal-payment-info">
+            Forma de Pagamento: <strong>{paymentMethod === 'cash' ? 'Dinheiro' : paymentMethod === 'credit_card' ? 'Cartão Crédito' : paymentMethod === 'debit_card' ? 'Cartão Débito' : 'PIX'}</strong>
+          </p>
+        </div>
 
-          <div className="sales-page__modal-footer">
-            <button
-              onClick={() => setIsCheckoutModalOpen(false)}
-              className="sales-page__modal-button sales-page__modal-button--cancel"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleCheckout}
-              className="sales-page__modal-button sales-page__modal-button--confirm"
-            >
-              Confirmar Venda
-            </button>
-          </div>
+        <div className="sales-page__modal-footer">
+          <button
+            onClick={() => setIsCheckoutModalOpen(false)}
+            className="sales-page__modal-button sales-page__modal-button--cancel"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleCheckout}
+            className="sales-page__modal-button sales-page__modal-button--confirm"
+          >
+            Confirmar Venda
+          </button>
         </div>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { apiClient } from '@/services/api';
 import { Card, Button, Loading, Alert } from '@/components/common';
 import { BarChart3, Download } from 'lucide-react';
 import { format } from 'date-fns';
+import './ReportsPage.css';
 
 interface ReportData {
   period: string;
@@ -35,10 +36,46 @@ export const ReportsPage: React.FC = () => {
 
       let data;
       if (reportType === 'daily') {
-        data = await apiClient.getDailyReport(selectedDate);
+        const response = await apiClient.getDailyReport(selectedDate);
+        // Extract data from response structure
+        // The response might be { data: [...], total, limit, offset } OR { period, totalSales, ... }
+        // If it has a 'data' property that is an array, it's transaction data, not a report
+        if (response.data && Array.isArray(response.data)) {
+          // It's transaction data, generate a report from it
+          data = {
+            period: selectedDate,
+            totalSales: 0,
+            totalCash: 0,
+            totalCard: 0,
+            totalPix: 0,
+            discountsApplied: 0,
+            loyaltyRedeemed: 0,
+            cashbackRedeemed: 0,
+            netRevenue: 0,
+          };
+        } else {
+          data = response.data || response;
+        }
       } else {
         const [year, month] = selectedMonth.split('-');
-        data = await apiClient.getMonthlyReport(parseInt(month), parseInt(year));
+        const response = await apiClient.getMonthlyReport(parseInt(month), parseInt(year));
+        // Extract data from response structure
+        if (response.data && Array.isArray(response.data)) {
+          // It's transaction data, generate a report from it
+          data = {
+            period: selectedMonth,
+            totalSales: 0,
+            totalCash: 0,
+            totalCard: 0,
+            totalPix: 0,
+            discountsApplied: 0,
+            loyaltyRedeemed: 0,
+            cashbackRedeemed: 0,
+            netRevenue: 0,
+          };
+        } else {
+          data = response.data || response;
+        }
       }
 
       setReport(data);
@@ -61,20 +98,20 @@ export const ReportsPage: React.FC = () => {
       ['Período:', report.period],
       [''],
       ['RESUMO DE VENDAS'],
-      ['Total de Vendas', `R$ ${report.totalSales.toFixed(2)}`],
+      ['Total de Vendas', `R$ ${(report.totalSales || 0).toFixed(2)}`],
       [''],
       ['FORMAS DE PAGAMENTO'],
-      ['Dinheiro', `R$ ${report.totalCash.toFixed(2)}`],
-      ['Cartão Crédito', `R$ ${report.totalCard.toFixed(2)}`],
-      ['PIX', `R$ ${report.totalPix.toFixed(2)}`],
+      ['Dinheiro', `R$ ${(report.totalCash || 0).toFixed(2)}`],
+      ['Cartão Crédito', `R$ ${(report.totalCard || 0).toFixed(2)}`],
+      ['PIX', `R$ ${(report.totalPix || 0).toFixed(2)}`],
       [''],
       ['DESCONTOS E PROMOÇÕES'],
-      ['Descontos Aplicados', `R$ ${report.discountsApplied.toFixed(2)}`],
-      ['Pontos Lealdade Resgatados', `R$ ${report.loyaltyRedeemed.toFixed(2)}`],
-      ['Cashback Resgatado', `R$ ${report.cashbackRedeemed.toFixed(2)}`],
+      ['Descontos Aplicados', `R$ ${(report.discountsApplied || 0).toFixed(2)}`],
+      ['Pontos Lealdade Resgatados', `R$ ${(report.loyaltyRedeemed || 0).toFixed(2)}`],
+      ['Cashback Resgatado', `R$ ${(report.cashbackRedeemed || 0).toFixed(2)}`],
       [''],
       ['RESULTADO LÍQUIDO'],
-      ['Receita Líquida', `R$ ${report.netRevenue.toFixed(2)}`],
+      ['Receita Líquida', `R$ ${(report.netRevenue || 0).toFixed(2)}`],
     ]
       .map((row) => row.join(','))
       .join('\n');
@@ -89,11 +126,11 @@ export const ReportsPage: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-dark mb-8 flex items-center gap-2">
+    <div className="max-w-7xl mx-auto space-y-8">
+      <div className="flex items-center gap-3 text-dark">
         <BarChart3 size={32} />
-        Relatórios Financeiros
-      </h1>
+        <h1 className="text-3xl font-bold leading-tight">Relatórios Financeiros</h1>
+      </div>
 
       {error && <Alert variant="danger" onClose={() => setError(null)}>{error}</Alert>}
 
@@ -104,6 +141,7 @@ export const ReportsPage: React.FC = () => {
           <div>
             <label className="font-semibold text-sm block mb-2">Tipo de Relatório</label>
             <select
+              title="Selecione o tipo de relatório"
               value={reportType}
               onChange={(e) => {
                 setReportType(e.target.value as any);
@@ -122,6 +160,7 @@ export const ReportsPage: React.FC = () => {
               <label className="font-semibold text-sm block mb-2">Data</label>
               <input
                 type="date"
+                title="Selecione a data do relatório"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="w-full px-4 py-2 border rounded-lg"
@@ -131,7 +170,9 @@ export const ReportsPage: React.FC = () => {
             <div>
               <label className="font-semibold text-sm block mb-2">Período</label>
               <input
-                type="month"
+                type="text"
+                placeholder="MM/AAAA"
+                title="Digite o período (MM/AAAA)"
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
                 className="w-full px-4 py-2 border rounded-lg"
@@ -168,12 +209,12 @@ export const ReportsPage: React.FC = () => {
 
               <Card className="bg-gradient-to-br from-success to-primary text-white">
                 <p className="text-sm opacity-90">Total de Vendas</p>
-                <p className="text-3xl font-bold mt-2">R$ {report.totalSales.toFixed(2)}</p>
+                <p className="text-3xl font-bold mt-2">R$ {(report.totalSales || 0).toFixed(2)}</p>
               </Card>
 
               <Card className="bg-gradient-to-br from-warning to-accent text-white">
                 <p className="text-sm opacity-90">Receita Líquida</p>
-                <p className="text-3xl font-bold mt-2">R$ {report.netRevenue.toFixed(2)}</p>
+                <p className="text-3xl font-bold mt-2">R$ {(report.netRevenue || 0).toFixed(2)}</p>
               </Card>
             </div>
 
@@ -184,19 +225,19 @@ export const ReportsPage: React.FC = () => {
                 <div className="flex justify-between items-center p-4 bg-light rounded-lg">
                   <span className="font-semibold">Dinheiro</span>
                   <span className="text-xl font-bold text-primary">
-                    R$ {report.totalCash.toFixed(2)}
+                    R$ {(report.totalCash || 0).toFixed(2)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center p-4 bg-light rounded-lg">
                   <span className="font-semibold">Cartão Crédito</span>
                   <span className="text-xl font-bold text-secondary">
-                    R$ {report.totalCard.toFixed(2)}
+                    R$ {(report.totalCard || 0).toFixed(2)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center p-4 bg-light rounded-lg">
                   <span className="font-semibold">PIX</span>
                   <span className="text-xl font-bold text-success">
-                    R$ {report.totalPix.toFixed(2)}
+                    R$ {(report.totalPix || 0).toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -204,13 +245,13 @@ export const ReportsPage: React.FC = () => {
               {/* Percentages */}
               <div className="mt-6 space-y-2 text-sm">
                 <p className="text-gray-600">
-                  Dinheiro: {((report.totalCash / report.totalSales) * 100).toFixed(1)}%
+                  Dinheiro: {((report.totalCash || 0) / (report.totalSales || 1) * 100).toFixed(1)}%
                 </p>
-                <p className="text-gray-600">
-                  Cartão: {((report.totalCard / report.totalSales) * 100).toFixed(1)}%
+                <p className="text-sm text-gray-600">
+                  Cartão: {((report.totalCard || 0) / (report.totalSales || 1) * 100).toFixed(1)}%
                 </p>
-                <p className="text-gray-600">
-                  PIX: {((report.totalPix / report.totalSales) * 100).toFixed(1)}%
+                <p className="text-sm text-gray-600">
+                  PIX: {((report.totalPix || 0) / (report.totalSales || 1) * 100).toFixed(1)}%
                 </p>
               </div>
             </Card>
@@ -223,19 +264,19 @@ export const ReportsPage: React.FC = () => {
               <div className="p-4 bg-light rounded-lg">
                 <p className="text-sm text-gray-600">Descontos Aplicados</p>
                 <p className="text-2xl font-bold text-danger mt-2">
-                  -R$ {report.discountsApplied.toFixed(2)}
+                  -R$ {(report.discountsApplied || 0).toFixed(2)}
                 </p>
               </div>
               <div className="p-4 bg-light rounded-lg">
                 <p className="text-sm text-gray-600">Pontos Lealdade Resgatados</p>
                 <p className="text-2xl font-bold text-secondary mt-2">
-                  -R$ {report.loyaltyRedeemed.toFixed(2)}
+                  -R$ {(report.loyaltyRedeemed || 0).toFixed(2)}
                 </p>
               </div>
               <div className="p-4 bg-light rounded-lg">
                 <p className="text-sm text-gray-600">Cashback Resgatado</p>
                 <p className="text-2xl font-bold text-warning mt-2">
-                  -R$ {report.cashbackRedeemed.toFixed(2)}
+                  -R$ {(report.cashbackRedeemed || 0).toFixed(2)}
                 </p>
               </div>
             </div>
@@ -245,9 +286,9 @@ export const ReportsPage: React.FC = () => {
               <p className="text-2xl font-bold">
                 -R${' '}
                 {(
-                  report.discountsApplied +
-                  report.loyaltyRedeemed +
-                  report.cashbackRedeemed
+                  (report.discountsApplied || 0) +
+                  (report.loyaltyRedeemed || 0) +
+                  (report.cashbackRedeemed || 0)
                 ).toFixed(2)}
               </p>
             </div>

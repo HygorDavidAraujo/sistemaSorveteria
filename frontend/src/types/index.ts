@@ -7,15 +7,40 @@ export interface User {
   createdAt?: string;
 }
 
+export interface Category {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Product {
   id: string;
   name: string;
-  description: string;
-  price: number;
-  category: 'sorvete' | 'bebida' | 'sobremesa' | 'outro';
+  description?: string;
+  sale_price?: number;
+  price?: number; // Alias for sale_price
+  cost_price?: number;
+  category_id?: string;
+  category?: 'sorvete' | 'bebida' | 'sobremesa' | 'outro' | Category;
   image?: string;
-  available: boolean;
-  createdAt: string;
+  available?: boolean;
+  is_active?: boolean;
+  code?: string;
+  sale_type?: string;
+  unit?: string;
+  eligible_for_loyalty?: boolean;
+  loyalty_points_multiplier?: number;
+  track_stock?: boolean;
+  current_stock?: number;
+  min_stock?: number;
+  cashback_percentage?: number;
+  earns_cashback?: boolean;
+  createdAt?: string;
+  created_at?: string;
 }
 
 export interface Customer {
