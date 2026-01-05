@@ -65,11 +65,11 @@ export const CustomersPage: React.FC = () => {
   if (loading) return <Loading message="Carregando clientes..." />;
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3 text-dark">
+    <div className="customers-page">
+      <div className="customers-header">
+        <div className="page-header">
           <Users size={32} />
-          <h1 className="text-3xl font-bold leading-tight">Gerenciar Clientes</h1>
+          <h1>Gerenciar Clientes</h1>
         </div>
         <Button
           variant="primary"
@@ -78,7 +78,7 @@ export const CustomersPage: React.FC = () => {
             setIsFormModalOpen(true);
           }}
         >
-          <Plus size={18} className="mr-2 inline" />
+          <Plus size={18} />
           Novo Cliente
         </Button>
       </div>
@@ -96,36 +96,36 @@ export const CustomersPage: React.FC = () => {
         />
       </Card>
 
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-light">
+      <div className="customers-table-wrapper">
+        <table className="customers-table">
+          <thead>
             <tr>
-              <th className="px-6 py-3 text-left font-semibold">Nome</th>
-              <th className="px-6 py-3 text-left font-semibold">Email</th>
-              <th className="px-6 py-3 text-left font-semibold">Telefone</th>
-              <th className="px-6 py-3 text-left font-semibold">CPF</th>
-              <th className="px-6 py-3 text-center font-semibold">Pontos</th>
-              <th className="px-6 py-3 text-center font-semibold">Cashback</th>
-              <th className="px-6 py-3 text-left font-semibold">Ações</th>
+              <th>Nome</th>
+              <th>Email</th>
+              <th>Telefone</th>
+              <th>CPF</th>
+              <th>Pontos</th>
+              <th>Cashback</th>
+              <th>Ações</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y">
+          <tbody>
             {filteredCustomers.map((customer) => (
-              <tr key={customer.id} className="hover:bg-light transition">
-                <td className="px-6 py-4 font-semibold">{customer.name}</td>
-                <td className="px-6 py-4 text-sm text-gray-600">{customer.email}</td>
-                <td className="px-6 py-4 text-sm">{customer.phone || '-'}</td>
-                <td className="px-6 py-4 text-sm">{customer.cpf || '-'}</td>
-                <td className="px-6 py-4 text-center">
+              <tr key={customer.id}>
+                <td className="customers-name">{customer.name}</td>
+                <td className="customers-email">{customer.email}</td>
+                <td>{customer.phone || '-'}</td>
+                <td>{customer.cpf || '-'}</td>
+                <td className="customers-center">
                   <Badge variant="secondary">{customer.loyaltyPoints || 0} pts</Badge>
                 </td>
-                <td className="px-6 py-4 text-center">
+                <td className="customers-center">
                   <Badge variant="success">R$ {(customer.cashbackBalance || 0).toFixed(2)}</Badge>
                 </td>
-                <td className="px-6 py-4">
+                <td>
                   <button
                     onClick={() => handleViewDetails(customer)}
-                    className="text-primary hover:text-secondary mr-4"
+                    className="customers-action-button"
                     title="Ver detalhes do cliente"
                   >
                     <Eye size={18} />
@@ -138,8 +138,10 @@ export const CustomersPage: React.FC = () => {
       </div>
 
       {filteredCustomers.length === 0 && (
-        <Card className="text-center py-12">
-          <p className="text-gray-500 text-lg">Nenhum cliente encontrado</p>
+        <Card>
+          <div className="customers-empty">
+            <p>Nenhum cliente encontrado</p>
+          </div>
         </Card>
       )}
 
@@ -149,7 +151,7 @@ export const CustomersPage: React.FC = () => {
         title="Novo Cliente"
         onClose={() => setIsFormModalOpen(false)}
         footer={
-          <div className="flex gap-4">
+          <div className="modal-footer">
             <Button
               variant="secondary"
               onClick={() => setIsFormModalOpen(false)}
@@ -159,14 +161,13 @@ export const CustomersPage: React.FC = () => {
             <Button
               variant="primary"
               onClick={handleSubmit}
-              className="flex-1"
             >
               Criar Cliente
             </Button>
           </div>
         }
       >
-        <form className="space-y-4">
+        <form className="customers-form">
           <Input
             label="Nome"
             value={form.name}
@@ -204,40 +205,43 @@ export const CustomersPage: React.FC = () => {
             <Button
               variant="secondary"
               onClick={() => setIsDetailModalOpen(false)}
-              className="w-full"
             >
               Fechar
             </Button>
           }
         >
-          <div className="space-y-4">
-            <div className="bg-light p-4 rounded-lg">
-              <p className="text-sm text-gray-600">Email</p>
-              <p className="font-semibold">{selectedCustomer.email}</p>
+          <div className="customers-details">
+            <div className="customers-detail-item">
+              <p className="customers-detail-label">Email</p>
+              <p className="customers-detail-value">{selectedCustomer.email}</p>
             </div>
 
-            <div className="bg-light p-4 rounded-lg">
-              <p className="text-sm text-gray-600">Telefone</p>
-              <p className="font-semibold">{selectedCustomer.phone || 'Não informado'}</p>
+            <div className="customers-detail-item">
+              <p className="customers-detail-label">Telefone</p>
+              <p className="customers-detail-value">{selectedCustomer.phone || 'Não informado'}</p>
             </div>
 
-            <div className="bg-light p-4 rounded-lg">
-              <p className="text-sm text-gray-600">CPF</p>
-              <p className="font-semibold">{selectedCustomer.cpf || 'Não informado'}</p>
+            <div className="customers-detail-item">
+              <p className="customers-detail-label">CPF</p>
+              <p className="customers-detail-value">{selectedCustomer.cpf || 'Não informado'}</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <Card className="bg-gradient-to-br from-secondary to-accent text-white">
-                <div className="flex items-center gap-2 mb-2">
-                  <Gift size={20} />
-                  <p className="text-sm opacity-90">Pontos de Lealdade</p>
+            <div className="customers-detail-cards">
+              <Card>
+                <div className="customers-detail-card customers-detail-card-loyalty">
+                  <div className="customers-detail-card-header">
+                    <Gift size={20} />
+                    <p>Pontos de Lealdade</p>
+                  </div>
+                  <p className="customers-detail-card-value">{selectedCustomer.loyaltyPoints || 0}</p>
                 </div>
-                <p className="text-2xl font-bold">{selectedCustomer.loyaltyPoints || 0}</p>
               </Card>
 
-              <Card className="bg-gradient-to-br from-success to-primary text-white">
-                <p className="text-sm opacity-90">Cashback Disponível</p>
-                <p className="text-2xl font-bold">R$ {(selectedCustomer.cashbackBalance || 0).toFixed(2)}</p>
+              <Card>
+                <div className="customers-detail-card customers-detail-card-cashback">
+                  <p className="customers-detail-card-label">Cashback Disponível</p>
+                  <p className="customers-detail-card-value">R$ {(selectedCustomer.cashbackBalance || 0).toFixed(2)}</p>
+                </div>
               </Card>
             </div>
           </div>

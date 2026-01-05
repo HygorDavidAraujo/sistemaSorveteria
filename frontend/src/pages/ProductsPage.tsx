@@ -15,6 +15,7 @@ const getCategoryName = (cat: any): string => {
 
 export const ProductsPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -25,19 +26,35 @@ export const ProductsPage: React.FC = () => {
     name: '',
     description: '',
     price: '',
+    code: '',
     category: '',
     available: true,
   });
 
   useEffect(() => {
     loadProducts();
+    loadCategories();
   }, []);
+
+  const loadCategories = async () => {
+    try {
+      const response = await apiClient.get('/categories');
+      const unwrap = (res: any) => res?.data?.data ?? res?.data ?? res;
+      const list = Array.isArray(unwrap(response)) ? unwrap(response) : [];
+      setCategories(list as Category[]);
+    } catch (err) {
+      console.error('Erro ao carregar categorias:', err);
+    }
+  };
 
   const loadProducts = async () => {
     try {
       setLoading(true);
       const response = await apiClient.getProducts();
-      setProducts(response.data || response);
+      const unwrap = (res: any) => res?.data?.data ?? res?.data ?? res;
+      const raw = unwrap(response);
+      const list = Array.isArray(raw) ? raw : (raw?.items ?? []);
+      setProducts(list as Product[]);
     } catch (err) {
       setError('Erro ao carregar produtos');
     } finally {
@@ -45,16 +62,40 @@ export const ProductsPage: React.FC = () => {
     }
   };
 
+  const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const productData = {
+      const categoryId = isUuid(form.category) ? form.category : undefined;
+      const priceValue = parseFloat(form.price);
+      const codeSource = (form.code || form.name || '').trim();
+      const normalizedCode = codeSource
+        .replace(/\s+/g, '-')
+        .replace(/[-]{2,}/g, '-')
+        .replace(/(^-|-$)/g, '')
+        .slice(0, 50);
+
+      if (!editingId && !normalizedCode) {
+        setError('Código é obrigatório');
+        return;
+      }
+
+      if (!editingId && (Number.isNaN(priceValue) || priceValue <= 0)) {
+        setError('Preço deve ser maior que zero');
+        return;
+      }
+
+      const productData: any = {
         name: form.name,
         description: form.description,
-        price: parseFloat(form.price),
-        category: form.category,
-        available: form.available,
+        saleType: 'unit',
+        isActive: form.available,
       };
+
+      if (!editingId || normalizedCode) productData.code = normalizedCode;
+      if (!Number.isNaN(priceValue) && priceValue > 0) productData.salePrice = priceValue;
+      if (categoryId) productData.categoryId = categoryId;
 
       if (editingId) {
         await apiClient.updateProduct(editingId, productData);
@@ -67,7 +108,7 @@ export const ProductsPage: React.FC = () => {
       loadProducts();
       setIsFormModalOpen(false);
       setEditingId(null);
-      setForm({ name: '', description: '', price: '', category: '', available: true });
+      setForm({ name: '', description: '', price: '', code: '', category: '', available: true });
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erro ao salvar produto');
@@ -76,11 +117,13 @@ export const ProductsPage: React.FC = () => {
 
   const handleEdit = (product: Product) => {
     const categoryName = typeof product.category === 'string' ? product.category : (product.category as any)?.name || '';
+    const categoryValue = (product as any).category_id || (product as any).categoryId || (product.category as any)?.id || categoryName;
     setForm({
       name: product.name || '',
       description: product.description || '',
       price: (product.sale_price || product.price || 0).toString(),
-      category: categoryName,
+      code: (product as any).code || '',
+      category: categoryValue || '',
       available: product.is_active !== undefined ? product.is_active : product.available !== undefined ? product.available : true,
     });
     setEditingId(product.id);
@@ -117,7 +160,7 @@ export const ProductsPage: React.FC = () => {
         <button
           onClick={() => {
             setEditingId(null);
-            setForm({ name: '', description: '', price: '', category: '', available: true });
+            setForm({ name: '', description: '', price: '', code: '', category: '', available: true });
             setIsFormModalOpen(true);
           }}
           className="products-page__button products-page__button--primary"
@@ -258,19 +301,31 @@ export const ProductsPage: React.FC = () => {
             </div>
 
             <div className="products-page__form-group">
+              <label className="products-page__form-label">Código</label>
+              <input
+                type="text"
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value })}
+                className="products-page__form-input"
+                title="Código interno ou SKU"
+                required
+              />
+            </div>
+
+            <div className="products-page__form-group">
               <label className="products-page__form-label">Categoria</label>
               <select
                 value={form.category}
                 onChange={(e) => setForm({ ...form, category: e.target.value })}
                 className="products-page__form-select"
                 title="Selecione a categoria"
-                required
               >
                 <option value="">Selecione uma categoria</option>
-                <option value="sorvete">Sorvete</option>
-                <option value="bebida">Bebida</option>
-                <option value="sobremesa">Sobremesa</option>
-                <option value="outro">Outro</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
               </select>
             </div>
 

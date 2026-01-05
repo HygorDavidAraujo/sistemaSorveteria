@@ -12,6 +12,8 @@ import { CashPage } from '@/pages/CashPage';
 import { LoyaltyPage } from '@/pages/LoyaltyPage';
 import { ReportsPage } from '@/pages/ReportsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { ComandasPage } from '@/pages/ComandasPage';
+import { CouponsPage } from '@/pages/CouponsPage';
 
 // Components
 import { PrivateRoute } from '@/components/PrivateRoute';
@@ -91,6 +93,22 @@ function App() {
                     element={
                       <PrivateRoute requiredRole={['admin', 'manager']}>
                         <ReportsPage />
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/comandas"
+                    element={
+                      <PrivateRoute requiredRole={['admin', 'manager', 'cashier']}>
+                        <ComandasPage />
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/coupons"
+                    element={
+                      <PrivateRoute requiredRole={['admin', 'manager']}>
+                        <CouponsPage />
                       </PrivateRoute>
                     }
                   />

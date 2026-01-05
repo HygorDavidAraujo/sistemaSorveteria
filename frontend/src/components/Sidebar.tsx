@@ -10,6 +10,8 @@ import {
   Settings,
   CreditCard,
   Gift,
+  FileText,
+  Tag,
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -55,6 +57,18 @@ export const Sidebar: React.FC = () => {
       href: '/loyalty',
       icon: <Gift size={20} />,
       roles: ['admin', 'manager', 'operator', 'cashier'],
+    },
+    {
+      label: 'Comandas',
+      href: '/comandas',
+      icon: <FileText size={20} />,
+      roles: ['admin', 'manager', 'cashier'],
+    },
+    {
+      label: 'Cupons',
+      href: '/coupons',
+      icon: <Tag size={20} />,
+      roles: ['admin', 'manager'],
     },
     {
       label: 'Relatórios',

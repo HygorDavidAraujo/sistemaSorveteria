@@ -77,43 +77,43 @@ export const LoyaltyPage: React.FC = () => {
   if (loading) return <Loading message="Carregando dados de lealdade..." />;
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
-      <div className="flex items-center gap-3 text-dark">
+    <div className="loyalty-page">
+      <div className="page-header">
         <Gift size={32} />
-        <h1 className="text-3xl font-bold leading-tight">Sistema de Lealdade</h1>
+        <h1>Sistema de Lealdade</h1>
       </div>
 
       {error && <Alert variant="danger" onClose={() => setError(null)}>{error}</Alert>}
       {success && <Alert variant="success" onClose={() => setSuccess(null)}>{success}</Alert>}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+      <div className="loyalty-page__grid">
         {/* Customers List */}
-        <div className="lg:col-span-1">
-          <Card className="lg:sticky lg:top-24 space-y-4">
-            <h2 className="text-xl font-semibold leading-tight">Clientes com Pontos</h2>
+        <div className="loyalty-page__sidebar">
+          <Card className="loyalty-page__customers-card">
+            <h2 className="loyalty-page__section-title">Clientes com Pontos</h2>
 
             <Input
               type="text"
               placeholder="Buscar cliente..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="mb-4"
+              className="loyalty-page__search-input"
             />
 
-            <div className="max-h-96 overflow-y-auto space-y-2">
+            <div className="loyalty-page__customers-list">
               {filteredCustomers.map((customer) => (
                 <button
                   key={customer.id}
                   onClick={() => handleSelectCustomer(customer)}
-                  className={`w-full text-left p-3 rounded-lg transition border-2 ${
+                  className={`loyalty-page__customer-item ${
                     selectedCustomer?.id === customer.id
-                      ? 'border-primary bg-primary bg-opacity-10'
-                      : 'border-light hover:border-primary'
+                      ? 'loyalty-page__customer-item--active'
+                      : ''
                   }`}
                 >
-                  <p className="font-semibold">{customer.name}</p>
-                  <p className="text-sm text-gray-600">{customer.email}</p>
-                  <p className="text-sm font-bold text-primary mt-1">
+                  <p className="loyalty-page__customer-name">{customer.name}</p>
+                  <p className="loyalty-page__customer-email">{customer.email}</p>
+                  <p className="loyalty-page__customer-points">
                     {customer.loyaltyPoints} pontos
                   </p>
                 </button>
@@ -121,7 +121,7 @@ export const LoyaltyPage: React.FC = () => {
             </div>
 
             {filteredCustomers.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
+              <div className="loyalty-page__empty-state">
                 <p>Nenhum cliente encontrado</p>
               </div>
             )}
@@ -130,38 +130,38 @@ export const LoyaltyPage: React.FC = () => {
 
         {/* Customer Details */}
         {selectedCustomer ? (
-          <div className="lg:col-span-2 space-y-6">
+          <div className="loyalty-page__details">
             {/* Customer Info */}
-            <Card className="bg-gradient-to-r from-primary to-secondary text-white">
-              <div className="flex justify-between items-start">
+            <Card className="loyalty-page__customer-header">
+              <div className="loyalty-page__customer-info">
                 <div>
-                  <h2 className="text-2xl font-bold">{selectedCustomer.name}</h2>
-                  <p className="text-sm opacity-90 mt-2">{selectedCustomer.email}</p>
+                  <h2 className="loyalty-page__customer-title">{selectedCustomer.name}</h2>
+                  <p className="loyalty-page__customer-subtitle">{selectedCustomer.email}</p>
                 </div>
-                <Badge variant="success" className="text-white">
+                <Badge variant="success" className="loyalty-page__badge">
                   {selectedCustomer.loyaltyPoints} pts
                 </Badge>
               </div>
             </Card>
 
             {/* Points Info */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="loyalty-page__points-grid">
               <Card>
-                <p className="text-sm text-gray-600 flex items-center gap-2">
+                <p className="loyalty-page__card-label">
                   <TrendingUp size={16} />
                   Pontos Disponíveis
                 </p>
-                <p className="text-3xl font-bold text-primary mt-2">
+                <p className="loyalty-page__card-value loyalty-page__card-value--primary">
                   {selectedCustomer.loyaltyPoints}
                 </p>
               </Card>
 
               <Card>
-                <p className="text-sm text-gray-600">Valor em Reais</p>
-                <p className="text-3xl font-bold text-secondary mt-2">
+                <p className="loyalty-page__card-label">Valor em Reais</p>
+                <p className="loyalty-page__card-value loyalty-page__card-value--secondary">
                   R$ {(selectedCustomer.loyaltyPoints * 0.1).toFixed(2)}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">(1 ponto = R$ 0,10)</p>
+                <p className="loyalty-page__card-note">(1 ponto = R$ 0,10)</p>
               </Card>
             </div>
 
@@ -169,24 +169,24 @@ export const LoyaltyPage: React.FC = () => {
             <Button
               variant="success"
               onClick={() => setIsRedeemModalOpen(true)}
-              className="w-full"
+              className="loyalty-page__redeem-button"
             >
               Resgatar Pontos
             </Button>
 
             {/* Transactions */}
             <Card>
-              <h3 className="text-xl font-bold mb-4">Histórico de Transações</h3>
-              <div className="max-h-96 overflow-y-auto space-y-2">
+              <h3 className="loyalty-page__transactions-title">Histórico de Transações</h3>
+              <div className="loyalty-page__transactions-list">
                 {transactions.length > 0 ? (
                   transactions.map((tx) => (
                     <div
                       key={tx.id}
-                      className="flex justify-between items-center p-3 bg-light rounded-lg"
+                      className="loyalty-page__transaction-item"
                     >
                       <div>
-                        <p className="font-semibold text-sm">{tx.description}</p>
-                        <p className="text-xs text-gray-500">
+                        <p className="loyalty-page__transaction-desc">{tx.description}</p>
+                        <p className="loyalty-page__transaction-date">
                           {new Date(tx.createdAt).toLocaleDateString('pt-BR')}
                         </p>
                       </div>
@@ -198,16 +198,16 @@ export const LoyaltyPage: React.FC = () => {
                     </div>
                   ))
                 ) : (
-                  <p className="text-gray-500 text-center py-4">Nenhuma transação</p>
+                  <p className="loyalty-page__empty-text">Nenhuma transação</p>
                 )}
               </div>
             </Card>
           </div>
         ) : (
-          <div className="lg:col-span-2">
-            <Card className="text-center py-12">
-              <Search size={48} className="mx-auto text-gray-300 mb-4" />
-              <p className="text-gray-500 text-lg">
+          <div className="loyalty-page__details">
+            <Card className="loyalty-page__placeholder">
+              <Search size={48} className="loyalty-page__placeholder-icon" />
+              <p className="loyalty-page__placeholder-text">
                 Selecione um cliente para ver os detalhes de lealdade
               </p>
             </Card>
@@ -239,10 +239,10 @@ export const LoyaltyPage: React.FC = () => {
             </div>
           }
         >
-          <form onSubmit={handleRedeem} className="space-y-4">
-            <div className="p-4 bg-light rounded-lg">
-              <p className="text-sm text-gray-600">Pontos Disponíveis</p>
-              <p className="text-2xl font-bold text-primary">
+          <form onSubmit={handleRedeem} className="loyalty-page__redeem-form">
+            <div className="loyalty-page__redeem-balance">
+              <p className="loyalty-page__redeem-label">Pontos Disponíveis</p>
+              <p className="loyalty-page__redeem-value loyalty-page__redeem-value--primary">
                 {selectedCustomer.loyaltyPoints}
               </p>
             </div>
@@ -259,9 +259,9 @@ export const LoyaltyPage: React.FC = () => {
             />
 
             {redeemAmount && (
-              <div className="p-4 bg-success bg-opacity-10 rounded-lg">
-                <p className="text-sm text-gray-600">Valor de Desconto</p>
-                <p className="text-2xl font-bold text-success">
+              <div className="loyalty-page__redeem-discount">
+                <p className="loyalty-page__redeem-label">Valor de Desconto</p>
+                <p className="loyalty-page__redeem-value loyalty-page__redeem-value--success">
                   R$ {(parseInt(redeemAmount) * 0.1).toFixed(2)}
                 </p>
               </div>

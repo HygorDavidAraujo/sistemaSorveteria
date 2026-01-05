@@ -26,13 +26,32 @@ export const DashboardPage: React.FC = () => {
     try {
       setLoading(true);
       await loadSession();
+      const unwrap = (res: any) => res?.data ?? res;
 
-      // Mock stats - replace with actual API calls
+      const [salesRes, customersRes, productsRes] = await Promise.all([
+        apiClient.get('/sales'),
+        apiClient.get('/customers'),
+        apiClient.get('/products'),
+      ]);
+
+      const salesData = unwrap(salesRes)?.data ?? unwrap(salesRes) ?? [];
+      const customersData = unwrap(customersRes)?.data ?? unwrap(customersRes) ?? [];
+      const productsData = unwrap(productsRes)?.data ?? unwrap(productsRes) ?? [];
+
+      const salesArray = Array.isArray(salesData) ? salesData : [];
+      const customersArray = Array.isArray(customersData) ? customersData : [];
+      const productsArray = Array.isArray(productsData) ? productsData : [];
+
+      const totalRevenue = salesArray.reduce(
+        (sum, sale: any) => sum + Number(sale?.totalAmount ?? sale?.total ?? 0),
+        0
+      );
+
       setStats({
-        totalSales: Math.floor(Math.random() * 100) + 20,
-        totalRevenue: Math.floor(Math.random() * 5000) + 1000,
-        totalCustomers: Math.floor(Math.random() * 200) + 50,
-        totalProducts: 25,
+        totalSales: salesArray.length,
+        totalRevenue,
+        totalCustomers: customersArray.length,
+        totalProducts: productsArray.length,
       });
     } catch (error) {
       console.error('Error loading dashboard:', error);

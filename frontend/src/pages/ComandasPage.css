@@ -1,0 +1,591 @@
+/* Comandas Page Layout */
+.comandas-page {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* Page Header */
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--color-dark);
+}
+
+.page-header h1 {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0;
+}
+
+/* Main Container */
+.comandas-container {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+}
+
+@media (min-width: 1024px) {
+  .comandas-container {
+    grid-template-columns: 1.5fr 1fr;
+  }
+}
+
+/* Comandas List Section */
+.comandas-list-section {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.comandas-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.comandas-list-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.comandas-list-header button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Comandas Grid */
+.comandas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.comanda-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
+  background: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.comanda-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(129, 93, 209, 0.1);
+}
+
+.comanda-card.active {
+  border-color: var(--color-primary);
+  background: rgba(129, 93, 209, 0.02);
+}
+
+.comanda-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.comanda-number {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 0 0 4px 0;
+}
+
+.comanda-customer {
+  font-size: 12px;
+  color: var(--color-gray-600);
+  margin: 0;
+}
+
+.comanda-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.comanda-status.open {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--color-success);
+}
+
+.comanda-status.closed {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-danger);
+}
+
+.comanda-card-items {
+  border-top: 1px solid var(--color-border);
+  padding-top: 12px;
+}
+
+.comanda-item-count {
+  font-size: 13px;
+  color: var(--color-gray-600);
+  margin: 0;
+}
+
+.comanda-card-footer {
+  border-top: 1px solid var(--color-border);
+  padding-top: 12px;
+}
+
+.comanda-total {
+  font-size: 18px;
+  color: var(--color-dark);
+  margin: 0;
+}
+
+/* Empty State */
+.comandas-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 48px 24px;
+  background: var(--color-light);
+  border-radius: var(--border-radius);
+  color: var(--color-gray-600);
+}
+
+.comandas-empty p {
+  margin: 0;
+  font-size: 16px;
+}
+
+/* Closed Comandas */
+.comandas-closed-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 32px 0 16px 0;
+}
+
+.comandas-table-wrapper {
+  overflow-x: auto;
+}
+
+.comandas-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.comandas-table thead {
+  background: var(--color-light);
+}
+
+.comandas-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--color-gray-700);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.comandas-table tbody tr {
+  border-bottom: 1px solid var(--color-border);
+  transition: background-color 0.2s;
+}
+
+.comandas-table tbody tr:hover {
+  background: var(--color-light);
+}
+
+.comandas-table td {
+  padding: 12px 16px;
+  font-size: 14px;
+}
+
+/* Comanda Details Section */
+.comanda-details-section {
+  position: sticky;
+  top: 32px;
+  height: fit-content;
+}
+
+.comanda-details-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 16px;
+}
+
+.comanda-details-header h2 {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 0 0 4px 0;
+}
+
+.comanda-details-subtitle {
+  font-size: 14px;
+  color: var(--color-gray-600);
+  margin: 4px 0 0 0;
+}
+
+.comanda-details-status {
+  display: flex;
+  align-items: center;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.open {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--color-success);
+}
+
+.status-badge.closed {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-danger);
+}
+
+/* Items Section */
+.comanda-items-section {
+  margin-bottom: 24px;
+}
+
+.comanda-items-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.comanda-items-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.comanda-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.comanda-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  background: var(--color-light);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--color-border);
+}
+
+.comanda-item-info {
+  flex: 1;
+}
+
+.comanda-item-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-dark);
+  margin: 0 0 4px 0;
+}
+
+.comanda-item-observation {
+  font-size: 12px;
+  color: var(--color-warning);
+  font-style: italic;
+  margin: 2px 0;
+}
+
+.comanda-item-qty {
+  font-size: 12px;
+  color: var(--color-gray-600);
+  margin: 4px 0 0 0;
+}
+
+.comanda-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comanda-item-subtotal {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-dark);
+  margin: 0;
+  min-width: 80px;
+  text-align: right;
+}
+
+.comanda-item-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-danger);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.comanda-item-remove:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.comanda-items-empty {
+  text-align: center;
+  padding: 24px;
+  color: var(--color-gray-600);
+  font-size: 14px;
+  background: var(--color-light);
+  border-radius: var(--border-radius);
+  margin: 0;
+}
+
+/* Summary */
+.comanda-summary {
+  padding: 16px;
+  background: var(--color-light);
+  border-radius: var(--border-radius);
+  margin-bottom: 16px;
+}
+
+.comanda-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 14px;
+  color: var(--color-gray-700);
+}
+
+.comanda-summary-row:not(:last-child) {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.comanda-summary-row strong {
+  color: var(--color-dark);
+  font-weight: 600;
+}
+
+.comanda-summary-row.discount strong {
+  color: var(--color-success);
+}
+
+.comanda-summary-row.total {
+  padding-top: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-dark);
+  border-top: 1px solid var(--color-border);
+}
+
+.comanda-summary-row.total strong {
+  font-size: 18px;
+  color: var(--color-primary);
+}
+
+/* Actions */
+.comanda-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.comanda-actions button {
+  width: 100%;
+}
+
+.comanda-cancel-btn {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  background: transparent;
+  color: var(--color-danger);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.comanda-cancel-btn:hover {
+  background: rgba(239, 68, 68, 0.05);
+  border-color: var(--color-danger);
+}
+
+/* Modal Footer */
+.modal-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.modal-footer button {
+  min-width: 100px;
+}
+
+/* Form Groups */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: var(--color-gray-700);
+}
+
+.form-value {
+  padding: 10px 12px;
+  background: var(--color-light);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  font-size: 14px;
+  color: var(--color-dark);
+  font-weight: 500;
+}
+
+.form-value.form-total {
+  background: rgba(16, 185, 129, 0.05);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: var(--color-success);
+  font-weight: 600;
+  font-size: 16px;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .comanda-details-section {
+    position: relative;
+    top: auto;
+  }
+
+  .comandas-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-header h1 {
+    font-size: 24px;
+  }
+
+  .comandas-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+
+  .comanda-card {
+    padding: 12px;
+  }
+
+  .comanda-number {
+    font-size: 16px;
+  }
+
+  .comandas-list-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .comandas-list-header button {
+    justify-content: center;
+  }
+
+  .comandas-table {
+    font-size: 12px;
+  }
+
+  .comandas-table th,
+  .comandas-table td {
+    padding: 8px;
+  }
+}
+
+/* Form Styles */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-gray-700);
+}
+
+.form-group input,
+.form-group select {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  font-size: 14px;
+  background: white;
+  color: var(--color-dark);
+  transition: all 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(129, 93, 209, 0.1);
+}
+
+.form-group input:disabled {
+  background: var(--color-light);
+  color: var(--color-gray-600);
+  cursor: not-allowed;
+}
+
+.form-value {
+  padding: 10px 12px;
+  background: var(--color-light);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  font-size: 14px;
+  color: var(--color-dark);
+  font-weight: 500;
+}
+
+.form-value.form-total {
+  background: rgba(16, 185, 129, 0.05);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: var(--color-success);
+  font-weight: 600;
+  font-size: 16px;
+}

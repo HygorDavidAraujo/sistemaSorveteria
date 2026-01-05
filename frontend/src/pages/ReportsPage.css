@@ -1,9 +1,289 @@
 /* Reports Page Layout */
-.reports {
+.reports-page {
+  max-width: 1280px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 32px;
 }
+
+/* Page Header */
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--color-dark);
+}
+
+.page-header h1 {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0;
+}
+
+/* Options Grid */
+.reports-options-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 768px) {
+  .reports-options-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.reports-label {
+  font-weight: 600;
+  font-size: 14px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.reports-select,
+.reports-input {
+  width: 100%;
+  padding: 8px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  background: white;
+  font-size: 14px;
+}
+
+.reports-select:focus,
+.reports-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(129, 93, 209, 0.1);
+}
+
+.reports-button-wrapper {
+  display: flex;
+  align-items: flex-end;
+}
+
+.reports-button-wrapper button {
+  width: 100%;
+}
+
+/* Reports Grid */
+.reports-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+  margin-bottom: 32px;
+}
+
+@media (min-width: 1024px) {
+  .reports-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Metrics Section */
+.reports-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.reports-metric-card {
+  padding: 20px;
+  border-radius: var(--border-radius);
+  color: white;
+}
+
+.reports-metric-period {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+}
+
+.reports-metric-sales {
+  background: linear-gradient(135deg, var(--color-success) 0%, var(--color-primary) 100%);
+}
+
+.reports-metric-revenue {
+  background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-accent) 100%);
+}
+
+.reports-metric-label {
+  font-size: 14px;
+  opacity: 0.9;
+  margin: 0 0 8px 0;
+}
+
+.reports-metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.reports-metric-value-large {
+  font-size: 30px;
+}
+
+/* Section Title */
+.reports-section-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 16px 0;
+}
+
+/* Payment Methods */
+.reports-payment-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.reports-payment-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: var(--color-light);
+  border-radius: var(--border-radius);
+}
+
+.reports-payment-name {
+  font-weight: 600;
+}
+
+.reports-payment-value {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.reports-payment-cash {
+  color: var(--color-primary);
+}
+
+.reports-payment-card {
+  color: var(--color-secondary);
+}
+
+.reports-payment-pix {
+  color: var(--color-success);
+}
+
+/* Percentages */
+.reports-percentages {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reports-percentage {
+  font-size: 14px;
+  color: var(--color-gray-600);
+  margin: 0;
+}
+
+/* Discounts Grid */
+.reports-discounts-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+@media (min-width: 768px) {
+  .reports-discounts-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.reports-discount-item {
+  padding: 16px;
+  background: var(--color-light);
+  border-radius: var(--border-radius);
+}
+
+.reports-discount-label {
+  font-size: 14px;
+  color: var(--color-gray-600);
+  margin: 0 0 8px 0;
+}
+
+.reports-discount-value {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.reports-discount-danger {
+  color: var(--color-danger);
+}
+
+.reports-discount-secondary {
+  color: var(--color-secondary);
+}
+
+.reports-discount-warning {
+  color: var(--color-warning);
+}
+
+/* Total Deductions */
+.reports-total-deductions {
+  padding: 16px;
+  background: var(--color-primary);
+  color: white;
+  border-radius: var(--border-radius);
+}
+
+.reports-total-label {
+  font-size: 14px;
+  opacity: 0.9;
+  margin: 0 0 8px 0;
+}
+
+.reports-total-value {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0;
+}
+
+/* Download Button */
+.reports-download {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.reports-download button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Empty State */
+.reports-empty {
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.reports-empty p {
+  color: var(--color-gray-500);
+  font-size: 18px;
+  margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .page-header h1 {
+    font-size: 24px;
+  }
+  
+  .reports-section-title {
+    font-size: 18px;
+  }
+  
+  .reports-metric-value-large {
+    font-size: 24px;
+  }
+}
+
 
 /* Header */
 .reports__header {

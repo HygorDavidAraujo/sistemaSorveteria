@@ -126,20 +126,20 @@ export const ReportsPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
-      <div className="flex items-center gap-3 text-dark">
+    <div className="reports-page">
+      <div className="page-header">
         <BarChart3 size={32} />
-        <h1 className="text-3xl font-bold leading-tight">Relatórios Financeiros</h1>
+        <h1>Relatórios Financeiros</h1>
       </div>
 
       {error && <Alert variant="danger" onClose={() => setError(null)}>{error}</Alert>}
 
       {/* Report Options */}
-      <Card className="mb-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <Card>
+        <div className="reports-options-grid">
           {/* Report Type Selection */}
           <div>
-            <label className="font-semibold text-sm block mb-2">Tipo de Relatório</label>
+            <label className="reports-label">Tipo de Relatório</label>
             <select
               title="Selecione o tipo de relatório"
               value={reportType}
@@ -147,7 +147,7 @@ export const ReportsPage: React.FC = () => {
                 setReportType(e.target.value as any);
                 setReport(null);
               }}
-              className="w-full px-4 py-2 border rounded-lg"
+              className="reports-select"
             >
               <option value="daily">Diário</option>
               <option value="monthly">Mensal</option>
@@ -157,36 +157,35 @@ export const ReportsPage: React.FC = () => {
           {/* Date/Month Selection */}
           {reportType === 'daily' ? (
             <div>
-              <label className="font-semibold text-sm block mb-2">Data</label>
+              <label className="reports-label">Data</label>
               <input
                 type="date"
                 title="Selecione a data do relatório"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-full px-4 py-2 border rounded-lg"
+                className="reports-input"
               />
             </div>
           ) : (
             <div>
-              <label className="font-semibold text-sm block mb-2">Período</label>
+              <label className="reports-label">Período</label>
               <input
                 type="text"
                 placeholder="MM/AAAA"
                 title="Digite o período (MM/AAAA)"
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="w-full px-4 py-2 border rounded-lg"
+                className="reports-input"
               />
             </div>
           )}
 
           {/* Generate Button */}
-          <div className="flex items-end">
+          <div className="reports-button-wrapper">
             <Button
               variant="primary"
               onClick={handleGenerateReport}
               isLoading={loading}
-              className="w-full"
             >
               Gerar Relatório
             </Button>
@@ -199,58 +198,64 @@ export const ReportsPage: React.FC = () => {
         <Loading message="Gerando relatório..." />
       ) : report ? (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          <div className="reports-grid">
             {/* Main Metrics */}
-            <div className="space-y-6">
-              <Card className="bg-gradient-to-br from-primary to-secondary text-white">
-                <p className="text-sm opacity-90">Período</p>
-                <p className="text-2xl font-bold mt-2">{report.period}</p>
+            <div className="reports-metrics">
+              <Card>
+                <div className="reports-metric-card reports-metric-period">
+                  <p className="reports-metric-label">Período</p>
+                  <p className="reports-metric-value">{report.period}</p>
+                </div>
               </Card>
 
-              <Card className="bg-gradient-to-br from-success to-primary text-white">
-                <p className="text-sm opacity-90">Total de Vendas</p>
-                <p className="text-3xl font-bold mt-2">R$ {(report.totalSales || 0).toFixed(2)}</p>
+              <Card>
+                <div className="reports-metric-card reports-metric-sales">
+                  <p className="reports-metric-label">Total de Vendas</p>
+                  <p className="reports-metric-value reports-metric-value-large">R$ {(report.totalSales || 0).toFixed(2)}</p>
+                </div>
               </Card>
 
-              <Card className="bg-gradient-to-br from-warning to-accent text-white">
-                <p className="text-sm opacity-90">Receita Líquida</p>
-                <p className="text-3xl font-bold mt-2">R$ {(report.netRevenue || 0).toFixed(2)}</p>
+              <Card>
+                <div className="reports-metric-card reports-metric-revenue">
+                  <p className="reports-metric-label">Receita Líquida</p>
+                  <p className="reports-metric-value reports-metric-value-large">R$ {(report.netRevenue || 0).toFixed(2)}</p>
+                </div>
               </Card>
             </div>
 
             {/* Payment Methods */}
             <Card>
-              <h3 className="text-xl font-bold mb-4">Formas de Pagamento</h3>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center p-4 bg-light rounded-lg">
-                  <span className="font-semibold">Dinheiro</span>
-                  <span className="text-xl font-bold text-primary">
+              <h3 className="reports-section-title">Formas de Pagamento</h3>
+              <div className="reports-payment-methods">
+                <div className="reports-payment-item">
+                  <span className="reports-payment-name">Dinheiro</span>
+                  <span className="reports-payment-value reports-payment-cash">
                     R$ {(report.totalCash || 0).toFixed(2)}
                   </span>
                 </div>
-                <div className="flex justify-between items-center p-4 bg-light rounded-lg">
-                  <span className="font-semibold">Cartão Crédito</span>
-                  <span className="text-xl font-bold text-secondary">
+                <div className="reports-payment-item">
+                  <span className="reports-payment-name">Cartão Crédito</span>
+                  <span className="reports-payment-value reports-payment-card">
                     R$ {(report.totalCard || 0).toFixed(2)}
                   </span>
                 </div>
-                <div className="flex justify-between items-center p-4 bg-light rounded-lg">
-                  <span className="font-semibold">PIX</span>
-                  <span className="text-xl font-bold text-success">
+                <div className="reports-payment-item">
+                  <span className="reports-payment-name">PIX</span>
+                  <span className="reports-payment-value reports-payment-pix">
                     R$ {(report.totalPix || 0).toFixed(2)}
                   </span>
                 </div>
               </div>
 
               {/* Percentages */}
-              <div className="mt-6 space-y-2 text-sm">
-                <p className="text-gray-600">
+              <div className="reports-percentages">
+                <p className="reports-percentage">
                   Dinheiro: {((report.totalCash || 0) / (report.totalSales || 1) * 100).toFixed(1)}%
                 </p>
-                <p className="text-sm text-gray-600">
+                <p className="reports-percentage">
                   Cartão: {((report.totalCard || 0) / (report.totalSales || 1) * 100).toFixed(1)}%
                 </p>
-                <p className="text-sm text-gray-600">
+                <p className="reports-percentage">
                   PIX: {((report.totalPix || 0) / (report.totalSales || 1) * 100).toFixed(1)}%
                 </p>
               </div>
@@ -258,32 +263,32 @@ export const ReportsPage: React.FC = () => {
           </div>
 
           {/* Discounts and Promotions */}
-          <Card className="mb-8">
-            <h3 className="text-xl font-bold mb-6">Descontos e Promoções</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 bg-light rounded-lg">
-                <p className="text-sm text-gray-600">Descontos Aplicados</p>
-                <p className="text-2xl font-bold text-danger mt-2">
+          <Card>
+            <h3 className="reports-section-title">Descontos e Promoções</h3>
+            <div className="reports-discounts-grid">
+              <div className="reports-discount-item">
+                <p className="reports-discount-label">Descontos Aplicados</p>
+                <p className="reports-discount-value reports-discount-danger">
                   -R$ {(report.discountsApplied || 0).toFixed(2)}
                 </p>
               </div>
-              <div className="p-4 bg-light rounded-lg">
-                <p className="text-sm text-gray-600">Pontos Lealdade Resgatados</p>
-                <p className="text-2xl font-bold text-secondary mt-2">
+              <div className="reports-discount-item">
+                <p className="reports-discount-label">Pontos Lealdade Resgatados</p>
+                <p className="reports-discount-value reports-discount-secondary">
                   -R$ {(report.loyaltyRedeemed || 0).toFixed(2)}
                 </p>
               </div>
-              <div className="p-4 bg-light rounded-lg">
-                <p className="text-sm text-gray-600">Cashback Resgatado</p>
-                <p className="text-2xl font-bold text-warning mt-2">
+              <div className="reports-discount-item">
+                <p className="reports-discount-label">Cashback Resgatado</p>
+                <p className="reports-discount-value reports-discount-warning">
                   -R$ {(report.cashbackRedeemed || 0).toFixed(2)}
                 </p>
               </div>
             </div>
 
-            <div className="mt-4 p-4 bg-primary text-white rounded-lg">
-              <p className="text-sm opacity-90">Total de Abatimentos</p>
-              <p className="text-2xl font-bold">
+            <div className="reports-total-deductions">
+              <p className="reports-total-label">Total de Abatimentos</p>
+              <p className="reports-total-value">
                 -R${' '}
                 {(
                   (report.discountsApplied || 0) +
@@ -295,11 +300,10 @@ export const ReportsPage: React.FC = () => {
           </Card>
 
           {/* Download Button */}
-          <div className="flex justify-end">
+          <div className="reports-download">
             <Button
               variant="secondary"
               onClick={downloadReport}
-              className="flex items-center gap-2"
             >
               <Download size={18} />
               Baixar Relatório (CSV)
@@ -307,8 +311,10 @@ export const ReportsPage: React.FC = () => {
           </div>
         </>
       ) : (
-        <Card className="text-center py-12">
-          <p className="text-gray-500 text-lg">Clique em "Gerar Relatório" para visualizar os dados</p>
+        <Card>
+          <div className="reports-empty">
+            <p>Clique em "Gerar Relatório" para visualizar os dados</p>
+          </div>
         </Card>
       )}
     </div>

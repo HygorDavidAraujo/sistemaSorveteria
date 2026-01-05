@@ -86,11 +86,7 @@ export class CashSessionService {
       include: this.includeRelations(),
     });
 
-    if (!session) {
-      throw new AppError('Nenhum caixa aberto para este terminal', 404);
-    }
-
-    return session;
+    return session || null;
   }
 
   async getById(id: string) {
