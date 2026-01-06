@@ -15,10 +15,31 @@ export const SalesPage: React.FC = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
   const [isCustomerSearchOpen, setIsCustomerSearchOpen] = useState(false);
+  const [isNewCustomerModalOpen, setIsNewCustomerModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'credit_card' | 'debit_card' | 'pix'>('cash');
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
   const [discountCode, setDiscountCode] = useState('');
   const [discountValue, setDiscountValue] = useState(0);
+  const [customerForm, setCustomerForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    whatsapp: '',
+    cpf: '',
+    birthDate: '',
+    gender: '',
+    customerType: 'pf',
+    street: '',
+    number: '',
+    complement: '',
+    neighborhood: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    referencePoint: '',
+    acceptsMarketing: true,
+    preferredContactMethod: '',
+  });
 
   const salesStore = useSalesStore();
 
@@ -95,6 +116,45 @@ export const SalesPage: React.FC = () => {
     if (!selectedCustomer) return 'Consumidor Final';
     const customer = customers.find(c => c.id === selectedCustomer);
     return customer ? `${customer.name} (${customer.cpf || customer.phone})` : 'Consumidor Final';
+  };
+
+  const handleCreateCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const response = await apiClient.post('/customers', customerForm);
+      const newCustomer = response.data.data || response.data;
+      
+      await loadData();
+      setSelectedCustomer(newCustomer.id);
+      setIsNewCustomerModalOpen(false);
+      setSuccess('Cliente cadastrado e vinculado com sucesso!');
+      setTimeout(() => setSuccess(null), 3000);
+      
+      setCustomerForm({
+        name: '',
+        email: '',
+        phone: '',
+        whatsapp: '',
+        cpf: '',
+        birthDate: '',
+        gender: '',
+        customerType: 'pf',
+        street: '',
+        number: '',
+        complement: '',
+        neighborhood: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        referencePoint: '',
+        acceptsMarketing: true,
+        preferredContactMethod: '',
+      });
+      setCustomerSearchTerm('');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Erro ao cadastrar cliente');
+      setTimeout(() => setError(null), 3000);
+    }
   };
 
   const handleApplyCoupon = async () => {
@@ -284,6 +344,14 @@ export const SalesPage: React.FC = () => {
                     placeholder="Buscar cliente por nome, CPF ou telefone..."
                     className="sales-page__customer-search-input"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setIsNewCustomerModalOpen(true)}
+                    className="sales-page__customer-add-button"
+                    title="Cadastrar novo cliente"
+                  >
+                    +
+                  </button>
 
                   {isCustomerSearchOpen && (
                     <div className="sales-page__customer-search-results">
@@ -395,6 +463,201 @@ export const SalesPage: React.FC = () => {
               Finalizar Venda
             </button>
           )}
+        </div>
+      </div>
+
+      {/* New Customer Modal */}
+      <div className={`sales-page__modal ${isNewCustomerModalOpen ? 'sales-page__modal--open' : ''}`}>
+        <div className="sales-page__modal-overlay" onClick={() => setIsNewCustomerModalOpen(false)} />
+        <div className="sales-page__modal-content sales-page__modal-content--large">
+          <div className="sales-page__modal-header">
+            <h2 className="sales-page__modal-title">Cadastrar Novo Cliente</h2>
+            <button
+              onClick={() => setIsNewCustomerModalOpen(false)}
+              className="sales-page__modal-close"
+            >
+              ✕
+            </button>
+          </div>
+
+          <form onSubmit={handleCreateCustomer} className="sales-page__customer-form">
+            <div className="sales-page__form-section">
+              <h3 className="sales-page__form-section-title">Informações Pessoais</h3>
+              
+              <div className="sales-page__form-group">
+                <label className="sales-page__form-label">Nome *</label>
+                <input
+                  type="text"
+                  required
+                  value={customerForm.name}
+                  onChange={(e) => setCustomerForm({...customerForm, name: e.target.value})}
+                  className="sales-page__form-input"
+                  placeholder="Nome completo"
+                />
+              </div>
+
+              <div className="sales-page__form-row">
+                <div className="sales-page__form-group">
+                  <label className="sales-page__form-label">CPF</label>
+                  <input
+                    type="text"
+                    value={customerForm.cpf}
+                    onChange={(e) => setCustomerForm({...customerForm, cpf: e.target.value})}
+                    className="sales-page__form-input"
+                    placeholder="000.000.000-00"
+                  />
+                </div>
+                <div className="sales-page__form-group">
+                  <label className="sales-page__form-label">Data de Nascimento</label>
+                  <input
+                    type="date"
+                    value={customerForm.birthDate}
+                    onChange={(e) => setCustomerForm({...customerForm, birthDate: e.target.value})}
+                    className="sales-page__form-input"
+                    title="Data de nascimento"
+                    placeholder="Data de nascimento"
+                  />
+                </div>
+              </div>
+
+              <div className="sales-page__form-row">
+                <div className="sales-page__form-group">
+                  <label className="sales-page__form-label">Telefone</label>
+                  <input
+                    type="tel"
+                    value={customerForm.phone}
+                    onChange={(e) => setCustomerForm({...customerForm, phone: e.target.value})}
+                    className="sales-page__form-input"
+                    placeholder="(11) 99999-9999"
+                  />
+                </div>
+                <div className="sales-page__form-group">
+                  <label className="sales-page__form-label">WhatsApp</label>
+                  <input
+                    type="tel"
+                    value={customerForm.whatsapp}
+                    onChange={(e) => setCustomerForm({...customerForm, whatsapp: e.target.value})}
+                    className="sales-page__form-input"
+                    placeholder="(11) 99999-9999"
+                  />
+                </div>
+              </div>
+
+              <div className="sales-page__form-group">
+                <label className="sales-page__form-label">Email</label>
+                <input
+                  type="email"
+                  value={customerForm.email}
+                  onChange={(e) => setCustomerForm({...customerForm, email: e.target.value})}
+                  className="sales-page__form-input"
+                  placeholder="email@exemplo.com"
+                />
+              </div>
+            </div>
+
+            <div className="sales-page__form-section">
+              <h3 className="sales-page__form-section-title">Endereço</h3>
+              
+              <div className="sales-page__form-row">
+                <div className="sales-page__form-group sales-page__form-group--flex">
+                  <label className="sales-page__form-label">Rua</label>
+                  <input
+                    type="text"
+                    value={customerForm.street}
+                    onChange={(e) => setCustomerForm({...customerForm, street: e.target.value})}
+                    className="sales-page__form-input"
+                    placeholder="Rua"
+                    title="Nome da rua"
+                  />
+                </div>
+                <div className="sales-page__form-group sales-page__form-group--small">
+                  <label className="sales-page__form-label">Nº</label>
+                  <input
+                    type="text"
+                    value={customerForm.number}
+                    onChange={(e) => setCustomerForm({...customerForm, number: e.target.value})}
+                    className="sales-page__form-input"
+                    placeholder="123"
+                    title="Número do endereço"
+                  />
+                </div>
+              </div>
+
+              <div className="sales-page__form-group">
+                <label className="sales-page__form-label">Complemento</label>
+                <input
+                  type="text"
+                  value={customerForm.complement}
+                  onChange={(e) => setCustomerForm({...customerForm, complement: e.target.value})}
+                  className="sales-page__form-input"
+                  placeholder="Apto, sala, etc"
+                />
+              </div>
+
+              <div className="sales-page__form-row">
+                <div className="sales-page__form-group">
+                  <label className="sales-page__form-label">Bairro</label>
+                  <input
+                    type="text"
+                    value={customerForm.neighborhood}
+                    onChange={(e) => setCustomerForm({...customerForm, neighborhood: e.target.value})}
+                    className="sales-page__form-input"
+                    placeholder="Bairro"
+                  />
+                </div>
+                <div className="sales-page__form-group">
+                  <label className="sales-page__form-label">Cidade</label>
+                  <input
+                    type="text"
+                    value={customerForm.city}
+                    onChange={(e) => setCustomerForm({...customerForm, city: e.target.value})}
+                    className="sales-page__form-input"
+                    placeholder="Cidade"
+                  />
+                </div>
+              </div>
+
+              <div className="sales-page__form-row">
+                <div className="sales-page__form-group">
+                  <label className="sales-page__form-label">Estado</label>
+                  <input
+                    type="text"
+                    value={customerForm.state}
+                    onChange={(e) => setCustomerForm({...customerForm, state: e.target.value})}
+                    className="sales-page__form-input"
+                    placeholder="SP"
+                    maxLength={2}
+                  />
+                </div>
+                <div className="sales-page__form-group">
+                  <label className="sales-page__form-label">CEP</label>
+                  <input
+                    type="text"
+                    value={customerForm.zipCode}
+                    onChange={(e) => setCustomerForm({...customerForm, zipCode: e.target.value})}
+                    className="sales-page__form-input"
+                    placeholder="00000-000"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="sales-page__modal-footer">
+              <button
+                type="button"
+                onClick={() => setIsNewCustomerModalOpen(false)}
+                className="sales-page__modal-button sales-page__modal-button--cancel"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="sales-page__modal-button sales-page__modal-button--confirm"
+              >
+                Cadastrar Cliente
+              </button>
+            </div>
+          </form>
         </div>
       </div>
 
