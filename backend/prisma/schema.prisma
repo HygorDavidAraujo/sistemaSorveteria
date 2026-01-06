@@ -59,26 +59,43 @@ model RefreshToken {
 }
 
 model Customer {
-  id                  String               @id @default(uuid()) @db.Uuid
-  name                String               @db.VarChar(255)
-  phone               String?              @db.VarChar(20)
-  whatsapp            String?              @db.VarChar(20)
-  email               String?              @db.VarChar(255)
-  cpf                 String?              @unique @db.VarChar(14)
-  notes               String?
-  isActive            Boolean              @default(true) @map("is_active")
-  totalPurchases         Decimal                 @default(0) @map("total_purchases") @db.Decimal(10, 2)
-  purchaseCount          Int                     @default(0) @map("purchase_count")
-  loyaltyPoints          Int                     @default(0) @map("loyalty_points")
-  cashbackBalance        Decimal                 @default(0) @map("cashback_balance") @db.Decimal(10, 2)
-  totalCashbackEarned    Decimal                 @default(0) @map("total_cashback_earned") @db.Decimal(10, 2)
-  createdAt              DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdById            String?                 @map("created_by") @db.Uuid
+  id                     String               @id @default(uuid()) @db.Uuid
+  name                   String               @db.VarChar(255)
+  phone                  String?              @db.VarChar(20)
+  whatsapp               String?              @db.VarChar(20)
+  email                  String?              @db.VarChar(255)
+  cpf                    String?              @unique @db.VarChar(14)
+  notes                  String?
+  // Address fields
+  street                 String?              @db.VarChar(255)
+  number                 String?              @db.VarChar(20)
+  complement             String?              @db.VarChar(255)
+  neighborhood           String?              @db.VarChar(100)
+  city                   String?              @db.VarChar(100)
+  state                  String?              @db.VarChar(2)
+  zipCode                String?              @map("zip_code") @db.VarChar(10)
+  referencePoint         String?              @map("reference_point")
+  // Additional customer fields
+  birthDate              DateTime?            @map("birth_date") @db.Date
+  gender                 Gender?
+  customerType           CustomerType?        @default(pf) @map("customer_type")
+  acceptsMarketing       Boolean              @default(true) @map("accepts_marketing")
+  preferredContactMethod String?              @map("preferred_contact_method") @db.VarChar(50)
+  lastAccessAt           DateTime?            @map("last_access_at") @db.Timestamptz(6)
+  customerCategory       CustomerCategory     @default(new) @map("customer_category")
+  // Customer status and metrics
+  isActive               Boolean              @default(true) @map("is_active")
+  totalPurchases         Decimal              @default(0) @map("total_purchases") @db.Decimal(10, 2)
+  purchaseCount          Int                  @default(0) @map("purchase_count")
+  loyaltyPoints          Int                  @default(0) @map("loyalty_points")
+  cashbackBalance        Decimal              @default(0) @map("cashback_balance") @db.Decimal(10, 2)
+  totalCashbackEarned    Decimal              @default(0) @map("total_cashback_earned") @db.Decimal(10, 2)
+  createdAt              DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdById            String?              @map("created_by") @db.Uuid
   accountsReceivable     AccountReceivable[]
   cashbackTransactions   CashbackTransaction[]
   comandas               Comanda[]
-  addresses              CustomerAddress[]
   couponUsages           CouponUsage[]
   deliveryOrders         DeliveryOrder[]
   loyaltyTransactions    LoyaltyTransaction[]
@@ -88,28 +105,9 @@ model Customer {
   @@index([phone])
   @@index([cpf])
   @@index([isActive])
+  @@index([customerCategory])
+  @@index([lastAccessAt])
   @@map("customers")
-}
-
-model CustomerAddress {
-  id             String          @id @default(uuid()) @db.Uuid
-  customerId     String          @map("customer_id") @db.Uuid
-  label          String?         @db.VarChar(100)
-  street         String          @db.VarChar(255)
-  number         String?         @db.VarChar(20)
-  complement     String?         @db.VarChar(255)
-  neighborhood   String?         @db.VarChar(100)
-  city           String          @db.VarChar(100)
-  state          String          @db.VarChar(2)
-  zipCode        String?         @map("zip_code") @db.VarChar(10)
-  referencePoint String?         @map("reference_point")
-  isDefault      Boolean         @default(false) @map("is_default")
-  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  customer       Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  deliveryOrders DeliveryOrder[]
-
-  @@index([customerId])
-  @@map("customer_addresses")
 }
 
 model Category {
@@ -393,7 +391,6 @@ model DeliveryOrder {
   id                String          @id @default(uuid()) @db.Uuid
   orderNumber       Int             @default(autoincrement()) @map("order_number")
   customerId        String          @map("customer_id") @db.Uuid
-  customerAddressId String          @map("customer_address_id") @db.Uuid
   cashSessionId     String          @map("cash_session_id") @db.Uuid
   subtotal          Decimal         @db.Decimal(10, 2)
   deliveryFee       Decimal         @default(0) @map("delivery_fee") @db.Decimal(10, 2)
@@ -411,7 +408,6 @@ model DeliveryOrder {
   createdById       String          @map("created_by") @db.Uuid
   cashSession       CashSession     @relation(fields: [cashSessionId], references: [id])
   createdBy         User            @relation(fields: [createdById], references: [id])
-  customerAddress   CustomerAddress @relation(fields: [customerAddressId], references: [id])
   customer          Customer        @relation(fields: [customerId], references: [id])
 
   @@index([customerId])
@@ -422,11 +418,16 @@ model DeliveryOrder {
 
 model DeliveryFee {
   id                String   @id @default(uuid()) @db.Uuid
-  neighborhood      String   @db.VarChar(100)
-  city              String   @db.VarChar(100)
+  neighborhood      String?  @db.VarChar(100)
+  city              String?  @db.VarChar(100)
   fee               Decimal  @db.Decimal(10, 2)
   minOrderValue     Decimal  @default(0) @map("min_order_value") @db.Decimal(10, 2)
   freeDeliveryAbove Decimal? @map("free_delivery_above") @db.Decimal(10, 2)
+  // Distance-based delivery
+  feeType           FeeType  @default(neighborhood) @map("fee_type")
+  maxDistance       Float?   @map("max_distance")
+  feePerKm          Decimal? @map("fee_per_km") @db.Decimal(10, 2)
+  baseFee           Decimal? @map("base_fee") @db.Decimal(10, 2)
   isActive          Boolean  @default(true) @map("is_active")
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -781,4 +782,52 @@ enum TransactionStatus {
   paid
   cancelled
   overdue
+}
+enum Gender {
+  male
+  female
+  other
+  not_specified
+}
+
+enum CustomerType {
+  pf
+  pj
+}
+
+enum CustomerCategory {
+  new
+  occasional
+  regular
+  frequent
+  vip
+}
+
+enum FeeType {
+  neighborhood
+  distance
+}
+
+model CompanyInfo {
+  id                 String   @id @default(uuid()) @db.Uuid
+  cnpj               String   @unique @db.VarChar(18)
+  businessName       String   @map("business_name") @db.VarChar(255)
+  tradeName          String   @map("trade_name") @db.VarChar(255)
+  stateRegistration  String?  @map("state_registration") @db.VarChar(50)
+  municipalRegistration String? @map("municipal_registration") @db.VarChar(50)
+  street             String   @db.VarChar(255)
+  number             String   @db.VarChar(20)
+  complement         String?  @db.VarChar(255)
+  neighborhood       String   @db.VarChar(100)
+  city               String   @db.VarChar(100)
+  state              String   @db.VarChar(2)
+  zipCode            String   @map("zip_code") @db.VarChar(10)
+  email              String?  @db.VarChar(255)
+  phone              String?  @db.VarChar(20)
+  whatsapp           String?  @db.VarChar(20)
+  logoUrl            String?  @map("logo_url")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("company_info")
 }

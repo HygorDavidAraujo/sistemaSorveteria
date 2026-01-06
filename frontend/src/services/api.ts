@@ -123,9 +123,11 @@ export class ApiClient {
     return response.data.data;
   }
 
-  async closeCashSession(closingBalance: number) {
-    const response = await this.client.post('/cash-sessions/close', { closingBalance });
-    return response.data;
+  async closeCashSession(closingBalance: number, sessionId: string) {
+    const response = await this.client.post(`/cash-sessions/${sessionId}/cashier-close`, { 
+      cashierCashCount: closingBalance 
+    });
+    return response.data.data;
   }
 
   async getCurrentCashSession(terminalId: string = 'TERMINAL_01') {

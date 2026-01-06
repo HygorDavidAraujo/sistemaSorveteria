@@ -1,7 +1,5 @@
 /* Customers Page Layout */
 .customers-page {
-  max-width: 1280px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 32px;
@@ -45,6 +43,10 @@
 /* Table */
 .customers-table-wrapper {
   overflow-x: auto;
+  background: white;
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
 }
 
 .customers-table {
@@ -57,10 +59,13 @@
 }
 
 .customers-table th {
-  padding: 12px 24px;
+  padding: 16px 24px;
   text-align: left;
   font-weight: 600;
   font-size: 14px;
+  color: var(--color-gray-600);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .customers-table tbody {
@@ -69,24 +74,31 @@
 
 .customers-table tbody tr {
   border-bottom: 1px solid var(--color-border);
-  transition: background-color 0.2s;
+  transition: background-color 0.2s ease;
 }
 
 .customers-table tbody tr:hover {
-  background: var(--color-light);
+  background: var(--color-bg-secondary);
+}
+
+.customers-table tbody tr:last-child {
+  border-bottom: none;
 }
 
 .customers-table td {
   padding: 16px 24px;
   font-size: 14px;
+  color: var(--color-dark);
 }
 
 .customers-name {
   font-weight: 600;
+  color: var(--color-dark);
 }
 
 .customers-email {
-  color: var(--color-gray-600);
+  color: var(--color-gray-500);
+  font-size: 13px;
 }
 
 .customers-center {
@@ -98,13 +110,66 @@
   background: none;
   border: none;
   cursor: pointer;
-  padding: 4px;
+  padding: 8px;
   display: inline-flex;
-  transition: color 0.2s;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s ease;
 }
 
 .customers-action-button:hover {
-  color: var(--color-secondary);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+/* Badge Styles */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge-success {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--color-success);
+}
+
+.badge-warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--color-warning);
+}
+
+.badge-info {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--color-primary);
+}
+
+/* Empty State */
+.customers-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--color-gray-500);
+}
+
+.customers-empty p {
+  margin: 0;
+  font-size: 16px;
+}
+
+/* Modal Styles */
+.customers-modal-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+.customers-modal-footer button {
+  min-width: 100px;
 }
 
 /* Empty State */
@@ -212,6 +277,141 @@
   flex: 1;
 }
 
+/* Form Sections */
+.customers-form {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.customers-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.customers-form-section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-dark);
+  margin: 0;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.customers-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+@media (min-width: 640px) {
+  .customers-form-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .customers-form-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Form Select */
+.customers-form-select {
+  padding: 10px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  font-size: 14px;
+  background: white;
+  color: var(--color-dark);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.customers-form-select:hover {
+  border-color: var(--color-primary);
+}
+
+.customers-form-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Form Checkbox */
+.customers-form-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  padding: 10px;
+  border-radius: var(--border-radius);
+  transition: background 0.2s ease;
+}
+
+.customers-form-checkbox:hover {
+  background: var(--color-light);
+}
+
+.customers-form-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+
+.customers-form-checkbox span {
+  font-size: 14px;
+  color: var(--color-dark);
+  user-select: none;
+}
+
+/* Form Input */
+.customers-form-input {
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  font-size: 14px;
+  background: white;
+  color: var(--color-dark);
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.customers-form-input:hover {
+  border-color: var(--color-primary);
+}
+
+.customers-form-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.customers-form-input::placeholder {
+  color: var(--color-gray-500);
+}
+
+/* Form Group & Label */
+.customers-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.customers-form-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-dark);
+  margin: 0;
+}
+
 /* Responsive */
 @media (max-width: 640px) {
   .page-header h1 {
@@ -226,4 +426,18 @@
   .customers-detail-card-value {
     font-size: 20px;
   }
+  
+  .customers-form-section-title {
+    font-size: 16px;
+  }
+}
+
+/* Modal Footer */
+.customers-modal-footer {
+  display: flex;
+  gap: 16px;
+}
+
+.customers-modal-footer button:last-child {
+  flex: 1;
 }

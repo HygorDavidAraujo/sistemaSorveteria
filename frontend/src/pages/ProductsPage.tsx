@@ -29,6 +29,7 @@ export const ProductsPage: React.FC = () => {
     code: '',
     category: '',
     available: true,
+    saleType: 'unit' as 'unit' | 'weight',
   });
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export const ProductsPage: React.FC = () => {
       const list = Array.isArray(raw) ? raw : (raw?.items ?? []);
       setProducts(list as Product[]);
     } catch (err) {
+      console.error('Erro ao carregar produtos:', err);
       setError('Erro ao carregar produtos');
     } finally {
       setLoading(false);
@@ -89,7 +91,7 @@ export const ProductsPage: React.FC = () => {
       const productData: any = {
         name: form.name,
         description: form.description,
-        saleType: 'unit',
+        saleType: form.saleType,
         isActive: form.available,
       };
 
@@ -108,7 +110,7 @@ export const ProductsPage: React.FC = () => {
       loadProducts();
       setIsFormModalOpen(false);
       setEditingId(null);
-      setForm({ name: '', description: '', price: '', code: '', category: '', available: true });
+      setForm({ name: '', description: '', price: '', code: '', category: '', available: true, saleType: 'unit' });
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erro ao salvar produto');
@@ -121,10 +123,11 @@ export const ProductsPage: React.FC = () => {
     setForm({
       name: product.name || '',
       description: product.description || '',
-      price: (product.sale_price || product.price || 0).toString(),
+      price: (product.salePrice || product.sale_price || product.price || 0).toString(),
       code: (product as any).code || '',
       category: categoryValue || '',
-      available: product.is_active !== undefined ? product.is_active : product.available !== undefined ? product.available : true,
+      available: product.isActive !== undefined ? product.isActive : (product.is_active !== undefined ? product.is_active : (product.available !== undefined ? product.available : true)),
+      saleType: (product as any).saleType || (product as any).sale_type || 'unit' as 'unit' | 'weight',
     });
     setEditingId(product.id);
     setIsFormModalOpen(true);
@@ -160,7 +163,7 @@ export const ProductsPage: React.FC = () => {
         <button
           onClick={() => {
             setEditingId(null);
-            setForm({ name: '', description: '', price: '', code: '', category: '', available: true });
+            setForm({ name: '', description: '', price: '', code: '', category: '', available: true, saleType: 'unit' });
             setIsFormModalOpen(true);
           }}
           className="products-page__button products-page__button--primary"
@@ -209,7 +212,7 @@ export const ProductsPage: React.FC = () => {
             <div className="products-page__card-info">
               <div className="products-page__info-row">
                 <span className="products-page__info-label">Preço:</span>
-                <span className="products-page__info-value">R$ {(product.sale_price || product.price || 0).toFixed(2)}</span>
+                <span className="products-page__info-value">R$ {parseFloat(product.salePrice || product.sale_price || product.price || 0).toFixed(2)}</span>
               </div>
               <div className="products-page__info-row">
                 <span className="products-page__info-label">Categoria:</span>
@@ -217,8 +220,8 @@ export const ProductsPage: React.FC = () => {
               </div>
               <div className="products-page__info-row">
                 <span className="products-page__info-label">Status:</span>
-                <span className={`products-page__status ${product.is_active || product.available ? 'products-page__status--available' : 'products-page__status--unavailable'}`}>
-                  {product.is_active || product.available ? 'Disponível' : 'Indisponível'}
+                <span className={`products-page__status ${product.isActive || product.is_active || product.available ? 'products-page__status--available' : 'products-page__status--unavailable'}`}>
+                  {product.isActive || product.is_active || product.available ? 'Disponível' : 'Indisponível'}
                 </span>
               </div>
             </div>
@@ -326,6 +329,19 @@ export const ProductsPage: React.FC = () => {
                     {cat.name}
                   </option>
                 ))}
+              </select>
+            </div>
+
+            <div className="products-page__form-group">
+              <label className="products-page__form-label">Tipo de Produto</label>
+              <select
+                value={form.saleType}
+                onChange={(e) => setForm({ ...form, saleType: e.target.value as 'unit' | 'weight' })}
+                className="products-page__form-select"
+                title="Tipo de venda do produto"
+              >
+                <option value="unit">Unidade</option>
+                <option value="weight">Peso (Balança)</option>
               </select>
             </div>
 

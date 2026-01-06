@@ -1,7 +1,10 @@
-# Build stage
-FROM node:20-alpine as builder
+# Development stage
+FROM node:20-alpine
 
 WORKDIR /app
+
+# Install git (para desenvolvimento)
+RUN apk add --no-cache git curl wget
 
 # Copy package files
 COPY package*.json ./
@@ -17,28 +20,10 @@ COPY src ./src
 COPY public ./public
 
 # Install dependencies
-RUN npm ci
-
-# Build for production
-RUN npm run build
-
-# Production stage
-FROM node:20-alpine
-
-WORKDIR /app
-
-# Install serve to run the application
-RUN npm install -g serve
-
-# Copy built app from builder
-COPY --from=builder /app/dist ./dist
-
-# Health check
-HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=5 \
-  CMD node -e "require('http').get('http://localhost:5173', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
+RUN npm install
 
 # Expose port
 EXPOSE 5173
 
-# Start the application
-CMD ["serve", "-s", "dist", "-l", "5173"]
+# Start the development server
+CMD ["npm", "run", "dev"]

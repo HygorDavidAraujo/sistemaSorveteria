@@ -12,6 +12,7 @@ import {
   Gift,
   FileText,
   Tag,
+  Truck,
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -62,6 +63,12 @@ export const Sidebar: React.FC = () => {
       label: 'Comandas',
       href: '/comandas',
       icon: <FileText size={20} />,
+      roles: ['admin', 'manager', 'cashier'],
+    },
+    {
+      label: 'Delivery',
+      href: '/delivery',
+      icon: <Truck size={20} />,
       roles: ['admin', 'manager', 'cashier'],
     },
     {

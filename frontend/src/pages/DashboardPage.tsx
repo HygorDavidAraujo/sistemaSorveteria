@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useAuthStore, useCashSessionStore } from '@/store';
+import { useAuthStore, useCashSessionStore, useProductsStore, useCustomersStore } from '@/store';
 import { apiClient } from '@/services/api';
 import { Card } from '@/components/common';
 import { DollarSign, Users, ShoppingCart, Package, TrendingUp } from 'lucide-react';
@@ -10,6 +10,8 @@ import '../pages/DashboardPage.css';
 export const DashboardPage: React.FC = () => {
   const { user } = useAuthStore();
   const { currentSession, loadSession } = useCashSessionStore();
+  const { products, loadProducts } = useProductsStore();
+  const { customers, loadCustomers } = useCustomersStore();
   const [stats, setStats] = useState({
     totalSales: 0,
     totalRevenue: 0,
@@ -22,25 +24,31 @@ export const DashboardPage: React.FC = () => {
     loadDashboardData();
   }, []);
 
+  // Atualiza stats quando os stores mudam
+  useEffect(() => {
+    if (products.length > 0 || customers.length > 0) {
+      setStats(prev => ({
+        ...prev,
+        totalCustomers: customers.length,
+        totalProducts: products.length,
+      }));
+    }
+  }, [products, customers]);
+
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      await loadSession();
       const unwrap = (res: any) => res?.data ?? res;
 
-      const [salesRes, customersRes, productsRes] = await Promise.all([
+      const [salesRes] = await Promise.all([
         apiClient.get('/sales'),
-        apiClient.get('/customers'),
-        apiClient.get('/products'),
+        loadSession(),
+        loadProducts(),
+        loadCustomers(),
       ]);
 
       const salesData = unwrap(salesRes)?.data ?? unwrap(salesRes) ?? [];
-      const customersData = unwrap(customersRes)?.data ?? unwrap(customersRes) ?? [];
-      const productsData = unwrap(productsRes)?.data ?? unwrap(productsRes) ?? [];
-
       const salesArray = Array.isArray(salesData) ? salesData : [];
-      const customersArray = Array.isArray(customersData) ? customersData : [];
-      const productsArray = Array.isArray(productsData) ? productsData : [];
 
       const totalRevenue = salesArray.reduce(
         (sum, sale: any) => sum + Number(sale?.totalAmount ?? sale?.total ?? 0),
@@ -50,8 +58,8 @@ export const DashboardPage: React.FC = () => {
       setStats({
         totalSales: salesArray.length,
         totalRevenue,
-        totalCustomers: customersArray.length,
-        totalProducts: productsArray.length,
+        totalCustomers: customers.length,
+        totalProducts: products.length,
       });
     } catch (error) {
       console.error('Error loading dashboard:', error);
@@ -62,8 +70,8 @@ export const DashboardPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="dashboard__loading">
+        <div className="dashboard__loading-spinner"></div>
       </div>
     );
   }
@@ -83,8 +91,8 @@ export const DashboardPage: React.FC = () => {
         {/* Revenue Card */}
         <div className="dashboard__card">
           <div className="dashboard__card-header">
-            <div className="dashboard__card-icon blue">
-              <DollarSign className="text-blue-600" size={24} />
+            <div className="dashboard__card-icon dashboard__card-icon--blue">
+              <DollarSign size={24} />
             </div>
             <span className="dashboard__card-badge">+12.5%</span>
           </div>
@@ -97,8 +105,8 @@ export const DashboardPage: React.FC = () => {
         {/* Sales Card */}
         <div className="dashboard__card">
           <div className="dashboard__card-header">
-            <div className="dashboard__card-icon cyan">
-              <ShoppingCart className="text-cyan-600" size={24} />
+            <div className="dashboard__card-icon dashboard__card-icon--cyan">
+              <ShoppingCart size={24} />
             </div>
             <span className="dashboard__card-badge">+8.2%</span>
           </div>
@@ -109,8 +117,8 @@ export const DashboardPage: React.FC = () => {
         {/* Customers Card */}
         <div className="dashboard__card">
           <div className="dashboard__card-header">
-            <div className="dashboard__card-icon amber">
-              <Users className="text-amber-600" size={24} />
+            <div className="dashboard__card-icon dashboard__card-icon--amber">
+              <Users size={24} />
             </div>
             <span className="dashboard__card-badge">+5.1%</span>
           </div>
@@ -121,8 +129,8 @@ export const DashboardPage: React.FC = () => {
         {/* Products Card */}
         <div className="dashboard__card">
           <div className="dashboard__card-header">
-            <div className="dashboard__card-icon purple">
-              <Package className="text-purple-600" size={24} />
+            <div className="dashboard__card-icon dashboard__card-icon--purple">
+              <Package size={24} />
             </div>
             <span className="dashboard__card-badge">Total</span>
           </div>
@@ -132,11 +140,11 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* Cash Session */}
-      {currentSession && (
+      {currentSession && currentSession.status === 'open' && (
         <div className="dashboard__cash-session">
           <div className="dashboard__cash-session-header">
             <div className="dashboard__cash-session-icon">
-              <TrendingUp className="text-green-700" size={24} />
+              <TrendingUp size={24} />
             </div>
             <div>
               <h3 className="dashboard__cash-session-title">Caixa Aberto</h3>
@@ -164,6 +172,37 @@ export const DashboardPage: React.FC = () => {
                 R$ {currentSession?.totalCash?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cash Session Closed */}
+      {(!currentSession || currentSession.status !== 'open') && (
+        <div className="dashboard__cash-session" style={{ borderColor: '#ef4444', backgroundColor: '#fef2f2' }}>
+          <div className="dashboard__cash-session-header">
+            <div className="dashboard__cash-session-icon" style={{ color: '#ef4444' }}>
+              <TrendingUp size={24} />
+            </div>
+            <div>
+              <h3 className="dashboard__cash-session-title" style={{ color: '#7f1d1d' }}>Caixa Fechado</h3>
+              <p className="dashboard__cash-session-subtitle" style={{ color: '#991b1b' }}>
+                Nenhuma sessão de caixa ativa. Abra o caixa para iniciar operações.
+              </p>
+            </div>
+          </div>
+          <div style={{ marginTop: '1rem' }}>
+            <a href="/cash" style={{
+              display: 'inline-block',
+              backgroundColor: '#10b981',
+              color: 'white',
+              padding: '0.75rem 1.5rem',
+              borderRadius: '0.5rem',
+              textDecoration: 'none',
+              fontWeight: '600',
+              cursor: 'pointer'
+            }}>
+              Abrir Caixa
+            </a>
           </div>
         </div>
       )}

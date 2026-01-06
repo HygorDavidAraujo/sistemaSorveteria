@@ -18,6 +18,7 @@ import couponRoutes from '@presentation/http/routes/coupon.routes';
 import loyaltyRoutes from '@presentation/http/routes/loyalty.routes';
 import cashbackRoutes from '@presentation/http/routes/cashback.routes';
 import financialRoutes from '@presentation/http/routes/financial.routes';
+import settingsRoutes from '@presentation/http/routes/settings.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -35,9 +36,10 @@ export function createApp(): Application {
 
   // Rate limiting
   const limiter = rateLimit({
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'),
-    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'), // 1 minuto
+    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '1000'), // 1000 requisições por minuto
     message: 'Muitas requisições deste IP, tente novamente mais tarde',
+    skip: (req) => req.path === '/health', // Não contar health checks
   });
   app.use(limiter);
 
@@ -80,6 +82,7 @@ export function createApp(): Application {
   app.use(`${apiPrefix}/loyalty`, loyaltyRoutes);
   app.use(`${apiPrefix}/cashback`, cashbackRoutes);
   app.use(`${apiPrefix}/financial`, financialRoutes);
+  app.use(`${apiPrefix}/settings`, settingsRoutes);
 
   // 404 handler
   app.use((req: Request, res: Response) => {

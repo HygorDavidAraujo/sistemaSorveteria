@@ -14,6 +14,7 @@ import { ReportsPage } from '@/pages/ReportsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { ComandasPage } from '@/pages/ComandasPage';
 import { CouponsPage } from '@/pages/CouponsPage';
+import { DeliveryPage } from '@/pages/DeliveryPage';
 
 // Components
 import { PrivateRoute } from '@/components/PrivateRoute';
@@ -101,6 +102,14 @@ function App() {
                     element={
                       <PrivateRoute requiredRole={['admin', 'manager', 'cashier']}>
                         <ComandasPage />
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/delivery"
+                    element={
+                      <PrivateRoute requiredRole={['admin', 'manager', 'cashier']}>
+                        <DeliveryPage />
                       </PrivateRoute>
                     }
                   />

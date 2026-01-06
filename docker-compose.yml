@@ -3,24 +3,31 @@ services:
   postgres:
     image: postgres:14-alpine
     container_name: gelatini-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: gelatini
       POSTGRES_PASSWORD: gelatini123
       POSTGRES_DB: gelatini_db
+      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gelatini"]
+      test: ["CMD-SHELL", "pg_isready -U gelatini -d gelatini_db"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    networks:
+      - gelatini-network
 
   # Redis Cache
   redis:
     image: redis:7-alpine
     container_name: gelatini-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
     volumes:
@@ -30,6 +37,9 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+      start_period: 10s
+    networks:
+      - gelatini-network
 
   # Backend API
   backend:
@@ -37,11 +47,15 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: gelatini-backend
+    restart: unless-stopped
     environment:
-      - NODE_ENV=development
-      - DATABASE_URL=postgresql://gelatini:gelatini123@postgres:5432/gelatini_db?schema=public
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      NODE_ENV: development
+      DATABASE_URL: postgresql://gelatini:gelatini123@postgres:5432/gelatini_db?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      API_PORT: "3000"
+      API_HOST: 0.0.0.0
+      LOG_LEVEL: debug
     ports:
       - "3000:3000"
     depends_on:
@@ -52,27 +66,47 @@ services:
     volumes:
       - ./backend:/app
       - /app/node_modules
-    command: npm run dev
+      - backend_logs:/app/logs
+    command: sh -c "npx prisma migrate deploy && npm run dev"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - gelatini-network
 
-  # Frontend (React)
+  # Frontend (React + Vite)
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: gelatini-frontend
+    restart: unless-stopped
     environment:
-      - VITE_API_URL=http://backend:3000/api/v1
+      VITE_API_URL: http://localhost:3000/api/v1
+      NODE_ENV: development
     ports:
       - "5173:5173"
     depends_on:
       backend:
-        condition: service_started
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5173"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
+        condition: service_healthy
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/dist
+    networks:
+      - gelatini-network
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
+  backend_logs:
+    driver: local
+
+networks:
+  gelatini-network:
+    driver: bridge

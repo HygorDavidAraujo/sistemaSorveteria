@@ -47,7 +47,7 @@
   border-radius: 16px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.1);
   overflow: hidden;
-  border: 1px solid #f3f4f6;
+  border: 1px solid var(--color-bg-light);
 }
 
 .login__card-header {
@@ -199,9 +199,9 @@
 .login__input {
   width: 100%;
   padding: 12px 12px 12px 40px;
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--color-gray-200);
   border-radius: 8px;
-  background-color: #f9fafb;
+  background-color: var(--color-bg-secondary);
   color: #111827;
   font-size: 15px;
   font-weight: 500;
@@ -299,7 +299,7 @@
 .login__footer {
   margin-top: 32px;
   padding-top: 24px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--color-bg-light);
   text-align: center;
 }
 
@@ -339,7 +339,7 @@
   font-size: 12px;
   color: #64748b;
   font-family: 'Courier New', Courier, monospace;
-  background-color: #f9fafb;
+  background-color: var(--color-bg-secondary);
   padding: 12px;
   border-radius: 6px;
 }

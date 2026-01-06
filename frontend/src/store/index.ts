@@ -86,7 +86,7 @@ interface SalesStore {
   total: number;
   addItem: (item: any) => void;
   removeItem: (itemId: string) => void;
-  updateItem: (itemId: string, quantity: number) => void;
+  updateItem: (itemId: string, quantity: number, totalPrice?: number) => void;
   clear: () => void;
   setTotal: (total: number) => void;
 }
@@ -97,16 +97,30 @@ export const useSalesStore = create<SalesStore>((set) => ({
 
   addItem: (item: any) => {
     set((state) => {
-      const existingItem = state.items.find((i) => i.productId === item.productId);
+      // Produtos de peso (balança) nunca são agrupados
+      if (item.saleType === 'weight') {
+        return { items: [...state.items, item] };
+      }
+      
+      // Produtos normais são agrupados por productId (convertendo para string para comparação consistente)
+      const productIdStr = String(item.productId);
+      const existingItem = state.items.find((i) => String(i.productId) === productIdStr);
+      
       if (existingItem) {
         return {
           items: state.items.map((i) =>
-            i.productId === item.productId
-              ? { ...i, quantity: i.quantity + item.quantity }
+            String(i.productId) === productIdStr
+              ? { 
+                  ...i, 
+                  id: existingItem.id, // Mantém o ID original do item
+                  quantity: i.quantity + item.quantity,
+                  totalPrice: (i.quantity + item.quantity) * i.unitPrice
+                }
               : i
           ),
         };
       }
+      
       return { items: [...state.items, item] };
     });
   },
@@ -117,10 +131,16 @@ export const useSalesStore = create<SalesStore>((set) => ({
     }));
   },
 
-  updateItem: (itemId: string, quantity: number) => {
+  updateItem: (itemId: string, quantity: number, totalPrice?: number) => {
     set((state) => ({
       items: state.items.map((i) =>
-        i.id === itemId ? { ...i, quantity } : i
+        i.id === itemId 
+          ? { 
+              ...i, 
+              quantity,
+              totalPrice: totalPrice !== undefined ? totalPrice : quantity * i.unitPrice
+            } 
+          : i
       ).filter((i) => i.quantity > 0),
     }));
   },
@@ -133,22 +153,40 @@ export const useSalesStore = create<SalesStore>((set) => ({
 interface CashSessionStore {
   currentSession: any | null;
   isOpen: boolean;
+  lastLoadTime: number;
+  isLoading: boolean;
   loadSession: () => Promise<void>;
   openSession: (openingBalance: number) => Promise<void>;
   closeSession: (closingBalance: number) => Promise<void>;
 }
 
-export const useCashSessionStore = create<CashSessionStore>((set) => ({
+export const useCashSessionStore = create<CashSessionStore>((set, get) => ({
   currentSession: null,
   isOpen: false,
+  lastLoadTime: 0,
+  isLoading: false,
 
   loadSession: async () => {
+    const state = get();
+    const now = Date.now();
+    
+    // Se carregou há menos de 2 segundos, não recarrega
+    if (state.isLoading || (now - state.lastLoadTime < 2000)) {
+      return;
+    }
+
+    set({ isLoading: true });
     try {
       const terminalId = localStorage.getItem('terminalId') || 'TERMINAL_01';
       const session = await apiClient.getCurrentCashSession(terminalId);
-      set({ currentSession: session, isOpen: session?.status === 'open' });
+      set({ 
+        currentSession: session, 
+        isOpen: session?.status === 'open',
+        lastLoadTime: now,
+        isLoading: false
+      });
     } catch {
-      set({ currentSession: null, isOpen: false });
+      set({ currentSession: null, isOpen: false, isLoading: false });
     }
   },
 
@@ -159,7 +197,87 @@ export const useCashSessionStore = create<CashSessionStore>((set) => ({
   },
 
   closeSession: async (closingBalance: number) => {
-    const session = await apiClient.closeCashSession(closingBalance);
+    const { currentSession } = get();
+    if (!currentSession?.id) {
+      throw new Error('Nenhuma sessão aberta para fechar');
+    }
+    const session = await apiClient.closeCashSession(closingBalance, currentSession.id);
     set({ currentSession: session, isOpen: false });
+  },
+}));
+
+// Store para produtos com cache
+interface ProductsStore {
+  products: any[];
+  lastLoadTime: number;
+  isLoading: boolean;
+  loadProducts: () => Promise<void>;
+}
+
+export const useProductsStore = create<ProductsStore>((set, get) => ({
+  products: [],
+  lastLoadTime: 0,
+  isLoading: false,
+
+  loadProducts: async () => {
+    const state = get();
+    const now = Date.now();
+    
+    // Se carregou há menos de 5 segundos, não recarrega
+    if (state.isLoading || (now - state.lastLoadTime < 5000 && state.products.length > 0)) {
+      return;
+    }
+
+    set({ isLoading: true });
+    try {
+      const response = await apiClient.getProducts();
+      const productsData = response.data || response;
+      set({ 
+        products: productsData,
+        lastLoadTime: now,
+        isLoading: false
+      });
+    } catch (error) {
+      console.error('Erro ao carregar produtos:', error);
+      set({ isLoading: false });
+    }
+  },
+}));
+
+// Store para clientes com cache
+interface CustomersStore {
+  customers: any[];
+  lastLoadTime: number;
+  isLoading: boolean;
+  loadCustomers: () => Promise<void>;
+}
+
+export const useCustomersStore = create<CustomersStore>((set, get) => ({
+  customers: [],
+  lastLoadTime: 0,
+  isLoading: false,
+
+  loadCustomers: async () => {
+    const state = get();
+    const now = Date.now();
+    
+    // Se carregou há menos de 5 segundos, não recarrega
+    if (state.isLoading || (now - state.lastLoadTime < 5000 && state.customers.length > 0)) {
+      return;
+    }
+
+    set({ isLoading: true });
+    try {
+      const response = await apiClient.getCustomers();
+      const customersData = response.data || response;
+      set({ 
+        customers: customersData,
+        lastLoadTime: now,
+        isLoading: false
+      });
+    } catch (error) {
+      console.error('Erro ao carregar clientes:', error);
+      set({ isLoading: false });
+    }
   },
 }));

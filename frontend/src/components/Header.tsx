@@ -51,7 +51,7 @@ interface NavLinkProps {
 const NavLink: React.FC<NavLinkProps> = ({ to, icon, label }) => (
   <Link
     to={to}
-    className="flex items-center gap-3 px-4 py-2.5 text-gray-700 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all duration-200 font-medium"
+    className="header__nav-link"
   >
     {icon}
     {label}

@@ -222,7 +222,7 @@ export const LoyaltyPage: React.FC = () => {
           title="Resgatar Pontos"
           onClose={() => setIsRedeemModalOpen(false)}
           footer={
-            <div className="flex gap-4">
+            <div className="loyalty-page__modal-footer">
               <Button
                 variant="secondary"
                 onClick={() => setIsRedeemModalOpen(false)}
@@ -232,7 +232,7 @@ export const LoyaltyPage: React.FC = () => {
               <Button
                 variant="success"
                 onClick={handleRedeem}
-                className="flex-1"
+                className="loyalty-page__modal-footer-primary"
               >
                 Resgatar
               </Button>

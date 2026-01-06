@@ -47,20 +47,54 @@ export class CustomerService {
       }
     }
 
+    // Check if phone already exists (important for delivery)
+    if (data.phone) {
+      const existingByPhone = await prisma.customer.findFirst({
+        where: {
+          OR: [
+            { phone: data.phone },
+            { whatsapp: data.phone },
+          ],
+        },
+      });
+
+      if (existingByPhone) {
+        throw new ConflictError('Telefone já cadastrado');
+      }
+    }
+
+    // Check if whatsapp already exists
+    if (data.whatsapp) {
+      const existingByWhatsapp = await prisma.customer.findFirst({
+        where: {
+          OR: [
+            { phone: data.whatsapp },
+            { whatsapp: data.whatsapp },
+          ],
+        },
+      });
+
+      if (existingByWhatsapp) {
+        throw new ConflictError('WhatsApp já cadastrado');
+      }
+    }
+
     const { addresses, ...customerData } = data;
+
+    // Clean empty strings - convert to null for optional fields
+    const cleanData = Object.entries(customerData).reduce((acc: any, [key, value]) => {
+      if (value === '' && key !== 'notes') {
+        acc[key] = null;
+      } else {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
 
     const customer = await prisma.customer.create({
       data: {
-        ...customerData,
+        ...cleanData,
         createdById,
-        addresses: addresses
-          ? {
-              create: addresses,
-            }
-          : undefined,
-      },
-      include: {
-        addresses: true,
       },
     });
 
@@ -90,12 +124,19 @@ export class CustomerService {
 
     const { addresses, ...customerData } = data as any;
 
+    // Clean empty strings - convert to null for optional fields
+    const cleanData = Object.entries(customerData).reduce((acc: any, [key, value]) => {
+      if (value === '' && key !== 'notes') {
+        acc[key] = null;
+      } else {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
+
     const customer = await prisma.customer.update({
       where: { id },
-      data: customerData,
-      include: {
-        addresses: true,
-      },
+      data: cleanData,
     });
 
     return customer;
@@ -105,7 +146,6 @@ export class CustomerService {
     const customer = await prisma.customer.findUnique({
       where: { id },
       include: {
-        addresses: true,
         sales: {
           take: 10,
           orderBy: { saleDate: 'desc' },
@@ -153,6 +193,11 @@ export class CustomerService {
           },
         },
         {
+          whatsapp: {
+            contains: search,
+          },
+        },
+        {
           cpf: {
             contains: search,
           },
@@ -169,12 +214,6 @@ export class CustomerService {
     const [customers, total] = await Promise.all([
       prisma.customer.findMany({
         where,
-        include: {
-          addresses: {
-            where: { isDefault: true },
-            take: 1,
-          },
-        },
         orderBy: { name: 'asc' },
         take: limit,
         skip: offset,
@@ -191,72 +230,70 @@ export class CustomerService {
   }
 
   async addAddress(customerId: string, addressData: any) {
-    // Check if customer exists
-    const customer = await prisma.customer.findUnique({
+    // Inline address storage only; address table not available in schema
+    const customer = await prisma.customer.findUnique({ where: { id: customerId } });
+    if (!customer) throw new NotFoundError('Cliente não encontrado');
+
+    const cleanAddress = {
+      street: addressData.street ?? null,
+      number: addressData.number ?? null,
+      complement: addressData.complement ?? null,
+      neighborhood: addressData.neighborhood ?? null,
+      city: addressData.city ?? null,
+      state: addressData.state ?? null,
+      zipCode: addressData.zipCode ?? null,
+      referencePoint: addressData.referencePoint ?? null,
+    };
+
+    const updated = await prisma.customer.update({
       where: { id: customerId },
+      data: cleanAddress,
     });
 
-    if (!customer) {
-      throw new NotFoundError('Cliente não encontrado');
-    }
-
-    // If this is default, unset other defaults
-    if (addressData.isDefault) {
-      await prisma.customerAddress.updateMany({
-        where: { customerId },
-        data: { isDefault: false },
-      });
-    }
-
-    const address = await prisma.customerAddress.create({
-      data: {
-        ...addressData,
-        customerId,
-      },
-    });
-
-    return address;
+    return updated;
   }
 
   async updateAddress(addressId: string, addressData: any) {
-    const address = await prisma.customerAddress.findUnique({
+    // Treat addressId as customerId for inline address update
+    const customer = await prisma.customer.findUnique({ where: { id: addressId } });
+    if (!customer) throw new NotFoundError('Cliente não encontrado');
+
+    const cleanAddress = {
+      street: addressData.street ?? null,
+      number: addressData.number ?? null,
+      complement: addressData.complement ?? null,
+      neighborhood: addressData.neighborhood ?? null,
+      city: addressData.city ?? null,
+      state: addressData.state ?? null,
+      zipCode: addressData.zipCode ?? null,
+      referencePoint: addressData.referencePoint ?? null,
+    };
+
+    const updated = await prisma.customer.update({
       where: { id: addressId },
-    });
-
-    if (!address) {
-      throw new NotFoundError('Endereço não encontrado');
-    }
-
-    // If setting as default, unset other defaults
-    if (addressData.isDefault) {
-      await prisma.customerAddress.updateMany({
-        where: {
-          customerId: address.customerId,
-          id: { not: addressId },
-        },
-        data: { isDefault: false },
-      });
-    }
-
-    const updated = await prisma.customerAddress.update({
-      where: { id: addressId },
-      data: addressData,
+      data: cleanAddress,
     });
 
     return updated;
   }
 
   async deleteAddress(addressId: string) {
-    const address = await prisma.customerAddress.findUnique({
-      where: { id: addressId },
-    });
+    // Clear inline address fields for given customer id
+    const customer = await prisma.customer.findUnique({ where: { id: addressId } });
+    if (!customer) throw new NotFoundError('Cliente não encontrado');
 
-    if (!address) {
-      throw new NotFoundError('Endereço não encontrado');
-    }
-
-    await prisma.customerAddress.delete({
+    await prisma.customer.update({
       where: { id: addressId },
+      data: {
+        street: null,
+        number: null,
+        complement: null,
+        neighborhood: null,
+        city: null,
+        state: null,
+        zipCode: null,
+        referencePoint: null,
+      },
     });
   }
 

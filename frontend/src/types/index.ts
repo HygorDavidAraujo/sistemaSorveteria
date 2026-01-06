@@ -21,23 +21,21 @@ export interface Product {
   id: string;
   name: string;
   description?: string;
-  sale_price?: number;
-  price?: number; // Alias for sale_price
-  cost_price?: number;
-  category_id?: string;
+  salePrice?: number | string; // Backend retorna como string
+  costPrice?: number | string;
+  categoryId?: string;
   category?: 'sorvete' | 'bebida' | 'sobremesa' | 'outro' | Category;
   image?: string;
-  available?: boolean;
-  is_active?: boolean;
+  isActive?: boolean;
   code?: string;
-  sale_type?: string;
+  saleType?: string;
   unit?: string;
-  eligible_for_loyalty?: boolean;
-  loyalty_points_multiplier?: number;
-  track_stock?: boolean;
-  current_stock?: number;
-  min_stock?: number;
-  cashback_percentage?: number;
+  eligibleForLoyalty?: boolean;
+  loyaltyPointsMultiplier?: number | string;
+  trackStock?: boolean;
+  currentStock?: number | string;
+  minStock?: number | string;
+  cashbackPercentage?: number | string;
   earns_cashback?: boolean;
   createdAt?: string;
   created_at?: string;
@@ -48,9 +46,25 @@ export interface Customer {
   email: string;
   name: string;
   phone?: string;
+  whatsapp?: string;
   cpf?: string;
+  birthDate?: string;
+  gender?: string;
+  customerType?: string;
+  acceptsMarketing?: boolean;
+  preferredContactMethod?: string;
+  // Address fields
+  street?: string;
+  number?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  referencePoint?: string;
+  // Loyalty - API returns as string for Decimal fields
   loyaltyPoints: number;
-  cashbackBalance: number;
+  cashbackBalance: number | string;
   createdAt: string;
 }
 

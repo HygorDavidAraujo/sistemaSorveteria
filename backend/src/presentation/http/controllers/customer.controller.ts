@@ -74,6 +74,20 @@ export class CustomerController {
     }
   }
 
+  async getAddresses(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const customer = await customerService.findById(id);
+
+      res.json({
+        status: 'success',
+        data: customer.addresses || [],
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async addAddress(req: Request, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;

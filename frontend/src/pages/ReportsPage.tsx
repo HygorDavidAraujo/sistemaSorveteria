@@ -98,20 +98,20 @@ export const ReportsPage: React.FC = () => {
       ['Período:', report.period],
       [''],
       ['RESUMO DE VENDAS'],
-      ['Total de Vendas', `R$ ${(report.totalSales || 0).toFixed(2)}`],
+      ['Total de Vendas', `R$ ${Number(report.totalSales || 0).toFixed(2)}`],
       [''],
       ['FORMAS DE PAGAMENTO'],
-      ['Dinheiro', `R$ ${(report.totalCash || 0).toFixed(2)}`],
-      ['Cartão Crédito', `R$ ${(report.totalCard || 0).toFixed(2)}`],
-      ['PIX', `R$ ${(report.totalPix || 0).toFixed(2)}`],
+      ['Dinheiro', `R$ ${Number(report.totalCash || 0).toFixed(2)}`],
+      ['Cartão Crédito', `R$ ${Number(report.totalCard || 0).toFixed(2)}`],
+      ['PIX', `R$ ${Number(report.totalPix || 0).toFixed(2)}`],
       [''],
       ['DESCONTOS E PROMOÇÕES'],
-      ['Descontos Aplicados', `R$ ${(report.discountsApplied || 0).toFixed(2)}`],
-      ['Pontos Lealdade Resgatados', `R$ ${(report.loyaltyRedeemed || 0).toFixed(2)}`],
-      ['Cashback Resgatado', `R$ ${(report.cashbackRedeemed || 0).toFixed(2)}`],
+      ['Descontos Aplicados', `R$ ${Number(report.discountsApplied || 0).toFixed(2)}`],
+      ['Pontos Lealdade Resgatados', `R$ ${Number(report.loyaltyRedeemed || 0).toFixed(2)}`],
+      ['Cashback Resgatado', `R$ ${Number(report.cashbackRedeemed || 0).toFixed(2)}`],
       [''],
       ['RESULTADO LÍQUIDO'],
-      ['Receita Líquida', `R$ ${(report.netRevenue || 0).toFixed(2)}`],
+      ['Receita Líquida', `R$ ${Number(report.netRevenue || 0).toFixed(2)}`],
     ]
       .map((row) => row.join(','))
       .join('\n');
@@ -211,14 +211,14 @@ export const ReportsPage: React.FC = () => {
               <Card>
                 <div className="reports-metric-card reports-metric-sales">
                   <p className="reports-metric-label">Total de Vendas</p>
-                  <p className="reports-metric-value reports-metric-value-large">R$ {(report.totalSales || 0).toFixed(2)}</p>
+                  <p className="reports-metric-value reports-metric-value-large">R$ {Number(report.totalSales || 0).toFixed(2)}</p>
                 </div>
               </Card>
 
               <Card>
                 <div className="reports-metric-card reports-metric-revenue">
                   <p className="reports-metric-label">Receita Líquida</p>
-                  <p className="reports-metric-value reports-metric-value-large">R$ {(report.netRevenue || 0).toFixed(2)}</p>
+                  <p className="reports-metric-value reports-metric-value-large">R$ {Number(report.netRevenue || 0).toFixed(2)}</p>
                 </div>
               </Card>
             </div>
@@ -230,19 +230,19 @@ export const ReportsPage: React.FC = () => {
                 <div className="reports-payment-item">
                   <span className="reports-payment-name">Dinheiro</span>
                   <span className="reports-payment-value reports-payment-cash">
-                    R$ {(report.totalCash || 0).toFixed(2)}
+                    R$ {Number(report.totalCash || 0).toFixed(2)}
                   </span>
                 </div>
                 <div className="reports-payment-item">
                   <span className="reports-payment-name">Cartão Crédito</span>
                   <span className="reports-payment-value reports-payment-card">
-                    R$ {(report.totalCard || 0).toFixed(2)}
+                    R$ {Number(report.totalCard || 0).toFixed(2)}
                   </span>
                 </div>
                 <div className="reports-payment-item">
                   <span className="reports-payment-name">PIX</span>
                   <span className="reports-payment-value reports-payment-pix">
-                    R$ {(report.totalPix || 0).toFixed(2)}
+                    R$ {Number(report.totalPix || 0).toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -250,13 +250,13 @@ export const ReportsPage: React.FC = () => {
               {/* Percentages */}
               <div className="reports-percentages">
                 <p className="reports-percentage">
-                  Dinheiro: {((report.totalCash || 0) / (report.totalSales || 1) * 100).toFixed(1)}%
+                  Dinheiro: {(Number(report.totalCash || 0) / Number(report.totalSales || 1) * 100).toFixed(1)}%
                 </p>
                 <p className="reports-percentage">
-                  Cartão: {((report.totalCard || 0) / (report.totalSales || 1) * 100).toFixed(1)}%
+                  Cartão: {(Number(report.totalCard || 0) / Number(report.totalSales || 1) * 100).toFixed(1)}%
                 </p>
                 <p className="reports-percentage">
-                  PIX: {((report.totalPix || 0) / (report.totalSales || 1) * 100).toFixed(1)}%
+                  PIX: {(Number(report.totalPix || 0) / Number(report.totalSales || 1) * 100).toFixed(1)}%
                 </p>
               </div>
             </Card>
@@ -269,19 +269,19 @@ export const ReportsPage: React.FC = () => {
               <div className="reports-discount-item">
                 <p className="reports-discount-label">Descontos Aplicados</p>
                 <p className="reports-discount-value reports-discount-danger">
-                  -R$ {(report.discountsApplied || 0).toFixed(2)}
+                  -R$ {Number(report.discountsApplied || 0).toFixed(2)}
                 </p>
               </div>
               <div className="reports-discount-item">
                 <p className="reports-discount-label">Pontos Lealdade Resgatados</p>
                 <p className="reports-discount-value reports-discount-secondary">
-                  -R$ {(report.loyaltyRedeemed || 0).toFixed(2)}
+                  -R$ {Number(report.loyaltyRedeemed || 0).toFixed(2)}
                 </p>
               </div>
               <div className="reports-discount-item">
                 <p className="reports-discount-label">Cashback Resgatado</p>
                 <p className="reports-discount-value reports-discount-warning">
-                  -R$ {(report.cashbackRedeemed || 0).toFixed(2)}
+                  -R$ {Number(report.cashbackRedeemed || 0).toFixed(2)}
                 </p>
               </div>
             </div>
@@ -291,9 +291,9 @@ export const ReportsPage: React.FC = () => {
               <p className="reports-total-value">
                 -R${' '}
                 {(
-                  (report.discountsApplied || 0) +
-                  (report.loyaltyRedeemed || 0) +
-                  (report.cashbackRedeemed || 0)
+                  Number(report.discountsApplied || 0) +
+                  Number(report.loyaltyRedeemed || 0) +
+                  Number(report.cashbackRedeemed || 0)
                 ).toFixed(2)}
               </p>
             </div>

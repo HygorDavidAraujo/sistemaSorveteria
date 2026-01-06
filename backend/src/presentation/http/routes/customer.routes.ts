@@ -70,6 +70,11 @@ router.put(
 );
 
 // Address management
+router.get(
+  '/:id/addresses',
+  controller.getAddresses
+);
+
 router.post(
   '/:id/addresses',
   validate(addAddressSchema),

@@ -77,7 +77,6 @@ export class DeliveryService {
           whatsapp: true,
         },
       },
-      customerAddress: true,
       cashSession: {
         select: {
           id: true,
