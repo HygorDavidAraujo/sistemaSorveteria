@@ -13,6 +13,8 @@ export const SalesPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
+  const [isCustomerSearchOpen, setIsCustomerSearchOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'credit_card' | 'debit_card' | 'pix'>('cash');
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
   const [discountCode, setDiscountCode] = useState('');
@@ -23,6 +25,20 @@ export const SalesPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const searchContainer = document.querySelector('.sales-page__customer-search-group');
+      if (searchContainer && !searchContainer.contains(event.target as Node)) {
+        setIsCustomerSearchOpen(false);
+      }
+    };
+
+    if (isCustomerSearchOpen) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [isCustomerSearchOpen]);
 
   const loadData = async () => {
     try {
@@ -40,14 +56,28 @@ export const SalesPage: React.FC = () => {
     }
   };
 
+  const filteredCustomers = useMemo(() => {
+    if (!customerSearchTerm.trim()) return [];
+
+    const search = customerSearchTerm.toLowerCase();
+    return customers.filter(
+      (c) =>
+        c.name?.toLowerCase().includes(search) ||
+        c.phone?.includes(search) ||
+        c.cpf?.includes(search) ||
+        c.whatsapp?.includes(search) ||
+        c.email?.toLowerCase().includes(search)
+    ).slice(0, 8);
+  }, [customers, customerSearchTerm]);
+
   const handleAddItem = (product: Product) => {
     salesStore.addItem({
       id: `${product.id}-${Date.now()}`,
       productId: product.id,
       productName: product.name,
       quantity: 1,
-      unitPrice: product.sale_price || product.price || 0,
-      totalPrice: product.sale_price || product.price || 0,
+      unitPrice: typeof product.salePrice === 'number' ? product.salePrice : (typeof product.salePrice === 'string' ? parseFloat(product.salePrice) : 0),
+      totalPrice: typeof product.salePrice === 'number' ? product.salePrice : (typeof product.salePrice === 'string' ? parseFloat(product.salePrice) : 0),
     });
   };
 
@@ -59,6 +89,12 @@ export const SalesPage: React.FC = () => {
 
   const handleRemoveItem = (itemId: string) => {
     salesStore.removeItem(itemId);
+  };
+
+  const getCustomerName = () => {
+    if (!selectedCustomer) return 'Consumidor Final';
+    const customer = customers.find(c => c.id === selectedCustomer);
+    return customer ? `${customer.name} (${customer.cpf || customer.phone})` : 'Consumidor Final';
   };
 
   const handleApplyCoupon = async () => {
@@ -160,15 +196,15 @@ export const SalesPage: React.FC = () => {
                   )}
                 </div>
                 <p className="sales-page__product-name">{product.name}</p>
-                <p className="sales-page__product-price">R$ {(product.sale_price || product.price || 0).toFixed(2)}</p>
+                <p className="sales-page__product-price">R$ {(typeof product.salePrice === 'number' ? product.salePrice : (typeof product.salePrice === 'string' ? parseFloat(product.salePrice) : 0)).toFixed(2)}</p>
                 <span
                   className={`sales-page__product-status ${
-                    product.is_active || product.available
+                    product.isActive
                       ? 'sales-page__product-status--available'
                       : 'sales-page__product-status--unavailable'
                   }`}
                 >
-                  {product.is_active || product.available ? 'Disponível' : 'Indisponível'}
+                  {product.isActive ? 'Disponível' : 'Indisponível'}
                 </span>
               </div>
             ))}
@@ -217,21 +253,79 @@ export const SalesPage: React.FC = () => {
           {/* Customer & Discount */}
           {salesStore.items.length > 0 && (
             <>
-              <div className="sales-page__cart-section">
+              <div className="sales-page__customer-search-group">
                 <label className="sales-page__cart-section-label">Cliente (Opcional)</label>
-                <select
-                  title="Selecione um cliente"
-                  value={selectedCustomer}
-                  onChange={(e) => setSelectedCustomer(e.target.value)}
-                  className="sales-page__cart-section-select"
-                >
-                  <option value="">Consumidor Final</option>
-                  {customers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name} ({customer.cpf})
-                    </option>
-                  ))}
-                </select>
+                
+                {selectedCustomer && (
+                  <div className="sales-page__customer-selected">
+                    {getCustomerName()}
+                    <button
+                      onClick={() => {
+                        setSelectedCustomer('');
+                        setCustomerSearchTerm('');
+                      }}
+                      className="sales-page__customer-remove"
+                      title="Remover cliente selecionado"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+
+                <div className="sales-page__customer-search-input-wrapper">
+                  <input
+                    type="text"
+                    value={customerSearchTerm}
+                    onChange={(e) => {
+                      setCustomerSearchTerm(e.target.value);
+                      setIsCustomerSearchOpen(true);
+                    }}
+                    onFocus={() => setIsCustomerSearchOpen(true)}
+                    placeholder="Buscar cliente por nome, CPF ou telefone..."
+                    className="sales-page__customer-search-input"
+                  />
+
+                  {isCustomerSearchOpen && (
+                    <div className="sales-page__customer-search-results">
+                      {filteredCustomers.length > 0 ? (
+                        <>
+                          {filteredCustomers.map((customer) => (
+                            <button
+                              key={customer.id}
+                              onClick={() => {
+                                setSelectedCustomer(customer.id);
+                                setCustomerSearchTerm('');
+                                setIsCustomerSearchOpen(false);
+                              }}
+                              className="sales-page__customer-search-item"
+                            >
+                              <span className="sales-page__customer-search-item-name">
+                                {customer.name}
+                              </span>
+                              <span className="sales-page__customer-search-item-info">
+                                {customer.cpf || customer.phone}
+                              </span>
+                            </button>
+                          ))}
+                          <button
+                            onClick={() => {
+                              setSelectedCustomer('');
+                              setCustomerSearchTerm('');
+                              setIsCustomerSearchOpen(false);
+                            }}
+                            className="sales-page__customer-search-item sales-page__customer-search-item--final"
+                          >
+                            Consumidor Final
+                          </button>
+                        </>
+                      ) : customerSearchTerm ? (
+                        <div className="sales-page__customer-search-empty">
+                          Nenhum cliente encontrado
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="sales-page__cart-section">
