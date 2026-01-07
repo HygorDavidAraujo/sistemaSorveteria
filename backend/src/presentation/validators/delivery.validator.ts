@@ -4,7 +4,6 @@ export const deliveryValidators = {
   createOrder: Joi.object({
     body: Joi.object({
       customerId: Joi.string().uuid().required(),
-      customerAddressId: Joi.string().uuid().required(),
       cashSessionId: Joi.string().uuid().required(),
       items: Joi.array()
         .items(

@@ -150,6 +150,71 @@ export const useSalesStore = create<SalesStore>((set) => ({
   setTotal: (total: number) => set({ total }),
 }));
 
+// Store separado para o carrinho do Delivery
+interface DeliveryStore {
+  items: any[];
+  total: number;
+  addItem: (item: any) => void;
+  removeItem: (itemId: string) => void;
+  updateItem: (itemId: string, quantity: number, totalPrice?: number) => void;
+  clear: () => void;
+  setTotal: (total: number) => void;
+}
+
+export const useDeliveryStore = create<DeliveryStore>((set) => ({
+  items: [],
+  total: 0,
+
+  addItem: (item: any) => {
+    set((state) => {
+      if (item.saleType === 'weight') {
+        return { items: [...state.items, item] };
+      }
+      const productIdStr = String(item.productId);
+      const existingItem = state.items.find((i) => String(i.productId) === productIdStr);
+      if (existingItem) {
+        return {
+          items: state.items.map((i) =>
+            String(i.productId) === productIdStr
+              ? {
+                  ...i,
+                  id: existingItem.id,
+                  quantity: i.quantity + item.quantity,
+                  totalPrice: (i.quantity + item.quantity) * i.unitPrice,
+                }
+              : i
+          ),
+        };
+      }
+      return { items: [...state.items, item] };
+    });
+  },
+
+  removeItem: (itemId: string) => {
+    set((state) => ({ items: state.items.filter((i) => i.id !== itemId) }));
+  },
+
+  updateItem: (itemId: string, quantity: number, totalPrice?: number) => {
+    set((state) => ({
+      items: state.items
+        .map((i) =>
+          i.id === itemId
+            ? {
+                ...i,
+                quantity,
+                totalPrice: totalPrice !== undefined ? totalPrice : quantity * i.unitPrice,
+              }
+            : i
+        )
+        .filter((i) => i.quantity > 0),
+    }));
+  },
+
+  clear: () => set({ items: [], total: 0 }),
+
+  setTotal: (total: number) => set({ total }),
+}));
+
 interface CashSessionStore {
   currentSession: any | null;
   isOpen: boolean;
@@ -157,7 +222,7 @@ interface CashSessionStore {
   isLoading: boolean;
   loadSession: () => Promise<void>;
   openSession: (openingBalance: number) => Promise<void>;
-  closeSession: (closingBalance: number) => Promise<void>;
+  closeSession: (closingBalance: number) => Promise<any>;
 }
 
 export const useCashSessionStore = create<CashSessionStore>((set, get) => ({
@@ -203,6 +268,7 @@ export const useCashSessionStore = create<CashSessionStore>((set, get) => ({
     }
     const session = await apiClient.closeCashSession(closingBalance, currentSession.id);
     set({ currentSession: session, isOpen: false });
+    return session;
   },
 }));
 

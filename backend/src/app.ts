@@ -8,6 +8,7 @@ import logger from '@shared/utils/logger';
 
 // Routes
 import authRoutes from '@presentation/http/routes/auth.routes';
+import userRoutes from '@presentation/http/routes/user.routes';
 import customerRoutes from '@presentation/http/routes/customer.routes';
 import productRoutes from '@presentation/http/routes/product.routes';
 import cashSessionRoutes from '@presentation/http/routes/cash-session.routes';
@@ -72,6 +73,7 @@ export function createApp(): Application {
   // API routes
   const apiPrefix = process.env.API_PREFIX || '/api/v1';
   app.use(`${apiPrefix}/auth`, authRoutes);
+  app.use(`${apiPrefix}/users`, userRoutes);
   app.use(`${apiPrefix}/customers`, customerRoutes);
   app.use(`${apiPrefix}`, productRoutes);
   app.use(`${apiPrefix}/cash-sessions`, cashSessionRoutes);

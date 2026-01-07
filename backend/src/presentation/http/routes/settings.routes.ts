@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { SettingsController } from '@presentation/http/controllers/settings.controller';
-import { validate } from '@presentation/middleware/validate.middleware';
-import { authorize } from '@presentation/middleware/auth.middleware';
+import { validate } from '@presentation/http/middlewares/validate';
+import { authenticate } from '@presentation/http/middlewares/authenticate';
+import { authorize } from '@presentation/http/middlewares/authorize';
 import { settingsValidators } from '@presentation/validators/settings.validator';
 
 const router = Router();
@@ -18,7 +19,7 @@ const settingsController = new SettingsController();
  */
 router.get(
   '/company-info',
-  settingsController.getCompanyInfo
+  settingsController.getCompanyInfo.bind(settingsController)
 );
 
 /**
@@ -28,9 +29,10 @@ router.get(
  */
 router.post(
   '/company-info',
+  authenticate,
   authorize('admin'),
   validate(settingsValidators.createOrUpdateCompanyInfo),
-  settingsController.createOrUpdateCompanyInfo
+  settingsController.createOrUpdateCompanyInfo.bind(settingsController)
 );
 
 export default router;

@@ -1,8 +1,6 @@
 import { Request, Response } from 'express';
 import { CashbackService } from '../../../application/use-cases/cashback/cashback.service';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '@infrastructure/database/prisma-client';
 const cashbackService = new CashbackService(prisma);
 
 export class CashbackController {

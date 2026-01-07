@@ -30,6 +30,10 @@ export const ProductsPage: React.FC = () => {
     category: '',
     available: true,
     saleType: 'unit' as 'unit' | 'weight',
+    eligibleForLoyalty: false,
+    loyaltyPointsMultiplier: 1,
+    earnsCashback: false,
+    cashbackPercentage: null as number | null,
   });
 
   useEffect(() => {
@@ -93,7 +97,14 @@ export const ProductsPage: React.FC = () => {
         description: form.description,
         saleType: form.saleType,
         isActive: form.available,
+        eligibleForLoyalty: form.eligibleForLoyalty,
+        loyaltyPointsMultiplier: form.loyaltyPointsMultiplier,
+        earnsCashback: form.earnsCashback,
       };
+
+      if (form.cashbackPercentage !== null && form.cashbackPercentage > 0) {
+        productData.cashbackPercentage = form.cashbackPercentage;
+      }
 
       if (!editingId || normalizedCode) productData.code = normalizedCode;
       if (!Number.isNaN(priceValue) && priceValue > 0) productData.salePrice = priceValue;
@@ -110,7 +121,19 @@ export const ProductsPage: React.FC = () => {
       loadProducts();
       setIsFormModalOpen(false);
       setEditingId(null);
-      setForm({ name: '', description: '', price: '', code: '', category: '', available: true, saleType: 'unit' });
+      setForm({ 
+        name: '', 
+        description: '', 
+        price: '', 
+        code: '', 
+        category: '', 
+        available: true, 
+        saleType: 'unit',
+        eligibleForLoyalty: false,
+        loyaltyPointsMultiplier: 1,
+        earnsCashback: false,
+        cashbackPercentage: null,
+      });
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erro ao salvar produto');
@@ -128,6 +151,10 @@ export const ProductsPage: React.FC = () => {
       category: categoryValue || '',
       available: product.isActive !== undefined ? product.isActive : (product.is_active !== undefined ? product.is_active : (product.available !== undefined ? product.available : true)),
       saleType: (product as any).saleType || (product as any).sale_type || 'unit' as 'unit' | 'weight',
+      eligibleForLoyalty: (product as any).eligibleForLoyalty || false,
+      loyaltyPointsMultiplier: parseFloat((product as any).loyaltyPointsMultiplier || '1'),
+      earnsCashback: (product as any).earnsCashback || false,
+      cashbackPercentage: (product as any).cashbackPercentage ? parseFloat((product as any).cashbackPercentage) : null,
     });
     setEditingId(product.id);
     setIsFormModalOpen(true);
@@ -354,6 +381,82 @@ export const ProductsPage: React.FC = () => {
                 />
                 Disponível para venda
               </label>
+            </div>
+
+            {/* Loyalty Section */}
+            <div className="products-page__form-section">
+              <h3 className="products-page__form-section-title">⭐ Programa de Lealdade</h3>
+              
+              <div className="products-page__form-group">
+                <label className="products-page__form-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={form.eligibleForLoyalty}
+                    onChange={(e) => setForm({ ...form, eligibleForLoyalty: e.target.checked })}
+                  />
+                  Elegível para Pontos de Lealdade
+                </label>
+                <small className="products-page__form-hint">
+                  Clientes ganham pontos ao comprar este produto
+                </small>
+              </div>
+
+              {form.eligibleForLoyalty && (
+                <div className="products-page__form-group">
+                  <label className="products-page__form-label">Multiplicador de Pontos</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.1"
+                    value={form.loyaltyPointsMultiplier}
+                    onChange={(e) => setForm({ ...form, loyaltyPointsMultiplier: parseFloat(e.target.value) || 1 })}
+                    className="products-page__form-input"
+                    title="Multiplicador de pontos (1 = normal, 2 = dobro)"
+                  />
+                  <small className="products-page__form-hint">
+                    Ex: 2.0 = cliente ganha o dobro de pontos neste produto
+                  </small>
+                </div>
+              )}
+            </div>
+
+            {/* Cashback Section */}
+            <div className="products-page__form-section">
+              <h3 className="products-page__form-section-title">💰 Cashback</h3>
+              
+              <div className="products-page__form-group">
+                <label className="products-page__form-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={form.earnsCashback}
+                    onChange={(e) => setForm({ ...form, earnsCashback: e.target.checked })}
+                  />
+                  Gera Cashback
+                </label>
+                <small className="products-page__form-hint">
+                  Clientes recebem cashback ao comprar este produto
+                </small>
+              </div>
+
+              {form.earnsCashback && (
+                <div className="products-page__form-group">
+                  <label className="products-page__form-label">Percentual de Cashback (%)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={form.cashbackPercentage || ''}
+                    onChange={(e) => setForm({ ...form, cashbackPercentage: e.target.value ? parseFloat(e.target.value) : null })}
+                    className="products-page__form-input"
+                    placeholder="Usar padrão do sistema"
+                    title="Percentual de cashback específico para este produto"
+                  />
+                  <small className="products-page__form-hint">
+                    Deixe em branco para usar o percentual padrão das configurações
+                  </small>
+                </div>
+              )}
             </div>
 
             <div className="products-page__modal-footer">

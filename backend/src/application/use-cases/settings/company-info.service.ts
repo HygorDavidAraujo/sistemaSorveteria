@@ -1,5 +1,4 @@
 import prisma from '@infrastructure/database/prisma-client';
-import { NotFoundError } from '@shared/errors/app-error';
 
 interface CreateCompanyInfoDTO {
   cnpj: string;
@@ -18,27 +17,28 @@ interface CreateCompanyInfoDTO {
   phone?: string;
   whatsapp?: string;
   logoUrl?: string;
+  logoBase64?: string;
+  logoMimeType?: string;
 }
 
 interface UpdateCompanyInfoDTO extends Partial<CreateCompanyInfoDTO> {}
 
 export class CompanyInfoService {
   async get() {
-    const company = await prisma.companyInfo.findFirst();
+    const company = await (prisma as any).companyInfo.findFirst();
     
-    if (!company) {
-      throw new NotFoundError('Informações da empresa não configuradas');
-    }
-
+    // Return null if no company info is configured yet (not an error)
     return company;
   }
 
   async createOrUpdate(data: CreateCompanyInfoDTO | UpdateCompanyInfoDTO) {
-    const existing = await prisma.companyInfo.findFirst();
+    const existing = await (prisma as any).companyInfo.findFirst();
+
+    const logoDataBuffer = data.logoBase64 ? Buffer.from(data.logoBase64, 'base64') : undefined;
 
     if (existing) {
       // Update existing
-      const updated = await prisma.companyInfo.update({
+      const updated = await (prisma as any).companyInfo.update({
         where: { id: existing.id },
         data: {
           cnpj: data.cnpj || existing.cnpj,
@@ -57,6 +57,12 @@ export class CompanyInfoService {
           phone: data.phone || existing.phone,
           whatsapp: data.whatsapp || existing.whatsapp,
           logoUrl: data.logoUrl || existing.logoUrl,
+          ...(logoDataBuffer
+            ? {
+                logoData: logoDataBuffer,
+                logoMimeType: data.logoMimeType || existing.logoMimeType,
+              }
+            : {}),
         },
       });
 
@@ -64,7 +70,7 @@ export class CompanyInfoService {
     } else {
       // Create new (type-safe cast for new company info)
       const createData = data as CreateCompanyInfoDTO;
-      const created = await prisma.companyInfo.create({
+      const created = await (prisma as any).companyInfo.create({
         data: {
           cnpj: createData.cnpj,
           businessName: createData.businessName,
@@ -82,6 +88,8 @@ export class CompanyInfoService {
           phone: createData.phone,
           whatsapp: createData.whatsapp,
           logoUrl: createData.logoUrl,
+          logoData: logoDataBuffer,
+          logoMimeType: createData.logoMimeType,
         },
       });
 

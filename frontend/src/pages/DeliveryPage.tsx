@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useSalesStore, useCashSessionStore, useProductsStore, useCustomersStore } from '@/store';
+import { useDeliveryStore, useCashSessionStore, useProductsStore, useCustomersStore } from '@/store';
 import { apiClient } from '@/services/api';
 import { Truck, Plus, Minus, Trash2, UserPlus, Printer, MapPin, Clock } from 'lucide-react';
 import type { Product, Customer } from '@/types';
@@ -57,7 +57,7 @@ export const DeliveryPage: React.FC = () => {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [isOrderDetailsOpen, setIsOrderDetailsOpen] = useState(false);
   
-  const salesStore = useSalesStore();
+  const deliveryStore = useDeliveryStore();
   const { currentSession, loadSession } = useCashSessionStore();
   const { products, loadProducts } = useProductsStore();
   const { customers, loadCustomers } = useCustomersStore();
@@ -262,7 +262,7 @@ export const DeliveryPage: React.FC = () => {
       ? product.salePrice 
       : parseFloat(product.salePrice as string) || 0;
     
-    salesStore.addItem({
+    deliveryStore.addItem({
       id: `${product.id}-${Date.now()}`,
       productId: product.id,
       productName: product.name,
@@ -289,7 +289,7 @@ export const DeliveryPage: React.FC = () => {
     
     const totalPrice = quantity * price;
     
-    salesStore.addItem({
+    deliveryStore.addItem({
       id: `${selectedWeightProduct.id}-${Date.now()}`,
       productId: selectedWeightProduct.id,
       productName: selectedWeightProduct.name,
@@ -309,12 +309,12 @@ export const DeliveryPage: React.FC = () => {
 
   const handleUpdateQuantity = (itemId: string, quantity: number) => {
     if (quantity > 0) {
-      salesStore.updateItem(itemId, quantity);
+      deliveryStore.updateItem(itemId, quantity);
     }
   };
 
   const handleRemoveItem = (itemId: string) => {
-    salesStore.removeItem(itemId);
+    deliveryStore.removeItem(itemId);
   };
 
   const handleCreateCustomer = async (e: React.FormEvent) => {
@@ -375,7 +375,7 @@ export const DeliveryPage: React.FC = () => {
       return;
     }
 
-    if (salesStore.items.length === 0) {
+    if (deliveryStore.items.length === 0) {
       setError('Adicione ao menos um item ao pedido');
       setTimeout(() => setError(null), 3000);
       return;
@@ -409,9 +409,8 @@ export const DeliveryPage: React.FC = () => {
     try {
       const orderData = {
         customerId: selectedCustomer,
-        customerAddressId: selectedAddress,
         cashSessionId: currentSession.id,
-        items: salesStore.items.map(item => ({
+        items: deliveryStore.items.map(item => ({
           productId: item.productId,
           quantity: item.quantity,
         })),
@@ -428,7 +427,7 @@ export const DeliveryPage: React.FC = () => {
       setTimeout(() => setSuccess(null), 3000);
       
       // Limpar carrinho e formulário
-      salesStore.items.forEach(item => salesStore.removeItem(item.id));
+      deliveryStore.items.forEach(item => deliveryStore.removeItem(item.id));
       setPayments([]);
       setDiscountValue(0);
       setCustomerNotes('');
@@ -462,7 +461,16 @@ export const DeliveryPage: React.FC = () => {
   };
 
   const handlePrintOrder = (order: any) => {
-    const address = order.customerAddress || {};
+    const address = {
+      street: order.customer?.street,
+      number: order.customer?.number,
+      complement: order.customer?.complement,
+      neighborhood: order.customer?.neighborhood,
+      city: order.customer?.city,
+      state: order.customer?.state,
+      zipCode: order.customer?.zipCode,
+      referencePoint: order.customer?.referencePoint,
+    };
     const receiptHTML = `
       <!DOCTYPE html>
       <html>
@@ -607,7 +615,7 @@ export const DeliveryPage: React.FC = () => {
     return colors[status] || '#6b7280';
   };
 
-  const subtotal = salesStore.items.reduce((sum, item) => sum + item.totalPrice, 0);
+  const subtotal = deliveryStore.items.reduce((sum, item) => sum + item.totalPrice, 0);
   const total = subtotal + deliveryFee - discountValue;
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
   const missingAmount = Math.max(0, total - totalPaid);
@@ -672,12 +680,12 @@ export const DeliveryPage: React.FC = () => {
         <div className="delivery-page__cart">
           <h2>Carrinho</h2>
           
-          {salesStore.items.length === 0 ? (
+          {deliveryStore.items.length === 0 ? (
             <p className="delivery-page__cart-empty">Carrinho vazio</p>
           ) : (
             <>
               <div className="delivery-page__cart-items">
-                {salesStore.items.map((item) => (
+                {deliveryStore.items.map((item) => (
                   <div key={item.id} className="delivery-page__cart-item">
                     <div className="delivery-page__cart-item-info">
                       <span className="delivery-page__cart-item-name">{item.productName}</span>
@@ -1169,6 +1177,18 @@ export const DeliveryPage: React.FC = () => {
                       {getStatusLabel(status)}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              <div className="delivery-page__order-detail-section">
+                <h4>Endereço de Entrega</h4>
+                <div className="delivery-page__order-address">
+                  <div>{selectedOrder.customer?.street}, {selectedOrder.customer?.number}{selectedOrder.customer?.complement ? ` - ${selectedOrder.customer?.complement}` : ''}</div>
+                  <div>{selectedOrder.customer?.neighborhood} - {selectedOrder.customer?.city}/{selectedOrder.customer?.state}</div>
+                  <div>CEP: {selectedOrder.customer?.zipCode || 'N/A'}</div>
+                  {selectedOrder.customer?.referencePoint ? (
+                    <div>Ref: {selectedOrder.customer?.referencePoint}</div>
+                  ) : null}
                 </div>
               </div>
 

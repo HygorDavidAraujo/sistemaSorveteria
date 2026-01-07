@@ -26,6 +26,8 @@ export const settingsValidators = {
       phone: Joi.string().max(20).optional(),
       whatsapp: Joi.string().max(20).optional(),
       logoUrl: Joi.string().optional(),
+      logoBase64: Joi.string().base64({ paddingRequired: false }).optional(),
+      logoMimeType: Joi.string().max(100).optional(),
     }),
     query: Joi.object({}),
     params: Joi.object({}),

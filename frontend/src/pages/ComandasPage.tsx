@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Card, Button, Input, Modal, Loading, Alert } from '@/components/common';
-import { Plus, Edit2, Trash2, X, ShoppingCart, Check, DollarSign, UserPlus, Printer } from 'lucide-react';
+import { Plus, Minus, Trash2, ShoppingCart, DollarSign, UserPlus, Printer } from 'lucide-react';
 import { apiClient } from '@/services/api';
 import { useCashSessionStore, useCustomersStore } from '@/store';
 import './ComandasPage.css';
@@ -98,7 +98,6 @@ export const ComandasPage: React.FC = () => {
   // Modals
   const [isOpenComandaModalOpen, setIsOpenComandaModalOpen] = useState(false);
   const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
-  const [isCloseComandaModalOpen, setIsCloseComandaModalOpen] = useState(false);
 
   // Form states
   const [tableNumber, setTableNumber] = useState('');
@@ -110,6 +109,8 @@ export const ComandasPage: React.FC = () => {
   const [discount, setDiscount] = useState('0');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [isNewCustomerModalOpen, setIsNewCustomerModalOpen] = useState(false);
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
+  const [isCustomerSearchOpen, setIsCustomerSearchOpen] = useState(false);
   const [customerForm, setCustomerForm] = useState({
     name: '',
     email: '',
@@ -135,6 +136,7 @@ export const ComandasPage: React.FC = () => {
   const [payments, setPayments] = useState<Array<{method: string; amount: number}>>([]);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [currentPaymentAmount, setCurrentPaymentAmount] = useState('');
+  const [quantityInputs, setQuantityInputs] = useState<Record<string, string>>({});
 
   // Filtered products based on search
   const filteredProducts = useMemo(() => {
@@ -147,12 +149,41 @@ export const ComandasPage: React.FC = () => {
     );
   }, [products, productSearchTerm]);
 
+  const filteredCustomers = useMemo(() => {
+    if (!customerSearchTerm.trim()) return [];
+
+    const search = customerSearchTerm.toLowerCase();
+    return customers
+      .filter((c) =>
+        c.name?.toLowerCase().includes(search) ||
+        c.phone?.toLowerCase().includes(search) ||
+        c.cpf?.toLowerCase().includes(search) ||
+        c.whatsapp?.toLowerCase().includes(search) ||
+        c.email?.toLowerCase().includes(search)
+      )
+      .slice(0, 8);
+  }, [customers, customerSearchTerm]);
+
   // Load data
   useEffect(() => {
     loadData();
     loadSession();
     loadCustomers();
   }, [loadSession, loadCustomers]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const container = document.querySelector('.comanda-customer-search-group');
+      if (container && !container.contains(event.target as Node)) {
+        setIsCustomerSearchOpen(false);
+      }
+    };
+
+    if (isCustomerSearchOpen) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [isCustomerSearchOpen]);
 
   const loadData = async () => {
     try {
@@ -180,6 +211,56 @@ export const ComandasPage: React.FC = () => {
     }
   };
 
+  // Keep selected comanda in sync across list and detail
+  const updateSelectedComandaState = (comandaData: Comanda) => {
+    setSelectedComanda(comandaData);
+    setComandas((prev) => prev.map((c) => (c.id === comandaData.id ? comandaData : c)));
+  };
+
+  const refreshSelectedComanda = async (comandaId: string) => {
+    const updatedComanda = await apiClient.get(`/comandas/${comandaId}`);
+    const comandaData = normalizeComanda(updatedComanda.data?.data || updatedComanda.data);
+    updateSelectedComandaState(comandaData);
+    return comandaData;
+  };
+
+  const formatCurrency = (value: number) => `R$ ${Number(value || 0).toFixed(2)}`;
+
+  useEffect(() => {
+    // Reset transient states when switching comandas
+    setPayments([]);
+    setCurrentPaymentAmount('');
+    setPaymentMethod('cash');
+    setDiscount(String(selectedComanda?.discount ?? '0'));
+    setQuantityInputs({});
+    setSelectedCustomerId('');
+    setCustomerSearchTerm('');
+    setIsCustomerSearchOpen(false);
+  }, [selectedComanda?.id]);
+
+  const paymentSummary = useMemo(() => {
+    const subtotalValue = selectedComanda?.subtotal || 0;
+    const discountValue = selectedComanda?.status === 'OPEN'
+      ? parseFloat(discount || '0')
+      : selectedComanda?.discount || 0;
+    const totalToPay = selectedComanda?.status === 'CLOSED'
+      ? selectedComanda.total
+      : Math.max(0, subtotalValue - discountValue);
+    const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+    const remaining = Math.max(0, totalToPay - totalPaid);
+    const change = Math.max(0, totalPaid - totalToPay);
+
+    return {
+      subtotalValue,
+      discountValue,
+      totalToPay,
+      totalPaid,
+      remaining,
+      change,
+      isPaid: totalPaid > 0 && remaining === 0,
+    };
+  }, [selectedComanda, discount, payments]);
+
   const handleOpenComanda = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -194,7 +275,7 @@ export const ComandasPage: React.FC = () => {
       const tableNumberNormalized = tableNumber.trim().toLowerCase();
       const existingComanda = comandas.find(
         (c) => c.status === 'OPEN' && 
-        c.tableNumber?.trim().toLowerCase() === tableNumberNormalized
+        String(c.tableNumber ?? '').trim().toLowerCase() === tableNumberNormalized
       );
       
       if (existingComanda) {
@@ -236,21 +317,13 @@ export const ComandasPage: React.FC = () => {
     }
 
     try {
-      const response = await apiClient.post(`/comandas/${selectedComanda.id}/items`, {
+      await apiClient.post(`/comandas/${selectedComanda.id}/items`, {
         productId: selectedProduct,
         quantity: qty,
         observation: observation || undefined,
       });
 
-      // Update selected comanda with new item
-      const updatedComanda = await apiClient.get(`/comandas/${selectedComanda.id}`);
-      const comandaData = normalizeComanda(updatedComanda.data?.data || updatedComanda.data);
-      setSelectedComanda(comandaData);
-
-      // Update comanda in list
-      setComandas(
-        comandas.map((c) => (c.id === selectedComanda.id ? comandaData : c))
-      );
+      await refreshSelectedComanda(selectedComanda.id);
 
       setSuccess('Item adicionado com sucesso!');
       setIsAddItemModalOpen(false);
@@ -268,18 +341,36 @@ export const ComandasPage: React.FC = () => {
 
     try {
       await apiClient.delete(`/comandas/${selectedComanda.id}/items/${itemId}`);
-
-      const updatedComanda = await apiClient.get(`/comandas/${selectedComanda.id}`);
-      const comandaData = normalizeComanda(updatedComanda.data?.data || updatedComanda.data);
-      setSelectedComanda(comandaData);
-      setComandas(
-        comandas.map((c) => (c.id === selectedComanda.id ? comandaData : c))
-      );
+      await refreshSelectedComanda(selectedComanda.id);
 
       setSuccess('Item removido com sucesso!');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erro ao remover item');
+    }
+  };
+
+  const handleUpdateItemQuantity = async (item: ComandaItem, newQuantity: number) => {
+    if (!selectedComanda || selectedComanda.status !== 'OPEN') return;
+
+    const safeQuantity = Math.max(1, Number.isFinite(newQuantity) ? newQuantity : item.quantity);
+
+    try {
+      await apiClient.put(`/comandas/${selectedComanda.id}/items/${item.id}`, {
+        quantity: safeQuantity,
+      });
+
+      await refreshSelectedComanda(selectedComanda.id);
+      setQuantityInputs((prev) => {
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
+      setSuccess('Quantidade atualizada com sucesso!');
+      setTimeout(() => setSuccess(null), 2000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Erro ao atualizar quantidade');
+      setTimeout(() => setError(null), 3000);
     }
   };
 
@@ -327,14 +418,14 @@ export const ComandasPage: React.FC = () => {
   };
 
   const handleAddPayment = () => {
-    const amount = parseFloat(currentPaymentAmount);
-    if (isNaN(amount) || amount <= 0) {
+    const parsed = parseFloat((currentPaymentAmount || '').replace(',', '.'));
+    if (isNaN(parsed) || parsed <= 0) {
       setError('Digite um valor válido');
       setTimeout(() => setError(null), 3000);
       return;
     }
 
-    setPayments([...payments, { method: paymentMethod, amount }]);
+    setPayments([...payments, { method: paymentMethod, amount: parseFloat(parsed.toFixed(2)) }]);
     setCurrentPaymentAmount('');
   };
 
@@ -525,29 +616,25 @@ export const ComandasPage: React.FC = () => {
     }
   };
 
-  const handleCloseComanda = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCloseComanda = async (e?: React.FormEvent | React.MouseEvent) => {
+    e?.preventDefault?.();
     if (!selectedComanda) return;
 
-    // Validate payments
     if (payments.length === 0) {
       setError('Adicione pelo menos uma forma de pagamento');
       setTimeout(() => setError(null), 3000);
       return;
     }
 
-    const totalToPay = selectedComanda.subtotal - parseFloat(discount || '0');
-    const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-    
-    if (totalPaid < totalToPay) {
-      setError(`Faltam R$ ${(totalToPay - totalPaid).toFixed(2)} para pagar`);
+    if (paymentSummary.remaining > 0) {
+      setError(`Faltam R$ ${paymentSummary.remaining.toFixed(2)} para pagar`);
       setTimeout(() => setError(null), 3000);
       return;
     }
 
     try {
       const response = await apiClient.post(`/comandas/${selectedComanda.id}/close`, {
-        discount: parseFloat(discount),
+        discount: paymentSummary.discountValue,
         payments: payments.map(p => ({
           paymentMethod: p.method,
           amount: p.amount
@@ -555,10 +642,8 @@ export const ComandasPage: React.FC = () => {
       });
 
       const comandaData = normalizeComanda(response.data?.data || response.data);
-      setComandas(comandas.map((c) => (c.id === selectedComanda.id ? comandaData : c)));
-      setSelectedComanda(comandaData);
+      updateSelectedComandaState(comandaData);
       setSuccess('Comanda fechada com sucesso!');
-      setIsCloseComandaModalOpen(false);
       setDiscount('0');
       setPayments([]);
       setCurrentPaymentAmount('');
@@ -756,10 +841,9 @@ export const ComandasPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Items */}
-              <div className="comanda-items-section">
-                <div className="comanda-items-header">
-                  <h3>Itens</h3>
+              <div className="comanda-cart">
+                <div className="comanda-cart-header">
+                  <h3>Itens da Comanda</h3>
                   {selectedComanda.status === 'OPEN' && (
                     <Button
                       size="sm"
@@ -772,157 +856,325 @@ export const ComandasPage: React.FC = () => {
                   )}
                 </div>
 
-                <div className="comanda-items-list">
-                  {selectedComanda.items.length > 0 ? (
+                <div className="comanda-cart-items">
+                  {selectedComanda.items.length === 0 ? (
+                    <p className="comanda-cart-empty">Nenhum item selecionado</p>
+                  ) : (
                     selectedComanda.items.map((item) => (
-                      <div key={item.id} className="comanda-item-row">
-                        <div className="comanda-item-info">
-                          <p className="comanda-item-name">{item.productName}</p>
+                      <div key={item.id} className="comanda-cart-item">
+                        <div className="comanda-cart-item-info">
+                          <p className="comanda-cart-item-name">{item.productName}</p>
                           {item.observation && (
-                            <p className="comanda-item-observation">{item.observation}</p>
+                            <p className="comanda-cart-item-observation">{item.observation}</p>
                           )}
-                          <p className="comanda-item-qty">
-                            {item.quantity}x R$ {item.unitPrice.toFixed(2)}
-                          </p>
+
+                          {selectedComanda.status === 'OPEN' ? (
+                            <div className="comanda-cart-item-controls">
+                              <button
+                                onClick={() => handleUpdateItemQuantity(item, item.quantity - 1)}
+                                className="comanda-cart-item-btn"
+                                title="Diminuir quantidade"
+                              >
+                                <Minus size={14} />
+                              </button>
+                              <input
+                                type="text"
+                                className="comanda-cart-item-quantity"
+                                value={quantityInputs[item.id] !== undefined ? quantityInputs[item.id] : item.quantity.toString()}
+                                onChange={(e) => setQuantityInputs({ ...quantityInputs, [item.id]: e.target.value })}
+                                onBlur={(e) => {
+                                  const raw = e.target.value.replace(',', '.');
+                                  const parsed = parseFloat(raw);
+                                  if (!isNaN(parsed) && parsed > 0) {
+                                    handleUpdateItemQuantity(item, parsed);
+                                  } else {
+                                    setQuantityInputs((prev) => {
+                                      const next = { ...prev };
+                                      delete next[item.id];
+                                      return next;
+                                    });
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    (e.target as HTMLInputElement).blur();
+                                  }
+                                }}
+                                title="Quantidade do item"
+                              />
+                              <button
+                                onClick={() => handleUpdateItemQuantity(item, item.quantity + 1)}
+                                className="comanda-cart-item-btn"
+                                title="Aumentar quantidade"
+                              >
+                                <Plus size={14} />
+                              </button>
+                              <span className="comanda-cart-item-total">
+                                {formatCurrency(item.unitPrice * item.quantity)}
+                              </span>
+                            </div>
+                          ) : (
+                            <p className="comanda-cart-item-qty-readonly">
+                              {item.quantity}x {formatCurrency(item.unitPrice)} — {formatCurrency(item.subtotal)}
+                            </p>
+                          )}
                         </div>
 
-                        <div className="comanda-item-actions">
-                          <p className="comanda-item-subtotal">
-                            R$ {item.subtotal.toFixed(2)}
-                          </p>
-                          {selectedComanda.status === 'OPEN' && (
-                            <button
-                              onClick={() => handleRemoveItem(item.id)}
-                              className="comanda-item-remove"
-                              title="Remover item"
-                            >
-                              <Trash2 size={18} />
-                            </button>
-                          )}
-                        </div>
+                        {selectedComanda.status === 'OPEN' && (
+                          <button
+                            onClick={() => handleRemoveItem(item.id)}
+                            className="comanda-cart-item-remove"
+                            title="Remover item"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </div>
                     ))
-                  ) : (
-                    <p className="comanda-items-empty">Nenhum item adicionado</p>
                   )}
                 </div>
-              </div>
 
-              {/* Summary */}
-              <div className="comanda-summary">
-                <div className="comanda-summary-row">
-                  <span>Subtotal:</span>
-                  <strong>R$ {selectedComanda.subtotal.toFixed(2)}</strong>
-                </div>
+                <div className="comanda-cart-section">
+                  <label className="comanda-cart-section-label">Cliente (Opcional)</label>
 
-                {selectedComanda.discount > 0 && (
-                  <div className="comanda-summary-row discount">
-                    <span>Desconto:</span>
-                    <strong>-R$ {selectedComanda.discount.toFixed(2)}</strong>
-                  </div>
-                )}
+                  <div className="comanda-customer-search-group">
+                    {selectedCustomerId && (
+                      <div className="comanda-customer-selected">
+                        <div className="comanda-customer-selected-name">
+                          {customers.find((c) => c.id === selectedCustomerId)?.name || 'Consumidor Final'}
+                        </div>
+                        <div className="comanda-customer-selected-info">
+                          {customers.find((c) => c.id === selectedCustomerId)?.cpf || customers.find((c) => c.id === selectedCustomerId)?.phone || 'Dados não informados'}
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSelectedCustomerId('');
+                            setCustomerSearchTerm('');
+                          }}
+                          className="comanda-customer-remove"
+                          title="Remover cliente"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
 
-                <div className="comanda-summary-row total">
-                  <span>Total:</span>
-                  <strong>R$ {selectedComanda.total.toFixed(2)}</strong>
-                </div>
-              </div>
-
-              {/* Customer & Payment Actions */}
-              {selectedComanda.status === 'OPEN' && selectedComanda.items.length > 0 && (
-                <>
-                  <div className="comanda-cart-section">
-                    <label className="comanda-cart-section-label">Cliente (Opcional)</label>
-                    <div className="comanda-customer-select-group">
-                      <select
-                        title="Selecione um cliente"
-                        value={selectedCustomerId}
-                        onChange={(e) => setSelectedCustomerId(e.target.value)}
-                        className="comanda-cart-section-select"
-                      >
-                        <option value="">Consumidor Final</option>
-                        {customers.map((customer) => (
-                          <option key={customer.id} value={customer.id}>
-                            {customer.name} ({customer.cpf})
-                          </option>
-                        ))}
-                      </select>
+                    <div className="comanda-customer-search-input-wrapper">
+                      <input
+                        type="text"
+                        value={customerSearchTerm}
+                        onChange={(e) => {
+                          setCustomerSearchTerm(e.target.value);
+                          setIsCustomerSearchOpen(true);
+                        }}
+                        onFocus={() => setIsCustomerSearchOpen(true)}
+                        placeholder="Buscar cliente por nome, CPF ou telefone..."
+                        className="comanda-customer-search-input"
+                      />
                       <button
+                        type="button"
                         onClick={() => setIsNewCustomerModalOpen(true)}
                         className="comanda-new-customer-btn"
                         title="Cadastrar novo cliente"
                       >
                         <UserPlus size={18} />
                       </button>
+
+                      {isCustomerSearchOpen && (
+                        <div className="comanda-customer-search-results">
+                          {filteredCustomers.length > 0 ? (
+                            <>
+                              {filteredCustomers.map((customer) => (
+                                <button
+                                  key={customer.id}
+                                  onClick={() => {
+                                    setSelectedCustomerId(customer.id);
+                                    setCustomerSearchTerm('');
+                                    setIsCustomerSearchOpen(false);
+                                  }}
+                                  className="comanda-customer-search-item"
+                                >
+                                  <span className="comanda-customer-search-item-name">{customer.name}</span>
+                                  <span className="comanda-customer-search-item-info">{customer.cpf || customer.phone || customer.whatsapp || customer.email}</span>
+                                </button>
+                              ))}
+                              <button
+                                onClick={() => {
+                                  setSelectedCustomerId('');
+                                  setCustomerSearchTerm('');
+                                  setIsCustomerSearchOpen(false);
+                                }}
+                                className="comanda-customer-search-item comanda-customer-search-item--final"
+                              >
+                                Consumidor Final
+                              </button>
+                            </>
+                          ) : customerSearchTerm ? (
+                            <div className="comanda-customer-search-empty">Nenhum cliente encontrado</div>
+                          ) : null}
+                        </div>
+                      )}
                     </div>
                   </div>
+                </div>
 
-                  <div className="comanda-cart-buttons">
-                    <button
-                      onClick={handlePrintPreBill}
-                      className="comanda-print-preview-button"
-                      title="Imprimir pré-conta"
-                    >
-                      <Printer size={18} />
-                      Pré-Conta
-                    </button>
+                {selectedComanda.status === 'OPEN' && (
+                  <div className="comanda-cart-section comanda-cart-discount">
+                    <label className="comanda-cart-section-label">Desconto</label>
+                    <input
+                      type="text"
+                      value={discount}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(',', '.');
+                        if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                          setDiscount(value);
+                        }
+                      }}
+                      placeholder="0,00"
+                      className="comanda-cart-discount-input"
+                    />
                   </div>
+                )}
 
-                  <button
-                    onClick={() => {
-                      setIsCloseComandaModalOpen(true);
-                    }}
-                    className="comanda-add-payment-btn"
-                    title="Adicionar forma de pagamento"
-                  >
-                    💳 Adicionar Pagamento
-                  </button>
-
-                  {/* Display Selected Payments */}
-                  {payments.length > 0 && (
-                    <div className="comanda-selected-payments">
-                      <h3 className="comanda-selected-payments-title">Pagamentos Registrados:</h3>
-                      {payments.map((payment, index) => (
-                        <div key={index} className="comanda-selected-payment-item">
-                          <span className="comanda-selected-payment-method">
-                            {getPaymentMethodLabel(payment.method)}
-                          </span>
-                          <span className="comanda-selected-payment-amount">
-                            R$ {payment.amount.toFixed(2)}
-                          </span>
-                          <button
-                            onClick={() => handleRemovePayment(index)}
-                            className="comanda-selected-payment-remove"
-                            title="Remover pagamento"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))}
+                <div className="comanda-cart-totals">
+                  <div className="comanda-cart-totals-row">
+                    <span>Subtotal</span>
+                    <span className="comanda-cart-totals-value">{formatCurrency(paymentSummary.subtotalValue)}</span>
+                  </div>
+                  {paymentSummary.discountValue > 0 && (
+                    <div className="comanda-cart-totals-row comanda-cart-totals-row--discount">
+                      <span>Desconto</span>
+                      <span className="comanda-cart-totals-value">- {formatCurrency(paymentSummary.discountValue)}</span>
                     </div>
                   )}
-                </>
-              )}
+                  <div className="comanda-cart-totals-row comanda-cart-totals-row--final">
+                    <span>Total</span>
+                    <span className="comanda-cart-totals-value">{formatCurrency(paymentSummary.totalToPay)}</span>
+                  </div>
+                </div>
 
-              {/* Actions */}
-              {selectedComanda.status === 'OPEN' && (
-                <div className="comanda-actions">
-                  <Button
-                    variant="success"
-                    onClick={() => setIsCloseComandaModalOpen(true)}
-                    style={{ width: '100%' }}
+                {selectedComanda.status === 'OPEN' && selectedComanda.items.length > 0 && (
+                  <div className="comanda-payment-inline">
+                    <div className="comanda-payment-inline-header">
+                      <h3>Pagamentos</h3>
+                      <span className="comanda-payment-inline-hint">Adicione pagamentos até cobrir o total</span>
+                    </div>
+
+                    <div className="comanda-payment-inline-inputs">
+                      <select
+                        title="Forma de pagamento"
+                        value={paymentMethod}
+                        onChange={(e) => setPaymentMethod(e.target.value)}
+                        className="comanda-payment-select"
+                      >
+                        <option value="cash">Dinheiro</option>
+                        <option value="credit_card">Cartão Crédito</option>
+                        <option value="debit_card">Cartão Débito</option>
+                        <option value="pix">PIX</option>
+                      </select>
+
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="Valor"
+                        value={currentPaymentAmount}
+                        onChange={(e) => setCurrentPaymentAmount(e.target.value)}
+                        className="comanda-payment-amount-input"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={handleAddPayment}
+                        className="comanda-payment-add-btn"
+                        title="Adicionar forma de pagamento"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    {payments.length > 0 && (
+                      <div className="comanda-payment-items">
+                        {payments.map((payment, index) => (
+                          <div key={index} className="comanda-payment-item">
+                            <span className="comanda-payment-item-method">
+                              {getPaymentMethodLabel(payment.method)}
+                            </span>
+                            <span className="comanda-payment-item-amount">
+                              {formatCurrency(payment.amount)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePayment(index)}
+                              className="comanda-payment-item-remove"
+                              title="Remover"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="comanda-payment-status">
+                      <div className="comanda-payment-status-row">
+                        <span>Total a pagar</span>
+                        <span className="comanda-payment-total">{formatCurrency(paymentSummary.totalToPay)}</span>
+                      </div>
+                      <div className="comanda-payment-status-row">
+                        <span>Total pago</span>
+                        <span className="comanda-payment-total">{formatCurrency(paymentSummary.totalPaid)}</span>
+                      </div>
+                      {paymentSummary.remaining > 0 && (
+                        <div className="comanda-payment-status-row comanda-payment-status-row--missing">
+                          <span>Faltando</span>
+                          <span className="comanda-payment-missing">{formatCurrency(paymentSummary.remaining)}</span>
+                        </div>
+                      )}
+                      {paymentSummary.change > 0 && (
+                        <div className="comanda-payment-status-row comanda-payment-status-row--change">
+                          <span>Troco</span>
+                          <span className="comanda-payment-change">{formatCurrency(paymentSummary.change)}</span>
+                        </div>
+                      )}
+                      {paymentSummary.isPaid && paymentSummary.change === 0 && (
+                        <div className="comanda-payment-status-row comanda-payment-status-row--complete">
+                          <span>✓ Pagamento completo</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="comanda-cart-buttons">
+                  <button
+                    onClick={handlePrintPreBill}
+                    className="comanda-print-preview-button"
+                    title="Imprimir pré-conta"
+                  >
+                    <Printer size={18} />
+                    Pré-Conta
+                  </button>
+                  <button
+                    onClick={handleCloseComanda}
+                    className="comanda-checkout-button"
+                    disabled={
+                      selectedComanda.status !== 'OPEN' ||
+                      selectedComanda.items.length === 0 ||
+                      payments.length === 0 ||
+                      paymentSummary.remaining > 0
+                    }
                   >
                     <DollarSign size={18} />
                     Fechar e Pagar
-                  </Button>
+                  </button>
                 </div>
-              )}
+              </div>
 
               {selectedComanda.status === 'CLOSED' && (
                 <div className="comanda-actions">
                   <Button
                     variant="secondary"
-                    onClick={handleReopenComanda}
+                    onClick={() => handleReopenComanda()}
                     style={{ width: '100%' }}
                   >
                     Reabrir Comanda
@@ -1081,161 +1333,6 @@ export const ComandasPage: React.FC = () => {
               placeholder="Ex: Sem chocolate, coberto"
             />
           </div>
-        </form>
-      </Modal>
-
-      {/* Close Comanda Modal */}
-      <Modal
-        isOpen={isCloseComandaModalOpen}
-        title="Fechar Comanda"
-        onClose={() => setIsCloseComandaModalOpen(false)}
-        footer={
-          <div className="modal-footer">
-            <Button
-              variant="secondary"
-              onClick={() => setIsCloseComandaModalOpen(false)}
-            >
-              Cancelar
-            </Button>
-            <Button 
-              variant="success" 
-              onClick={handleCloseComanda}
-              disabled={payments.length === 0 || (selectedComanda ? (payments.reduce((sum, p) => sum + p.amount, 0) < (selectedComanda.subtotal - parseFloat(discount || '0'))) : true)}
-            >
-              <Check size={18} />
-              Fechar
-            </Button>
-          </div>
-        }
-      >
-        <form onSubmit={handleCloseComanda}>
-          {selectedComanda && (
-            <>
-              <div className="form-group">
-                <label>Subtotal</label>
-                <div className="form-value">R$ {selectedComanda.subtotal.toFixed(2)}</div>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="discount">Desconto</label>
-                <Input
-                  id="discount"
-                  type="number"
-                  value={discount}
-                  onChange={(e) => setDiscount(e.target.value)}
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Total a Pagar</label>
-                <div className="form-value form-total">
-                  R$ {(selectedComanda.subtotal - parseFloat(discount || '0')).toFixed(2)}
-                </div>
-              </div>
-
-              {/* Payment Methods Section */}
-              <div className="comanda-payment-section">
-                <h3 className="comanda-payment-title">Formas de Pagamento</h3>
-                
-                <div className="comanda-payment-input-group">
-                  <select
-                    value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="comanda-payment-select"
-                  >
-                    <option value="cash">Dinheiro</option>
-                    <option value="credit_card">Cartão Crédito</option>
-                    <option value="debit_card">Cartão Débito</option>
-                    <option value="pix">PIX</option>
-                  </select>
-                  <input
-                    type="text"
-                    placeholder="Valor"
-                    value={currentPaymentAmount}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(',', '.');
-                      if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                        setCurrentPaymentAmount(value);
-                      }
-                    }}
-                    className="comanda-payment-amount-input"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddPayment}
-                    className="comanda-payment-add-btn"
-                    title="Adicionar forma de pagamento"
-                  >
-                    +
-                  </button>
-                </div>
-
-                {/* Payment Items */}
-                {payments.length > 0 && (
-                  <div className="comanda-payment-items">
-                    {payments.map((payment, index) => (
-                      <div key={index} className="comanda-payment-item">
-                        <span className="comanda-payment-item-method">
-                          {getPaymentMethodLabel(payment.method)}
-                        </span>
-                        <span className="comanda-payment-item-amount">
-                          R$ {payment.amount.toFixed(2)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemovePayment(index)}
-                          className="comanda-payment-item-remove"
-                          title="Remover"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Payment Status */}
-                {(() => {
-                  const totalToPay = selectedComanda.subtotal - parseFloat(discount || '0');
-                  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-                  const remaining = totalToPay - totalPaid;
-                  const hasChange = totalPaid > totalToPay;
-                  const change = hasChange ? totalPaid - totalToPay : 0;
-
-                  return (
-                    <div className="comanda-payment-status">
-                      <div className="comanda-payment-status-row">
-                        <span>Total Recebido:</span>
-                        <span className="comanda-payment-total">R$ {totalPaid.toFixed(2)}</span>
-                      </div>
-
-                      {remaining > 0 && (
-                        <div className="comanda-payment-status-row comanda-payment-status-row--missing">
-                          <span>⚠️ Faltando:</span>
-                          <span className="comanda-payment-missing">R$ {remaining.toFixed(2)}</span>
-                        </div>
-                      )}
-
-                      {hasChange && (
-                        <div className="comanda-payment-status-row comanda-payment-status-row--change">
-                          <span>💰 Troco:</span>
-                          <span className="comanda-payment-change">R$ {change.toFixed(2)}</span>
-                        </div>
-                      )}
-
-                      {remaining === 0 && totalPaid > 0 && (
-                        <div className="comanda-payment-status-row comanda-payment-status-row--complete">
-                          <span>✓ Pagamento Completo</span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-              </div>
-            </>
-          )}
         </form>
       </Modal>
 

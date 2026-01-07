@@ -1,8 +1,6 @@
 import { Request, Response } from 'express';
 import { LoyaltyService } from '../../../application/use-cases/loyalty/loyalty.service';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '@infrastructure/database/prisma-client';
 const loyaltyService = new LoyaltyService(prisma);
 
 export class LoyaltyController {

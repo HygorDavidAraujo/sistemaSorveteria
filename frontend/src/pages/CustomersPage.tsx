@@ -53,10 +53,22 @@ export const CustomersPage: React.FC = () => {
     }
   };
 
+  const sanitizePayload = (data: typeof form) => {
+    // Remove campos vazios para evitar 422 em campos que não aceitam string vazia no backend
+    return Object.entries(data).reduce((acc: any, [key, value]) => {
+      if (value === '' || value === undefined) {
+        return acc;
+      }
+      acc[key] = value;
+      return acc;
+    }, {} as Partial<typeof form>);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const payload = sanitizePayload(form);
     try {
-      await apiClient.createCustomer(form);
+      await apiClient.createCustomer(payload);
       setSuccess('Cliente criado com sucesso!');
       loadCustomers();
       setIsFormModalOpen(false);
@@ -108,8 +120,10 @@ export const CustomersPage: React.FC = () => {
     e.preventDefault();
     if (!selectedCustomer) return;
 
+    const payload = sanitizePayload(form);
+
     try {
-      await apiClient.updateCustomer(selectedCustomer.id, form);
+      await apiClient.updateCustomer(selectedCustomer.id, payload);
       setSuccess('Cliente atualizado com sucesso!');
       loadCustomers();
       setIsDetailModalOpen(false);
@@ -475,6 +489,20 @@ export const CustomersPage: React.FC = () => {
                     label="WhatsApp"
                     value={form.whatsapp}
                     onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
+                  />
+                  <Input
+                    className="customers-form-input"
+                    label="CPF"
+                    value={form.cpf}
+                    onChange={(e) => setForm({ ...form, cpf: e.target.value })}
+                    placeholder="000.000.000-00"
+                  />
+                  <Input
+                    className="customers-form-input"
+                    label="Data de Nascimento"
+                    type="date"
+                    value={form.birthDate}
+                    onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
                   />
                 </div>
               </div>

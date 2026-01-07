@@ -29,6 +29,84 @@ export const CashPage: React.FC = () => {
     setLoading(false);
   }, [loadSession]);
 
+  const formatCurrency = (value: number) => `R$ ${Number(value || 0).toFixed(2)}`;
+
+  const handlePrintClosingReceipt = (sessionData: any, declaredCash: number) => {
+    if (!sessionData) return;
+
+    const initialCash = parseFloat(sessionData.initialCash || 0);
+    const totalSales = parseFloat(sessionData.totalSales || 0);
+    const totalCash = parseFloat(sessionData.totalCash || 0);
+    const totalCard = parseFloat(sessionData.totalCard || 0);
+    const totalPix = parseFloat(sessionData.totalPix || 0);
+    const openedAt = sessionData.openedAt ? new Date(sessionData.openedAt).toLocaleString('pt-BR') : '-';
+    const closedAtRaw = sessionData.closedAt || sessionData.cashierClosedAt || sessionData.managerClosedAt;
+    const closedAt = closedAtRaw ? new Date(closedAtRaw).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR');
+    const expectedCash = initialCash + totalCash;
+    const difference = declaredCash - expectedCash;
+    const operator = typeof sessionData.openedBy === 'object'
+      ? (sessionData.openedBy?.fullName || sessionData.openedBy?.email || 'Operador')
+      : (sessionData.openedBy || 'Operador');
+
+    const receiptHTML = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <style>
+            @page { size: 80mm auto; margin: 0; }
+            body { font-family: 'Courier New', monospace; font-size: 11px; margin: 5mm; width: 70mm; }
+            .header { text-align: center; margin-bottom: 3mm; border-bottom: 1px dashed #000; padding-bottom: 3mm; }
+            .header h1 { font-size: 14px; margin: 0 0 2mm 0; font-weight: bold; }
+            .header p { margin: 1mm 0; font-size: 10px; }
+            .section { margin: 3mm 0; padding: 2mm 0; }
+            .section-title { font-weight: bold; margin-bottom: 2mm; border-bottom: 1px solid #ddd; padding-bottom: 1mm; }
+            .row { display: flex; justify-content: space-between; margin: 2mm 0; }
+            .highlight { font-weight: bold; font-size: 12px; }
+            .footer { text-align: center; margin-top: 5mm; padding-top: 3mm; border-top: 1px dashed #000; font-size: 9px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>FECHAMENTO DE CAIXA</h1>
+            <p>Terminal: ${sessionData.terminalId || 'TERMINAL_01'}</p>
+            <p>Operador: ${operator}</p>
+            <p>Abertura: ${openedAt}</p>
+            <p>Fechamento: ${closedAt}</p>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Resumo</div>
+            <div class="row"><span>Saldo de Abertura</span><span>${formatCurrency(initialCash)}</span></div>
+            <div class="row"><span>Vendas - Dinheiro</span><span>${formatCurrency(totalCash)}</span></div>
+            <div class="row"><span>Vendas - Cartão</span><span>${formatCurrency(totalCard)}</span></div>
+            <div class="row"><span>Vendas - Pix</span><span>${formatCurrency(totalPix)}</span></div>
+            <div class="row highlight"><span>Total de Vendas</span><span>${formatCurrency(totalSales)}</span></div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Conferência</div>
+            <div class="row"><span>Esperado no Caixa</span><span>${formatCurrency(expectedCash)}</span></div>
+            <div class="row"><span>Declarado (Fechamento)</span><span>${formatCurrency(declaredCash)}</span></div>
+            <div class="row highlight"><span>Diferença</span><span>${formatCurrency(difference)}</span></div>
+          </div>
+
+          <div class="footer">
+            <p>Assinatura: ___________________________</p>
+            <p>Obrigado pelo trabalho!</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '', 'width=400,height=600');
+    if (printWindow) {
+      printWindow.document.write(receiptHTML);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
+
   const loadCashSessionsHistory = async () => {
     try {
       setLoadingSessions(true);
@@ -115,13 +193,20 @@ export const CashPage: React.FC = () => {
 
   const handleCloseSession = async (e: React.FormEvent) => {
     e.preventDefault();
+    const parsedClosing = parseFloat(closingBalance);
+    if (Number.isNaN(parsedClosing)) {
+      setError('Informe um valor válido para o fechamento');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
     try {
-      await closeSession(parseFloat(closingBalance));
+      const closedSession = await closeSession(parsedClosing);
       setSuccess('Caixa fechado com sucesso!');
       setIsCloseModalOpen(false);
       setClosingBalance('');
       await loadSession();
       await loadCashSessionsHistory();
+      handlePrintClosingReceipt(closedSession || currentSession, parsedClosing);
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erro ao fechar caixa');

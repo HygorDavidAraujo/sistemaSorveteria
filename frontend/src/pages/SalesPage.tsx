@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useSalesStore } from '@/store';
+import { useSalesStore, useCashSessionStore } from '@/store';
 import { apiClient } from '@/services/api';
 import { Card, Button, Modal, Loading, Alert, Badge } from '@/components/common';
-import { Trash2, ShoppingCart } from 'lucide-react';
+import { Trash2, ShoppingCart, Plus, Minus, Printer } from 'lucide-react';
 import type { Product, Customer } from '@/types';
 import './SalesPage.css';
 
@@ -17,9 +17,15 @@ export const SalesPage: React.FC = () => {
   const [isCustomerSearchOpen, setIsCustomerSearchOpen] = useState(false);
   const [isNewCustomerModalOpen, setIsNewCustomerModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'credit_card' | 'debit_card' | 'pix'>('cash');
+  const [payments, setPayments] = useState<Array<{ method: 'cash' | 'credit_card' | 'debit_card' | 'pix'; amount: number }>>([]);
+  const [currentPaymentAmount, setCurrentPaymentAmount] = useState('');
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
   const [discountCode, setDiscountCode] = useState('');
   const [discountValue, setDiscountValue] = useState(0);
+  const [weightInputs, setWeightInputs] = useState<Record<string, string>>({});
+  const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
+  const [pendingWeightProduct, setPendingWeightProduct] = useState<Product | null>(null);
+  const [tempWeight, setTempWeight] = useState('');
   const [customerForm, setCustomerForm] = useState({
     name: '',
     email: '',
@@ -42,6 +48,7 @@ export const SalesPage: React.FC = () => {
   });
 
   const salesStore = useSalesStore();
+  const { currentSession, loadSession } = useCashSessionStore();
 
   useEffect(() => {
     loadData();
@@ -67,6 +74,7 @@ export const SalesPage: React.FC = () => {
       const [productsResponse, customersResponse] = await Promise.all([
         apiClient.getProducts(),
         apiClient.getCustomers(),
+        loadSession(),
       ]);
       setProducts(productsResponse.data || productsResponse);
       setCustomers(customersResponse.data || customersResponse);
@@ -92,20 +100,71 @@ export const SalesPage: React.FC = () => {
   }, [customers, customerSearchTerm]);
 
   const handleAddItem = (product: Product) => {
+    const isWeight = product.saleType === 'weight';
+    
+    if (isWeight) {
+      setPendingWeightProduct(product);
+      setTempWeight('');
+      setIsWeightModalOpen(true);
+    } else {
+      const unitPrice = typeof product.salePrice === 'number' ? product.salePrice : (typeof product.salePrice === 'string' ? parseFloat(product.salePrice) : 0);
+      salesStore.addItem({
+        id: `${product.id}-${Date.now()}`,
+        productId: product.id,
+        productName: product.name,
+        saleType: product.saleType,
+        quantity: 1,
+        unitPrice,
+        totalPrice: unitPrice,
+      });
+    }
+  };
+
+  const handleConfirmWeight = () => {
+    if (!pendingWeightProduct) return;
+
+    const raw = tempWeight.replace(/[^\d,]/g, '').replace(/,(?=.*,)/g, '').replace(',', '.');
+    const weight = parseFloat(raw);
+
+    if (isNaN(weight) || weight <= 0) {
+      setError('Digite um peso válido');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    const unitPrice = typeof pendingWeightProduct.salePrice === 'number' 
+      ? pendingWeightProduct.salePrice 
+      : (typeof pendingWeightProduct.salePrice === 'string' 
+        ? parseFloat(pendingWeightProduct.salePrice) 
+        : 0);
+
     salesStore.addItem({
-      id: `${product.id}-${Date.now()}`,
-      productId: product.id,
-      productName: product.name,
-      quantity: 1,
-      unitPrice: typeof product.salePrice === 'number' ? product.salePrice : (typeof product.salePrice === 'string' ? parseFloat(product.salePrice) : 0),
-      totalPrice: typeof product.salePrice === 'number' ? product.salePrice : (typeof product.salePrice === 'string' ? parseFloat(product.salePrice) : 0),
+      id: `${pendingWeightProduct.id}-${Date.now()}`,
+      productId: pendingWeightProduct.id,
+      productName: pendingWeightProduct.name,
+      saleType: 'weight',
+      quantity: weight,
+      unitPrice,
+      totalPrice: unitPrice * weight,
     });
+
+    setIsWeightModalOpen(false);
+    setPendingWeightProduct(null);
+    setTempWeight('');
   };
 
   const handleUpdateQuantity = (itemId: string, quantity: number) => {
-    if (quantity > 0) {
-      salesStore.updateItem(itemId, quantity);
+    const item = useSalesStore.getState().items.find((i) => i.id === itemId);
+    if (!item) return;
+
+    let newQty = quantity;
+    if (item.saleType === 'weight') {
+      newQty = Math.max(0.001, parseFloat(newQty.toFixed(3)));
+    } else {
+      newQty = Math.max(1, Math.floor(newQty));
     }
+
+    salesStore.updateItem(itemId, newQty);
   };
 
   const handleRemoveItem = (itemId: string) => {
@@ -178,20 +237,191 @@ export const SalesPage: React.FC = () => {
     return { subtotal, total: Math.max(0, total) };
   }, [salesStore.items, discountValue]);
 
+  const { totalPaid, missingAmount, changeAmount } = useMemo(() => {
+    const totalPaidCalc = payments.reduce((sum, p) => sum + p.amount, 0);
+    const missing = Math.max(0, total - totalPaidCalc);
+    const change = Math.max(0, totalPaidCalc - total);
+    return {
+      totalPaid: parseFloat(totalPaidCalc.toFixed(2)),
+      missingAmount: parseFloat(missing.toFixed(2)),
+      changeAmount: parseFloat(change.toFixed(2)),
+    };
+  }, [payments, total]);
+
+  const handleAddPayment = () => {
+    const parsed = parseFloat(currentPaymentAmount.replace(',', '.'));
+    if (isNaN(parsed) || parsed <= 0) {
+      setError('Digite um valor de pagamento válido');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    setPayments([...payments, { method: paymentMethod, amount: parseFloat(parsed.toFixed(2)) }]);
+    setCurrentPaymentAmount('');
+  };
+
+  const formatCurrency = (value: number) => `R$ ${Number(value || 0).toFixed(2)}`;
+
+  const handlePrintPreview = () => {
+    if (salesStore.items.length === 0) {
+      setError('Nenhum item no carrinho para imprimir');
+      setTimeout(() => setError(null), 2500);
+      return;
+    }
+
+    const customerName = getCustomerName();
+
+    const receiptHTML = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <style>
+            @page { size: 80mm auto; margin: 0; }
+            body { font-family: 'Courier New', monospace; font-size: 11px; margin: 5mm; width: 70mm; }
+            .header { text-align: center; margin-bottom: 3mm; border-bottom: 1px dashed #000; padding-bottom: 3mm; }
+            .header h1 { font-size: 14px; margin: 0 0 2mm 0; font-weight: bold; }
+            .header p { margin: 1mm 0; font-size: 10px; }
+            table { width: 100%; border-collapse: collapse; margin: 3mm 0; }
+            th { text-align: left; border-bottom: 1px solid #000; padding-bottom: 2mm; font-size: 10px; }
+            td { padding: 2mm 0; border-bottom: 1px dashed #ddd; font-size: 10px; }
+            .right { text-align: right; }
+            .totals { margin-top: 3mm; padding-top: 3mm; border-top: 1px solid #000; }
+            .total-row { display: flex; justify-content: space-between; margin: 2mm 0; }
+            .final-total { font-weight: bold; font-size: 12px; margin-top: 3mm; padding-top: 3mm; border-top: 2px solid #000; }
+            .footer { text-align: center; margin-top: 4mm; padding-top: 3mm; border-top: 1px dashed #000; font-size: 9px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>PRÉ-CONTA</h1>
+            <p>Cliente: ${customerName}</p>
+            <p>Data: ${new Date().toLocaleString('pt-BR')}</p>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th class="right">Qtd</th>
+                <th class="right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${salesStore.items.map((item) => {
+                const qtyLabel = item.saleType === 'weight'
+                  ? `${item.quantity.toFixed(3)} kg`
+                  : `${item.quantity}x`;
+                const unit = formatCurrency(item.unitPrice);
+                const lineTotal = formatCurrency(item.totalPrice);
+                return `
+                  <tr>
+                    <td>
+                      <div>${item.productName}</div>
+                      <div style="font-size:9px;color:#555;">${qtyLabel} · ${unit}</div>
+                    </td>
+                    <td class="right">${qtyLabel}</td>
+                    <td class="right">${lineTotal}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+
+          <div class="totals">
+            <div class="total-row">
+              <span>Subtotal:</span>
+              <span>${formatCurrency(subtotal)}</span>
+            </div>
+            ${discountValue > 0 ? `
+              <div class="total-row">
+                <span>Desconto:</span>
+                <span>- ${formatCurrency(discountValue)}</span>
+              </div>
+            ` : ''}
+            <div class="total-row final-total">
+              <span>Total:</span>
+              <span>${formatCurrency(total)}</span>
+            </div>
+          </div>
+
+          ${payments.length > 0 ? `
+            <div class="totals">
+              <div class="total-row"><strong>Pagamentos Selecionados</strong></div>
+              ${payments.map((p) => {
+                const label = p.method === 'cash'
+                  ? 'Dinheiro'
+                  : p.method === 'credit_card'
+                    ? 'Cartão Crédito'
+                    : p.method === 'debit_card'
+                      ? 'Cartão Débito'
+                      : 'PIX';
+                return `<div class="total-row"><span>${label}</span><span>${formatCurrency(p.amount)}</span></div>`;
+              }).join('')}
+              <div class="total-row">
+                <span>Total Pago</span>
+                <span>${formatCurrency(totalPaid)}</span>
+              </div>
+              ${missingAmount > 0 ? `<div class="total-row"><span>Falta</span><span>${formatCurrency(missingAmount)}</span></div>` : ''}
+              ${changeAmount > 0 ? `<div class="total-row"><span>Troco</span><span>${formatCurrency(changeAmount)}</span></div>` : ''}
+            </div>
+          ` : ''}
+
+          <div class="footer">
+            <p>Prévia para conferência do cliente</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '', 'width=400,height=600');
+    if (printWindow) {
+      printWindow.document.write(receiptHTML);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
+
+  const handleRemovePayment = (index: number) => {
+    setPayments(payments.filter((_, i) => i !== index));
+  };
+
   const handleCheckout = async () => {
     try {
+      if (!currentSession || currentSession.status !== 'open') {
+        setError('Nenhum caixa aberto. Abra um caixa para continuar.');
+        return;
+      }
+
       if (salesStore.items.length === 0) {
         setError('Adicione itens ao carrinho');
         return;
       }
 
+      if (payments.length === 0) {
+        setError('Adicione ao menos uma forma de pagamento');
+        return;
+      }
+
+      if (Math.abs(totalPaid - total) > 0.01) {
+        setError(`Valor pago (R$ ${totalPaid.toFixed(2)}) diferente do total (R$ ${total.toFixed(2)})`);
+        return;
+      }
+
       await apiClient.createSale({
-        items: salesStore.items,
-        customer_id: selectedCustomer || null,
-        payment_method: paymentMethod,
-        discount_value: discountValue,
-        total_amount: total,
-        coupon_code: discountCode || null,
+        cashSessionId: currentSession.id,
+        customerId: selectedCustomer || undefined,
+        saleType: 'pdv',
+        items: salesStore.items.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          discount: 0,
+        })),
+        payments: payments.map((p) => ({ paymentMethod: p.method, amount: p.amount })),
+        discount: discountValue,
+        deliveryFee: 0,
+        loyaltyPointsUsed: 0,
+        couponCode: discountCode || undefined,
       });
 
       setSuccess('Venda finalizada com sucesso!');
@@ -200,6 +430,8 @@ export const SalesPage: React.FC = () => {
       setDiscountCode('');
       setDiscountValue(0);
       setPaymentMethod('cash');
+      setPayments([]);
+      setCurrentPaymentAmount('');
       setIsCheckoutModalOpen(false);
       await loadData();
       setTimeout(() => setSuccess(null), 3000);
@@ -285,17 +517,79 @@ export const SalesPage: React.FC = () => {
                   <div className="sales-page__cart-item-info">
                     <p className="sales-page__cart-item-name">{item.productName}</p>
                     <div className="sales-page__cart-item-controls">
-                      <input
-                        type="number"
-                        title="Quantidade do item"
-                        min="1"
-                        value={item.quantity}
-                        onChange={(e) => handleUpdateQuantity(item.id, parseInt(e.target.value))}
-                        className="sales-page__cart-item-quantity"
-                      />
-                      <span className="sales-page__cart-item-total">
-                        R$ {(item.unitPrice * item.quantity).toFixed(2)}
-                      </span>
+                      {item.saleType === 'weight' ? (
+                        <>
+                          <button
+                            onClick={() => handleUpdateQuantity(item.id, item.quantity - 0.1)}
+                            className="sales-page__cart-item-btn"
+                            title="Diminuir quantidade (peso)"
+                          >
+                            <Minus size={14} />
+                          </button>
+                          <input
+                            type="text"
+                            title="Quantidade em kg (ex: 1,500)"
+                            placeholder="0,000"
+                            value={weightInputs[item.id] !== undefined ? weightInputs[item.id] : item.quantity.toFixed(3).replace('.', ',')}
+                            onChange={(e) => {
+                              setWeightInputs({ ...weightInputs, [item.id]: e.target.value });
+                            }}
+                            onBlur={(e) => {
+                              const val = e.target.value.replace(/[^\d,]/g, '').replace(/,(?=.*,)/g, '');
+                              const raw = val.replace(',', '.');
+                              const parsed = parseFloat(raw);
+                              if (!isNaN(parsed) && parsed > 0) {
+                                handleUpdateQuantity(item.id, parsed);
+                              }
+                              setWeightInputs({ ...weightInputs, [item.id]: undefined });
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                            className="sales-page__cart-item-quantity"
+                          />
+                          <button
+                            onClick={() => handleUpdateQuantity(item.id, item.quantity + 0.1)}
+                            className="sales-page__cart-item-btn"
+                            title="Aumentar quantidade (peso)"
+                          >
+                            <Plus size={14} />
+                          </button>
+                          <span className="sales-page__cart-item-total">
+                            R$ {(item.unitPrice * item.quantity).toFixed(2)}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
+                            className="sales-page__cart-item-btn"
+                            title="Diminuir quantidade"
+                          >
+                            <Minus size={14} />
+                          </button>
+                          <input
+                            type="number"
+                            title="Quantidade do item"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => handleUpdateQuantity(item.id, parseInt(e.target.value))}
+                            className="sales-page__cart-item-quantity"
+                          />
+                          <button
+                            onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                            className="sales-page__cart-item-btn"
+                            title="Aumentar quantidade"
+                          >
+                            <Plus size={14} />
+                          </button>
+                          <span className="sales-page__cart-item-total">
+                            R$ {(item.unitPrice * item.quantity).toFixed(2)}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <button
@@ -437,31 +731,113 @@ export const SalesPage: React.FC = () => {
             </div>
           )}
 
-          {/* Payment Method */}
           {salesStore.items.length > 0 && (
-            <div className="sales-page__cart-section">
-              <label className="sales-page__cart-section-label">Forma de Pagamento</label>
-              <select
-                title="Selecione a forma de pagamento"
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value as any)}
-                className="sales-page__cart-section-select"
-              >
-                <option value="cash">Dinheiro</option>
-                <option value="credit_card">Cartão Crédito</option>
-                <option value="debit_card">Cartão Débito</option>
-                <option value="pix">PIX</option>
-              </select>
+            <div className="sales-page__payment-section">
+              <h3 className="sales-page__payment-title">Pagamentos</h3>
+
+              <div className="sales-page__payment-input-group">
+                <select
+                  title="Selecione a forma de pagamento"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value as any)}
+                  className="sales-page__payment-select"
+                >
+                  <option value="cash">Dinheiro</option>
+                  <option value="credit_card">Cartão Crédito</option>
+                  <option value="debit_card">Cartão Débito</option>
+                  <option value="pix">PIX</option>
+                </select>
+
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Valor"
+                  value={currentPaymentAmount}
+                  onChange={(e) => setCurrentPaymentAmount(e.target.value)}
+                  className="sales-page__payment-amount-input"
+                />
+
+                <button
+                  onClick={handleAddPayment}
+                  className="sales-page__payment-add-btn"
+                >
+                  +
+                </button>
+              </div>
+
+              {payments.length > 0 && (
+                <div className="sales-page__payment-items">
+                  {payments.map((p, index) => (
+                    <div key={`${p.method}-${index}`} className="sales-page__payment-item">
+                      <span className="sales-page__payment-item-method">
+                        {p.method === 'cash'
+                          ? 'Dinheiro'
+                          : p.method === 'credit_card'
+                            ? 'Cartão Crédito'
+                            : p.method === 'debit_card'
+                              ? 'Cartão Débito'
+                              : 'PIX'}
+                      </span>
+                      <span className="sales-page__payment-item-amount">R$ {p.amount.toFixed(2)}</span>
+                      <button
+                        onClick={() => handleRemovePayment(index)}
+                        className="sales-page__payment-item-remove"
+                        title="Remover pagamento"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="sales-page__payment-status">
+                <div className="sales-page__payment-status-row">
+                  <span>Total da venda</span>
+                  <span className="sales-page__payment-total">R$ {total.toFixed(2)}</span>
+                </div>
+                <div className="sales-page__payment-status-row">
+                  <span>Total pago</span>
+                  <span className="sales-page__payment-total">R$ {totalPaid.toFixed(2)}</span>
+                </div>
+                {missingAmount > 0 && (
+                  <div className="sales-page__payment-status-row sales-page__payment-status-row--missing">
+                    <span>Falta pagar</span>
+                    <span className="sales-page__payment-missing">R$ {missingAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                {changeAmount > 0 && (
+                  <div className="sales-page__payment-status-row sales-page__payment-status-row--change">
+                    <span>Troco</span>
+                    <span className="sales-page__payment-change">R$ {changeAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                {missingAmount === 0 && changeAmount === 0 && payments.length > 0 && (
+                  <div className="sales-page__payment-status-row sales-page__payment-status-row--complete">
+                    <span>Pagamento completo</span>
+                    <span className="sales-page__payment-total">OK</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
           {salesStore.items.length > 0 && (
-            <button
-              onClick={() => setIsCheckoutModalOpen(true)}
-              className="sales-page__checkout-button"
-            >
-              Finalizar Venda
-            </button>
+            <div className="sales-page__cart-buttons">
+              <button
+                onClick={handlePrintPreview}
+                className="sales-page__print-preview-button"
+                title="Imprimir pré-conta para o cliente"
+              >
+                <Printer size={18} /> Pré-conta
+              </button>
+              <button
+                onClick={() => setIsCheckoutModalOpen(true)}
+                className="sales-page__checkout-button"
+              >
+                Finalizar Venda
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -690,9 +1066,42 @@ export const SalesPage: React.FC = () => {
               <span className="sales-page__modal-label">Total a Pagar:</span>
               <span className="sales-page__modal-value">R$ {total.toFixed(2)}</span>
             </div>
-            <p className="sales-page__modal-payment-info">
-              Forma de Pagamento: <strong>{paymentMethod === 'cash' ? 'Dinheiro' : paymentMethod === 'credit_card' ? 'Cartão Crédito' : paymentMethod === 'debit_card' ? 'Cartão Débito' : 'PIX'}</strong>
-            </p>
+
+            <div className="sales-page__selected-payments">
+              <p className="sales-page__selected-payments-title">Pagamentos Selecionados</p>
+              {payments.length === 0 && <div>Nenhum pagamento adicionado</div>}
+              {payments.map((p, index) => (
+                <div key={`${p.method}-${index}`} className="sales-page__selected-payment-item">
+                  <span className="sales-page__selected-payment-method">
+                    {p.method === 'cash'
+                      ? 'Dinheiro'
+                      : p.method === 'credit_card'
+                        ? 'Cartão Crédito'
+                        : p.method === 'debit_card'
+                          ? 'Cartão Débito'
+                          : 'PIX'}
+                  </span>
+                  <span className="sales-page__selected-payment-amount">R$ {p.amount.toFixed(2)}</span>
+                </div>
+              ))}
+
+              <div className="sales-page__selected-payment-total">
+                <span>Total Pago</span>
+                <span>R$ {totalPaid.toFixed(2)}</span>
+              </div>
+              {missingAmount > 0 && (
+                <div className="sales-page__selected-payment-missing">
+                  <span>Falta</span>
+                  <span>R$ {missingAmount.toFixed(2)}</span>
+                </div>
+              )}
+              {changeAmount > 0 && (
+                <div className="sales-page__selected-payment-change">
+                  <span>Troco</span>
+                  <span>R$ {changeAmount.toFixed(2)}</span>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="sales-page__modal-footer">
@@ -707,6 +1116,68 @@ export const SalesPage: React.FC = () => {
               className="sales-page__modal-button sales-page__modal-button--confirm"
             >
               Confirmar Venda
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Weight Modal */}
+      <div className={`sales-page__modal ${isWeightModalOpen ? 'sales-page__modal--open' : ''}`}>
+        <div className="sales-page__modal-overlay" onClick={() => setIsWeightModalOpen(false)} />
+        <div className="sales-page__modal-content sales-page__modal-content--small">
+          <div className="sales-page__modal-header">
+            <h2 className="sales-page__modal-title">Capturar Peso - {pendingWeightProduct?.name}</h2>
+            <button
+              onClick={() => setIsWeightModalOpen(false)}
+              className="sales-page__modal-close"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="sales-page__modal-body">
+            <div className="sales-page__weight-section">
+              <label className="sales-page__weight-label">Peso (kg)</label>
+              <input
+                type="text"
+                placeholder="0,000"
+                value={tempWeight}
+                onChange={(e) => setTempWeight(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleConfirmWeight();
+                  }
+                }}
+                className="sales-page__weight-input"
+              />
+              <p className="sales-page__weight-hint">Digite o peso ou clique em "Ler da Balança"</p>
+
+              <div className="sales-page__weight-actions">
+                <button
+                  onClick={() => {
+                    setError('Integração com balança Toledo Prix 3 Fit ainda em desenvolvimento');
+                    setTimeout(() => setError(null), 3000);
+                  }}
+                  className="sales-page__weight-button sales-page__weight-button--scale"
+                >
+                  📊 Ler da Balança
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="sales-page__modal-footer">
+            <button
+              onClick={() => setIsWeightModalOpen(false)}
+              className="sales-page__modal-button sales-page__modal-button--cancel"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleConfirmWeight}
+              className="sales-page__modal-button sales-page__modal-button--confirm"
+            >
+              Confirmar
             </button>
           </div>
         </div>

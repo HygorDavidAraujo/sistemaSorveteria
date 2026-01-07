@@ -7,7 +7,6 @@ import { CouponService } from '@application/use-cases/coupons/coupon.service';
 
 export interface CreateDeliveryOrderDTO {
   customerId: string;
-  customerAddressId: string;
   cashSessionId: string;
   couponCode?: string;
   items: Array<{
@@ -75,6 +74,14 @@ export class DeliveryService {
           name: true,
           phone: true,
           whatsapp: true,
+          street: true,
+          number: true,
+          complement: true,
+          neighborhood: true,
+          city: true,
+          state: true,
+          zipCode: true,
+          referencePoint: true,
         },
       },
       cashSession: {
@@ -128,19 +135,6 @@ export class DeliveryService {
 
     if (data.couponCode && !customer) {
       throw new AppError('Cupom exige um cliente identificado', 400);
-    }
-
-    // Validar endereço
-    const address = await this.prismaClient.customerAddress.findUnique({
-      where: { id: data.customerAddressId },
-    });
-
-    if (!address) {
-      throw new AppError('Endereço não encontrado', 404);
-    }
-
-    if (address.customerId !== data.customerId) {
-      throw new AppError('Endereço não pertence ao cliente', 400);
     }
 
     // Validar items
@@ -242,7 +236,6 @@ export class DeliveryService {
       const order = await tx.deliveryOrder.create({
         data: {
           customerId: data.customerId,
-          customerAddressId: data.customerAddressId,
           cashSessionId: data.cashSessionId,
           subtotal,
           deliveryFee,

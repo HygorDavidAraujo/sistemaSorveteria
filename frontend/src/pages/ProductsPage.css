@@ -628,3 +628,28 @@
   color: var(--color-gray);
   font-size: 1.125rem;
 }
+
+/* Product Form Sections */
+.products-page__form-section {
+  padding: 1.5rem;
+  margin-top: 1rem;
+  background-color: #f9fafb;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+.products-page__form-section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 1rem 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.products-page__form-hint {
+  display: block;
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-top: 0.25rem;
+}

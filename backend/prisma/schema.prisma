@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -826,6 +825,8 @@ model CompanyInfo {
   phone              String?  @db.VarChar(20)
   whatsapp           String?  @db.VarChar(20)
   logoUrl            String?  @map("logo_url")
+  logoData           Bytes?   @map("logo_data")
+  logoMimeType       String?  @map("logo_mime_type") @db.VarChar(100)
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 

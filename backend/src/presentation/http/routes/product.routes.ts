@@ -8,8 +8,9 @@ import { productValidators } from '@presentation/validators/product.validator';
 const router = Router();
 const productController = new ProductController();
 
-// Todas as rotas exigem autenticação
-router.use(authenticate);
+// Autenticação apenas para rotas de produtos e categorias
+router.use('/products', authenticate);
+router.use('/categories', authenticate);
 
 // ========================================
 // ROTAS DE PRODUTOS
