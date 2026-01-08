@@ -227,7 +227,7 @@ export class CashSessionService {
     const session = await this.getById(id);
 
     // Buscar vendas e comandas fechadas para breakdown detalhado
-    const [sales, comandas] = await Promise.all([
+    const [sales, comandas, deliveries] = await Promise.all([
       this.prismaClient.sale.findMany({
         where: {
           cashSessionId: id,
@@ -244,6 +244,13 @@ export class CashSessionService {
         },
         include: {
           payments: true,
+        },
+      }),
+      this.prismaClient.deliveryOrder.findMany({
+        where: {
+          cashSessionId: id,
+          // Considera pedidos entregues como concluídos para o relatório
+          deliveryStatus: 'delivered',
         },
       }),
     ]);
@@ -292,6 +299,10 @@ export class CashSessionService {
       accumulatePayments(comanda.payments as any);
     }
 
+    // Incluir pedidos de delivery no contador de vendas
+    // (pagamentos não são persistidos para delivery, então não entram no breakdown)
+    totalSalesCount += deliveries.length;
+
     return {
       ...session,
       totals: {
@@ -314,7 +325,7 @@ export class CashSessionService {
   }
 
   async recalculateTotals(sessionId: string) {
-    const [sales, comandas] = await Promise.all([
+    const [sales, comandas, deliveries] = await Promise.all([
       this.prismaClient.sale.findMany({
         where: {
           cashSessionId: sessionId,
@@ -331,6 +342,12 @@ export class CashSessionService {
         },
         include: {
           payments: true,
+        },
+      }),
+      this.prismaClient.deliveryOrder.findMany({
+        where: {
+          cashSessionId: sessionId,
+          deliveryStatus: 'delivered',
         },
       }),
     ]);
@@ -370,6 +387,12 @@ export class CashSessionService {
     for (const comanda of comandas) {
       totalSales += Number(comanda.total);
       accumulatePayments(comanda.payments as any);
+    }
+
+    // Somar valores de pedidos de delivery entregues ao total de vendas
+    for (const order of deliveries) {
+      totalSales += Number(order.total);
+      // Pagamentos de delivery não são persistidos em tabela específica; não ajusta breakdown
     }
 
     return this.prismaClient.cashSession.update({

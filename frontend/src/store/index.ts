@@ -335,7 +335,10 @@ export const useCustomersStore = create<CustomersStore>((set, get) => ({
     set({ isLoading: true });
     try {
       const response = await apiClient.getCustomers();
+      console.log('👥 loadCustomers response:', response);
+      // apiClient.getCustomers() já retorna response.data que é { status, data }
       const customersData = response.data || response;
+      console.log('👥 customersData:', customersData);
       set({ 
         customers: customersData,
         lastLoadTime: now,

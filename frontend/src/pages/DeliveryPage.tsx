@@ -2,8 +2,11 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useDeliveryStore, useCashSessionStore, useProductsStore, useCustomersStore } from '@/store';
 import { apiClient } from '@/services/api';
 import { Truck, Plus, Minus, Trash2, UserPlus, Printer, MapPin, Clock } from 'lucide-react';
+import { printReceipt, formatCurrency, getPrintStyles } from '@/utils/printer';
 import type { Product, Customer } from '@/types';
 import './DeliveryPage.css';
+
+const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 export const DeliveryPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -11,7 +14,11 @@ export const DeliveryPage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   
   // Cliente e endereço
-  const [selectedCustomer, setSelectedCustomer] = useState<string>('');
+  const [selectedCustomer, setSelectedCustomerRaw] = useState<string>('');
+  const setSelectedCustomer = (value: string) => {
+    console.log('📝 setSelectedCustomer chamado com:', value, 'stack:', new Error().stack);
+    setSelectedCustomerRaw(value);
+  };
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
   const [isCustomerSearchOpen, setIsCustomerSearchOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<string>('');
@@ -67,6 +74,7 @@ export const DeliveryPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    console.log('⚡ useEffect[selectedCustomer] disparado. selectedCustomer:', selectedCustomer);
     if (selectedCustomer) {
       loadCustomerAddresses(selectedCustomer);
       calculateDeliveryFee();
@@ -116,7 +124,9 @@ export const DeliveryPage: React.FC = () => {
   const loadOrders = async () => {
     try {
       const response = await apiClient.get('/delivery/orders');
-      setOrders(response.data.data || []);
+      // apiClient.get returns the backend JSON payload directly
+      // which is { status: 'success', data: orders }
+      setOrders(response.data || []);
     } catch (err) {
       console.error('Erro ao carregar pedidos:', err);
     }
@@ -124,8 +134,22 @@ export const DeliveryPage: React.FC = () => {
 
   const loadCustomerAddresses = async (customerId: string) => {
     try {
+        console.log('🔍 loadCustomerAddresses chamado com customerId:', customerId);
       const response = await apiClient.get(`/customers/${customerId}`);
-      const customer = response.data;
+        console.log('📦 Resposta completa do API:', response);
+        console.log('📦 response.data:', response.data);
+        console.log('📦 Todos os fields:', Object.keys(response.data));
+      
+      const customer = response.data; // apiClient.get já retorna response.data do axios
+        console.log('👤 Customer extraído:', customer);
+        console.log('👤 Endereço do customer:', {
+          street: customer.street,
+          number: customer.number,
+          neighborhood: customer.neighborhood,
+          city: customer.city,
+          state: customer.state,
+          zipCode: customer.zipCode,
+        });
 
       if (!customer) {
         console.error('Cliente não encontrado');
@@ -145,21 +169,21 @@ export const DeliveryPage: React.FC = () => {
         referencePoint: customer.referencePoint || '',
         isDefault: true,
       };
+      
+        console.log('🏠 Endereço montado:', primaryAddress);
 
-      const hasAddress =
-        primaryAddress.street ||
-        primaryAddress.neighborhood ||
-        primaryAddress.city ||
-        primaryAddress.state ||
-        primaryAddress.zipCode;
-
-      const addresses = hasAddress ? [primaryAddress] : [];
+      // Sempre adicionar o endereço, mesmo que incompleto
+      // O cliente pode completar os detalhes depois
+      const addresses = [primaryAddress];
+        console.log('📍 Addresses array:', addresses);
 
       setCustomerAddresses(addresses);
       if (addresses.length > 0) {
         setSelectedAddress(addresses[0].id);
+          console.log('✅ selectedAddress definido como:', addresses[0].id);
       } else {
         setSelectedAddress('');
+          console.log('❌ Nenhum endereço encontrado');
       }
     } catch (err) {
       console.error('Erro ao carregar endereços:', err);
@@ -176,6 +200,12 @@ export const DeliveryPage: React.FC = () => {
     try {
       const address = customerAddresses.find(a => a.id === selectedAddress);
       if (!address) return;
+
+      // Don't calculate fee if neighborhood or city are missing
+      if (!address.neighborhood || !address.city) {
+        setDeliveryFee(0);
+        return;
+      }
 
       const response = await apiClient.post('/delivery/calculate-fee', {
         neighborhood: address.neighborhood,
@@ -321,10 +351,12 @@ export const DeliveryPage: React.FC = () => {
     e.preventDefault();
     try {
       const response = await apiClient.post('/customers', customerForm);
-      const newCustomer = response.data.data;
+      // apiClient.post already returns response.data
+      const newCustomer = response.data || response;
       
       await loadCustomers();
       setSelectedCustomer(newCustomer.id);
+      await loadCustomerAddresses(newCustomer.id);
       setCustomerSearchTerm('');
       setIsCustomerSearchOpen(false);
       setIsNewCustomerModalOpen(false);
@@ -353,7 +385,7 @@ export const DeliveryPage: React.FC = () => {
   };
 
   const handleAddPayment = () => {
-    const amount = parseFloat(currentPaymentAmount);
+    const amount = round2(parseFloat(currentPaymentAmount));
     if (isNaN(amount) || amount <= 0) {
       setError('Digite um valor válido');
       setTimeout(() => setError(null), 3000);
@@ -369,6 +401,12 @@ export const DeliveryPage: React.FC = () => {
   };
 
   const handleCheckout = async () => {
+    console.log('🧾 Início do checkout');
+    console.log('🧑 selectedCustomer:', selectedCustomer);
+    console.log('🏠 selectedAddress:', selectedAddress);
+    console.log('🛒 items:', deliveryStore.items);
+    console.log('💵 payments:', payments);
+    console.log('🧮 total calculado:', total);
     if (!currentSession || currentSession.status !== 'open') {
       setError('Nenhum caixa aberto. Abra um caixa para continuar.');
       setTimeout(() => setError(null), 3000);
@@ -399,14 +437,22 @@ export const DeliveryPage: React.FC = () => {
       return;
     }
 
-    const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-    if (Math.abs(totalPaid - total) > 0.01) {
+    const totalPaid = round2(payments.reduce((sum, p) => sum + p.amount, 0));
+    console.log('💰 totalPaid:', totalPaid);
+    if (Math.abs(totalPaid - total) > 0.009) {
       setError(`Valor pago (R$ ${totalPaid.toFixed(2)}) diferente do total (R$ ${total.toFixed(2)})`);
       setTimeout(() => setError(null), 3000);
       return;
     }
 
     try {
+      // Validar se o cliente realmente está selecionado
+      if (!selectedCustomer || selectedCustomer.trim() === '') {
+        setError('Cliente não selecionado corretamente');
+        setTimeout(() => setError(null), 3000);
+        return;
+      }
+
       const orderData = {
         customerId: selectedCustomer,
         cashSessionId: currentSession.id,
@@ -414,6 +460,7 @@ export const DeliveryPage: React.FC = () => {
           productId: item.productId,
           quantity: item.quantity,
         })),
+        payments: payments.map(p => ({ paymentMethod: p.method as any, amount: p.amount })),
         deliveryFee,
         discount: discountValue,
         estimatedTime,
@@ -421,7 +468,9 @@ export const DeliveryPage: React.FC = () => {
         internalNotes: internalNotes || undefined,
       };
 
-      await apiClient.post('/delivery/orders', orderData);
+      console.log('🚚 Enviando pedido payload:', orderData);
+      const resp = await apiClient.post('/delivery/orders', orderData);
+      console.log('✅ Pedido criado:', resp);
       
       setSuccess('Pedido criado com sucesso!');
       setTimeout(() => setSuccess(null), 3000);
@@ -471,126 +520,109 @@ export const DeliveryPage: React.FC = () => {
       zipCode: order.customer?.zipCode,
       referencePoint: order.customer?.referencePoint,
     };
-    const receiptHTML = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8">
-          <style>
-            @page { size: 80mm auto; margin: 0; }
-            body { font-family: 'Courier New', monospace; font-size: 11px; margin: 5mm; width: 70mm; }
-            .header { text-align: center; margin-bottom: 3mm; border-bottom: 1px dashed #000; padding-bottom: 3mm; }
-            .header h1 { font-size: 14px; margin: 0 0 2mm 0; font-weight: bold; }
-            .header p { margin: 1mm 0; font-size: 10px; }
-            .delivery-badge { background: #10b981; color: white; padding: 2mm 4mm; border-radius: 3mm; font-weight: bold; margin: 3mm 0; display: inline-block; }
-            .section { margin: 3mm 0; padding: 2mm 0; }
-            .section-title { font-weight: bold; margin-bottom: 2mm; border-bottom: 1px solid #ddd; padding-bottom: 1mm; }
-            .address { font-size: 10px; line-height: 1.4; }
-            table { width: 100%; border-collapse: collapse; margin: 3mm 0; }
-            th { text-align: left; border-bottom: 1px solid #000; padding-bottom: 2mm; font-size: 10px; }
-            td { padding: 2mm 0; border-bottom: 1px dashed #ddd; font-size: 10px; }
-            .totals { margin-top: 3mm; padding-top: 3mm; border-top: 1px solid #000; }
-            .total-row { display: flex; justify-content: space-between; margin: 2mm 0; }
-            .final-total { font-weight: bold; font-size: 12px; margin-top: 3mm; padding-top: 3mm; border-top: 2px solid #000; }
-            .footer { text-align: center; margin-top: 5mm; padding-top: 3mm; border-top: 1px dashed #000; font-size: 9px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>GELATINI</h1>
-            <p>Gelados & Açaí</p>
-            <p>Tel: (00) 0000-0000</p>
-            <div class="delivery-badge">🚚 DELIVERY</div>
+
+    const itemsHTML = (order.items || []).map((item: any) => `
+      <tr>
+        <td class="print-table-item-name">${item.productName}</td>
+        <td class="print-table-col-qty">${item.quantity}</td>
+        <td class="print-table-col-total">R$ ${parseFloat(item.subtotal).toFixed(2)}</td>
+      </tr>
+    `).join('');
+
+    const addressText = `${address.street}, ${address.number}${address.complement ? ` - ${address.complement}` : ''}
+${address.neighborhood} - ${address.city}/${address.state}
+CEP: ${address.zipCode || 'N/A'}${address.referencePoint ? ` | Ref: ${address.referencePoint}` : ''}`;
+
+    const content = `
+      <div class="print-header">
+        <div class="print-header-title">🚚 DELIVERY</div>
+        <div class="print-header-subtitle">Gelatini - Gelados & Açaí</div>
+        <div class="print-header-info">Pedido #${order.orderNumber}</div>
+        <div class="print-header-info">Data: ${new Date(order.orderedAt).toLocaleString('pt-BR')}</div>
+      </div>
+
+      <div class="print-section">
+        <div class="print-section-title">Dados do Cliente</div>
+        <div class="print-row">
+          <span class="print-row-label"><strong>${order.customer?.name || 'N/A'}</strong></span>
+        </div>
+        <div class="print-row">
+          <span class="print-row-label">Telefone: ${order.customer?.phone || 'N/A'}</span>
+        </div>
+      </div>
+
+      <div class="print-section">
+        <div class="print-section-title">📍 Endereço de Entrega</div>
+        <div style="font-size: 10px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;">
+${addressText}
+        </div>
+      </div>
+
+      <table class="print-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th class="print-table-col-qty">Qtd</th>
+            <th class="print-table-col-total">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsHTML}
+        </tbody>
+      </table>
+
+      <div class="print-totals">
+        <div class="print-row">
+          <span class="print-row-label">Subtotal:</span>
+          <span class="print-row-value">${formatCurrency(parseFloat(order.subtotal))}</span>
+        </div>
+        <div class="print-row">
+          <span class="print-row-label">Taxa de Entrega:</span>
+          <span class="print-row-value">${formatCurrency(parseFloat(order.deliveryFee))}</span>
+        </div>
+        ${parseFloat(order.discount) > 0 ? `
+          <div class="print-row">
+            <span class="print-row-label">Desconto:</span>
+            <span class="print-row-value">-${formatCurrency(parseFloat(order.discount))}</span>
           </div>
+        ` : ''}
+        <div class="print-row total highlight">
+          <span class="print-row-label">TOTAL:</span>
+          <span class="print-row-value">${formatCurrency(parseFloat(order.total))}</span>
+        </div>
+      </div>
 
-          <div class="section">
-            <div class="section-title">Pedido #${order.orderNumber}</div>
-            <p style="font-size: 10px; margin: 1mm 0;">Data: ${new Date(order.orderedAt).toLocaleString('pt-BR')}</p>
-            <p style="font-size: 10px; margin: 1mm 0;">Cliente: ${order.customer?.name || 'N/A'}</p>
-            <p style="font-size: 10px; margin: 1mm 0;">Telefone: ${order.customer?.phone || 'N/A'}</p>
-          </div>
+      ${order.customerNotes ? `
+        <div class="print-section">
+          <div class="print-section-title">📝 Observações do Cliente</div>
+          <div style="font-size: 10px;">${order.customerNotes}</div>
+        </div>
+      ` : ''}
 
-          <div class="section">
-            <div class="section-title">📍 Endereço de Entrega</div>
-            <div class="address">
-              <p>${address.street}, ${address.number}${address.complement ? ` - ${address.complement}` : ''}</p>
-              <p>${address.neighborhood} - ${address.city}/${address.state}</p>
-              <p>CEP: ${address.zipCode || 'N/A'}</p>
-              ${address.referencePoint ? `<p>Ref: ${address.referencePoint}</p>` : ''}
-            </div>
-          </div>
+      ${order.internalNotes ? `
+        <div class="print-section">
+          <div class="print-section-title">📝 Observações Internas</div>
+          <div style="font-size: 10px;">${order.internalNotes}</div>
+        </div>
+      ` : ''}
 
-          <div class="section">
-            <div class="section-title">Itens do Pedido</div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Item</th>
-                  <th style="text-align: center;">Qtd</th>
-                  <th style="text-align: right;">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${(order.items || []).map((item: any) => `
-                  <tr>
-                    <td>${item.productName}</td>
-                    <td style="text-align: center;">${item.quantity}</td>
-                    <td style="text-align: right;">R$ ${parseFloat(item.subtotal).toFixed(2)}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
+      <div class="print-section" style="margin-top: 8mm;">
+        <div class="print-row" style="font-size: 10px;">
+          <span>⏱️ Tempo estimado: ${order.estimatedTime || 30} minutos</span>
+        </div>
+      </div>
 
-          <div class="totals">
-            <div class="total-row">
-              <span>Subtotal:</span>
-              <span>R$ ${parseFloat(order.subtotal).toFixed(2)}</span>
-            </div>
-            <div class="total-row">
-              <span>Taxa de Entrega:</span>
-              <span>R$ ${parseFloat(order.deliveryFee).toFixed(2)}</span>
-            </div>
-            ${parseFloat(order.discount) > 0 ? `
-              <div class="total-row">
-                <span>Desconto:</span>
-                <span>-R$ ${parseFloat(order.discount).toFixed(2)}</span>
-              </div>
-            ` : ''}
-            <div class="total-row final-total">
-              <span>TOTAL:</span>
-              <span>R$ ${parseFloat(order.total).toFixed(2)}</span>
-            </div>
-          </div>
-
-          ${order.customerNotes ? `
-            <div class="section">
-              <div class="section-title">Observações do Cliente</div>
-              <p style="font-size: 10px;">${order.customerNotes}</p>
-            </div>
-          ` : ''}
-
-          ${order.internalNotes ? `
-            <div class="section">
-              <div class="section-title">Observações Internas</div>
-              <p style="font-size: 10px;">${order.internalNotes}</p>
-            </div>
-          ` : ''}
-
-          <div class="footer">
-            <p>⏱️ Tempo estimado: ${order.estimatedTime || 30} minutos</p>
-            <p>Obrigado pela preferência!</p>
-          </div>
-        </body>
-      </html>
+      <div class="print-footer">
+        <div class="print-footer-text">Obrigado pela preferência!</div>
+        <div class="print-footer-line">Gelatini © 2024</div>
+      </div>
     `;
 
-    const printWindow = window.open('', '', 'width=400,height=600');
-    if (printWindow) {
-      printWindow.document.write(receiptHTML);
-      printWindow.document.close();
-      printWindow.print();
-    }
+    printReceipt({
+      title: 'Pedido Delivery #' + order.orderNumber,
+      subtitle: 'Gelatini - Gelados & Açaí',
+      content
+    });
   };
 
   const getStatusLabel = (status: string) => {
@@ -615,11 +647,16 @@ export const DeliveryPage: React.FC = () => {
     return colors[status] || '#6b7280';
   };
 
-  const subtotal = deliveryStore.items.reduce((sum, item) => sum + item.totalPrice, 0);
-  const total = subtotal + deliveryFee - discountValue;
-  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-  const missingAmount = Math.max(0, total - totalPaid);
-  const changeAmount = Math.max(0, totalPaid - total);
+  const rawSubtotal = deliveryStore.items.reduce((sum, item) => sum + item.totalPrice, 0);
+  const subtotal = round2(rawSubtotal);
+  const total = round2(subtotal + deliveryFee - discountValue);
+  const totalPaid = round2(payments.reduce((sum, p) => sum + p.amount, 0));
+  const missingAmount = round2(Math.max(0, total - totalPaid));
+  const changeAmount = round2(Math.max(0, totalPaid - total));
+
+  console.log('🔘 Render - selectedCustomer:', selectedCustomer);
+  console.log('🔘 Render - selectedAddress:', selectedAddress);
+  console.log('🔘 Render - botão disabled?', !selectedCustomer || !selectedAddress);
 
   if (loading) return <div className="delivery-page__loading">Carregando...</div>;
 
@@ -778,7 +815,10 @@ export const DeliveryPage: React.FC = () => {
                               {filteredCustomers.map((customer) => (
                                 <button
                                   key={customer.id}
-                                  onClick={() => {
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    console.log('🎯 Cliente selecionado:', customer.id, customer.name);
                                     setSelectedCustomer(customer.id);
                                     setSelectedAddress('');
                                     setCustomerSearchTerm('');
@@ -790,17 +830,6 @@ export const DeliveryPage: React.FC = () => {
                                   <span className="delivery-page__customer-search-item-info">{customer.cpf || customer.phone || customer.whatsapp || customer.email}</span>
                                 </button>
                               ))}
-                              <button
-                                onClick={() => {
-                                  setSelectedCustomer('');
-                                  setSelectedAddress('');
-                                  setCustomerSearchTerm('');
-                                  setIsCustomerSearchOpen(false);
-                                }}
-                                className="delivery-page__customer-search-item delivery-page__customer-search-item--final"
-                              >
-                                Consumidor Final
-                              </button>
                             </>
                           ) : customerSearchTerm ? (
                             <div className="delivery-page__customer-search-empty">Nenhum cliente encontrado</div>
@@ -814,18 +843,24 @@ export const DeliveryPage: React.FC = () => {
                 {selectedCustomer && (
                   <label>
                     <span>Endereço de Entrega:</span>
-                    <select
-                      value={selectedAddress}
-                      onChange={(e) => setSelectedAddress(e.target.value)}
-                      className="delivery-page__select"
-                    >
-                      <option value="">Selecione um endereço</option>
-                      {customerAddresses.map((addr) => (
-                        <option key={addr.id} value={addr.id}>
-                          {addr.street}, {addr.number} - {addr.neighborhood}
-                        </option>
-                      ))}
-                    </select>
+                    {customerAddresses.length > 0 ? (
+                      <select
+                        value={selectedAddress}
+                        onChange={(e) => setSelectedAddress(e.target.value)}
+                        className="delivery-page__select"
+                      >
+                        <option value="">Selecione um endereço</option>
+                        {customerAddresses.map((addr) => (
+                          <option key={addr.id} value={addr.id}>
+                            {addr.street}, {addr.number} - {addr.neighborhood}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="delivery-page__address-warning">
+                        ⚠️ Cliente não possui endereço. Cadastre um endereço primeiro.
+                      </div>
+                    )}
                   </label>
                 )}
 

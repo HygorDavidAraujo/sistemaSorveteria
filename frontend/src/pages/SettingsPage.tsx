@@ -46,6 +46,10 @@ interface CompanyInfo {
 export const SettingsPage: React.FC = () => {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  
+  // Calculate isAdmin early, before it's used in effects
+  const isAdmin = user?.role === 'admin';
+  
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'user' | 'company' | 'delivery' | 'loyalty'>('user');
@@ -54,6 +58,23 @@ export const SettingsPage: React.FC = () => {
   );
   const [isEditingTerminal, setIsEditingTerminal] = useState(false);
   const [isLoadingCompany, setIsLoadingCompany] = useState(false);
+  
+  // Helper functions for formatting
+  const formatCNPJ = (value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    if (numbers.length <= 14) {
+      return numbers
+        .replace(/^(\d{2})(\d)/, '$1.$2')
+        .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/\.(\d{3})(\d)/, '.$1/$2')
+        .replace(/(\d{4})(\d)/, '$1-$2');
+    }
+    return value;
+  };
+
+  const formatCEP = (value: string) => {
+    return value.replace(/\D/g, '').slice(0, 8);
+  };
   
   // User management state
   const [users, setUsers] = useState<User[]>([]);
@@ -100,6 +121,7 @@ export const SettingsPage: React.FC = () => {
     isActive: true,
   });
 
+  const [isLoadingLoyalty, setIsLoadingLoyalty] = useState(false);
   const [cashbackConfig, setCashbackConfig] = useState({
     cashbackPercentage: 2,
     minPurchaseForCashback: 0,
@@ -109,15 +131,16 @@ export const SettingsPage: React.FC = () => {
     applyToAllProducts: true,
     isActive: true,
   });
+  const [isLoadingCashback, setIsLoadingCashback] = useState(false);
 
   useEffect(() => {
-    if (activeTab === 'user' && isAdmin) {
+    if (activeTab === 'user' && isAdmin && users.length === 0 && !isLoadingUsers) {
       loadUsers();
     }
-    if (activeTab === 'company') {
+    if (activeTab === 'company' && !companyInfo.cnpj && !isLoadingCompany) {
       loadCompanyInfo();
     }
-    if (activeTab === 'loyalty') {
+    if (activeTab === 'loyalty' && !isLoadingLoyalty && loyaltyConfig.pointsPerReal === 1 && loyaltyConfig.pointsExpirationDays === 365) {
       loadLoyaltyConfig();
       loadCashbackConfig();
     }
@@ -126,9 +149,10 @@ export const SettingsPage: React.FC = () => {
   const loadUsers = async () => {
     try {
       setIsLoadingUsers(true);
-      const response = await apiClient.get('/users');
-      if (response.data && response.data.data) {
-        setUsers(response.data.data);
+      const result = await apiClient.get('/users');
+      console.log('Users API response:', result);
+      if (result && result.data) {
+        setUsers(result.data);
       }
     } catch (err: any) {
       console.error('Erro ao carregar usuários:', err);
@@ -142,49 +166,66 @@ export const SettingsPage: React.FC = () => {
     try {
       setIsLoadingCompany(true);
       setError(null);
+      console.log('📥 Carregando informações da empresa...');
       const response = await apiClient.get('/settings/company-info');
-      if (response.data && response.data.data) {
-        const data = response.data.data;
+      console.log('📦 Resposta recebida:', response);
+      if (response && response.data) {
+        const data = response.data;
+        console.log('✅ Dados da empresa carregados:', data);
         setCompanyInfo(prev => ({
           ...prev,
           ...data,
           logoBase64: data.logoBase64 ?? null,
           logoMimeType: data.logoMimeType ?? null,
         }));
+      } else {
+        console.log('⚠️ Nenhum dado encontrado na resposta');
       }
     } catch (err: any) {
-      console.error('Erro ao carregar informações da empresa:', err);
+      console.error('❌ Erro ao carregar informações da empresa:', err);
     } finally {
       setIsLoadingCompany(false);
     }
   };
 
   const loadLoyaltyConfig = async () => {
+    if (isLoadingLoyalty) return; // Prevent duplicate calls
     try {
+      setIsLoadingLoyalty(true);
       const response = await apiClient.get('/loyalty/config');
       if (response.data) {
         setLoyaltyConfig(response.data);
       }
     } catch (err: any) {
       console.error('Erro ao carregar configuração de lealdade:', err);
+      // Don't set error state for auto-load failures
+    } finally {
+      setIsLoadingLoyalty(false);
     }
   };
 
   const loadCashbackConfig = async () => {
+    if (isLoadingCashback) return; // Prevent duplicate calls
     try {
+      setIsLoadingCashback(true);
       const response = await apiClient.get('/cashback/config');
       if (response.data) {
         setCashbackConfig(response.data);
       }
     } catch (err: any) {
       console.error('Erro ao carregar configuração de cashback:', err);
+      // Don't set error state for auto-load failures
+    } finally {
+      setIsLoadingCashback(false);
     }
   };
 
   const handleSaveLoyaltyConfig = async () => {
     try {
-      await apiClient.put('/loyalty/config', loyaltyConfig);
+      await apiClient.patch('/loyalty/config', loyaltyConfig);
       setSuccess('Configuração de lealdade salva com sucesso!');
+      // Recarregar dados após salvar
+      await loadLoyaltyConfig();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erro ao salvar configuração');
@@ -194,8 +235,10 @@ export const SettingsPage: React.FC = () => {
 
   const handleSaveCashbackConfig = async () => {
     try {
-      await apiClient.put('/cashback/config', cashbackConfig);
+      await apiClient.patch('/cashback/config', cashbackConfig);
       setSuccess('Configuração de cashback salva com sucesso!');
+      // Recarregar dados após salvar
+      await loadCashbackConfig();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erro ao salvar configuração');
@@ -205,9 +248,18 @@ export const SettingsPage: React.FC = () => {
 
   const handleCompanyInfoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    let formattedValue = value;
+    
+    // Apply formatting based on field name
+    if (name === 'cnpj') {
+      formattedValue = formatCNPJ(value);
+    } else if (name === 'zipCode') {
+      formattedValue = formatCEP(value);
+    }
+    
     setCompanyInfo(prev => ({
       ...prev,
-      [name]: value,
+      [name]: formattedValue,
     }));
   };
 
@@ -236,10 +288,18 @@ export const SettingsPage: React.FC = () => {
       setError(null);
       setSuccess(null);
 
-      await apiClient.post('/settings/company-info', companyInfo);
+      console.log('📤 Enviando dados da empresa:', companyInfo);
+      const response = await apiClient.post('/settings/company-info', companyInfo);
+      console.log('✅ Resposta do servidor:', response);
+      
       setSuccess('Informações da empresa atualizadas com sucesso!');
+      
+      // Recarregar dados após salvar
+      await loadCompanyInfo();
+      
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
+      console.error('❌ Erro ao salvar:', err);
       setError(err.response?.data?.message || 'Erro ao salvar informações');
     } finally {
       setIsLoadingCompany(false);
@@ -354,8 +414,6 @@ export const SettingsPage: React.FC = () => {
       setTimeout(() => setError(null), 3000);
     }
   };
-
-  const isAdmin = user?.role === 'admin';
 
   return (
     <>

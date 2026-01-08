@@ -146,15 +146,15 @@ export const ProductsPage: React.FC = () => {
     setForm({
       name: product.name || '',
       description: product.description || '',
-      price: (product.salePrice || product.sale_price || product.price || 0).toString(),
-      code: (product as any).code || '',
+      price: (product.salePrice || product.costPrice || 0).toString(),
+      code: product.code || '',
       category: categoryValue || '',
-      available: product.isActive !== undefined ? product.isActive : (product.is_active !== undefined ? product.is_active : (product.available !== undefined ? product.available : true)),
-      saleType: (product as any).saleType || (product as any).sale_type || 'unit' as 'unit' | 'weight',
-      eligibleForLoyalty: (product as any).eligibleForLoyalty || false,
-      loyaltyPointsMultiplier: parseFloat((product as any).loyaltyPointsMultiplier || '1'),
-      earnsCashback: (product as any).earnsCashback || false,
-      cashbackPercentage: (product as any).cashbackPercentage ? parseFloat((product as any).cashbackPercentage) : null,
+      available: product.isActive !== undefined ? product.isActive : true,
+      saleType: (product.saleType || 'unit') as 'unit' | 'weight',
+      eligibleForLoyalty: product.eligibleForLoyalty || false,
+      loyaltyPointsMultiplier: parseFloat(String(product.loyaltyPointsMultiplier || 1)),
+      earnsCashback: product.earns_cashback || false,
+      cashbackPercentage: product.cashbackPercentage ? parseFloat(String(product.cashbackPercentage)) : null,
     });
     setEditingId(product.id);
     setIsFormModalOpen(true);
@@ -190,7 +190,19 @@ export const ProductsPage: React.FC = () => {
         <button
           onClick={() => {
             setEditingId(null);
-            setForm({ name: '', description: '', price: '', code: '', category: '', available: true, saleType: 'unit' });
+            setForm({ 
+              name: '', 
+              description: '', 
+              price: '', 
+              code: '', 
+              category: '', 
+              available: true, 
+              saleType: 'unit',
+              eligibleForLoyalty: false,
+              loyaltyPointsMultiplier: 1,
+              earnsCashback: false,
+              cashbackPercentage: null
+            });
             setIsFormModalOpen(true);
           }}
           className="products-page__button products-page__button--primary"
@@ -239,7 +251,7 @@ export const ProductsPage: React.FC = () => {
             <div className="products-page__card-info">
               <div className="products-page__info-row">
                 <span className="products-page__info-label">Preço:</span>
-                <span className="products-page__info-value">R$ {parseFloat(product.salePrice || product.sale_price || product.price || 0).toFixed(2)}</span>
+                <span className="products-page__info-value">R$ {parseFloat(String(product.salePrice || product.costPrice || 0)).toFixed(2)}</span>
               </div>
               <div className="products-page__info-row">
                 <span className="products-page__info-label">Categoria:</span>
@@ -247,8 +259,8 @@ export const ProductsPage: React.FC = () => {
               </div>
               <div className="products-page__info-row">
                 <span className="products-page__info-label">Status:</span>
-                <span className={`products-page__status ${product.isActive || product.is_active || product.available ? 'products-page__status--available' : 'products-page__status--unavailable'}`}>
-                  {product.isActive || product.is_active || product.available ? 'Disponível' : 'Indisponível'}
+                <span className={`products-page__status ${product.isActive ? 'products-page__status--available' : 'products-page__status--unavailable'}`}>
+                  {product.isActive ? 'Disponível' : 'Indisponível'}
                 </span>
               </div>
             </div>

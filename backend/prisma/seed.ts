@@ -174,6 +174,10 @@ async function main() {
 
     console.log('✓ Sample products created');
 
+    // Note: Cash sessions should be created manually by users
+    // Removing automatic session creation to prevent duplicate sessions
+
+    /*
     // Create sample cash session and sales
     const cashSession = await prisma.cashSession.create({
       data: {
@@ -314,7 +318,10 @@ async function main() {
       },
     });
 
-    console.log('✓ Cash session totals updated');
+    console.log('✓ Cash session totals updated');*/
+  }
+
+  console.log('🎉 Database seeding completed!');
   }
 
   console.log('🎉 Database seeding completed!');

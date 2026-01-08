@@ -168,6 +168,140 @@
   flex: 1;
 }
 
+/* Tables */
+.cash-table-container {
+  overflow-x: auto;
+}
+
+.cash-table-loading {
+  text-align: center;
+  padding: 2rem;
+}
+
+.cash-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.cash-table thead {
+  position: sticky;
+  top: 0;
+  background-color: #f9fafb;
+}
+
+.cash-table tr {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.cash-table thead tr {
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.cash-table th,
+.cash-table td {
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.cash-table th {
+  font-weight: 600;
+}
+
+.cash-table td {
+  color: #374151;
+}
+
+.cash-table th.text-right,
+.cash-table td.text-right {
+  text-align: right;
+}
+
+.cash-table th.text-center,
+.cash-table td.text-center {
+  text-align: center;
+}
+
+.cash-table td.text-open {
+  color: #9ca3af;
+}
+
+.cash-table td.text-success {
+  color: #059669;
+  font-weight: 600;
+}
+
+.cash-table td.font-semibold {
+  font-weight: 600;
+}
+
+/* Transaction badges */
+.transaction-badge {
+  font-weight: 600;
+}
+
+.transaction-badge-comanda {
+  color: #2563eb;
+}
+
+.transaction-badge-delivery {
+  color: #10b981;
+}
+
+.transaction-meta {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+/* Modal transaction list */
+.cash-modal-transactions {
+  overflow-x: auto;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+/* Status badges */
+.status-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.status-badge-open {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.status-badge-closed {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge-completed {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+/* Action buttons in table */
+.cash-table-action-btn {
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-right: 0.5rem;
+  transition: all 0.2s;
+}
+
+.cash-table-action-btn:hover {
+  background-color: #2563eb;
+}
+
 /* Responsive */
 @media (max-width: 640px) {
   .page-header h1 {

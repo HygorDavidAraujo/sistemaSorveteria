@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store';
+import { useCompanyInfo } from '@/hooks/useCompanyInfo';
 import { Lock, Mail, LogIn } from 'lucide-react';
 import './LoginPage.css';
 
@@ -8,6 +9,7 @@ export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { login, error, isLoading, clearError } = useAuthStore();
+  const { companyInfo, getLogoUrl } = useCompanyInfo();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
 
@@ -41,9 +43,13 @@ export const LoginPage: React.FC = () => {
             {/* Logo e Título */}
             <div className="login__logo-section">
               <div className="login__logo-icon">
-                <span>🍦</span>
+                {getLogoUrl() ? (
+                  <img src={getLogoUrl()!} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                ) : (
+                  <span>🍦</span>
+                )}
               </div>
-              <h1 className="login__title">Sorveteria</h1>
+              <h1 className="login__title">{companyInfo?.tradeName || 'Sorveteria'}</h1>
               <p className="login__subtitle">Sistema de Gestão Inteligente</p>
             </div>
 

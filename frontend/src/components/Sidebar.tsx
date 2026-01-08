@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store';
+import { useCompanyInfo } from '@/hooks/useCompanyInfo';
 import {
   Home,
   Package,
@@ -18,6 +19,7 @@ import './Sidebar.css';
 
 export const Sidebar: React.FC = () => {
   const { user } = useAuthStore();
+  const { companyInfo, getLogoUrl } = useCompanyInfo();
   const location = useLocation();
 
   if (!user) return null;
@@ -97,9 +99,15 @@ export const Sidebar: React.FC = () => {
     <aside className="sidebar">
       {/* Logo */}
       <div className="sidebar__logo">
-        <div className="sidebar__logo-icon">G</div>
+        <div className="sidebar__logo-icon">
+          {getLogoUrl() ? (
+            <img src={getLogoUrl()!} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          ) : (
+            'G'
+          )}
+        </div>
         <div className="sidebar__logo-text">
-          <h1>GELATINI</h1>
+          <h1>{companyInfo?.tradeName || 'GELATINI'}</h1>
           <p>Gestão</p>
         </div>
       </div>

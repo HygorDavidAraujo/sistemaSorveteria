@@ -20,6 +20,15 @@ export const deliveryValidators = {
       estimatedTime: Joi.number().integer().positive().optional(),
       customerNotes: Joi.string().max(500).optional(),
       internalNotes: Joi.string().max(500).optional(),
+      payments: Joi.array()
+        .items(
+          Joi.object({
+            paymentMethod: Joi.string().valid('cash', 'credit_card', 'debit_card', 'pix', 'other').required(),
+            amount: Joi.number().positive().required(),
+          })
+        )
+        .min(1)
+        .optional(),
     }),
     query: Joi.object({}),
     params: Joi.object({}),
@@ -130,9 +139,9 @@ export const deliveryValidators = {
 
   calculateFee: Joi.object({
     body: Joi.object({
-      neighborhood: Joi.string().max(100).required(),
-      city: Joi.string().max(100).required(),
-      subtotal: Joi.number().positive().required(),
+      neighborhood: Joi.string().min(1).max(100).required(),
+      city: Joi.string().min(1).max(100).required(),
+      subtotal: Joi.number().min(0).required(),
     }),
     query: Joi.object({}),
     params: Joi.object({}),

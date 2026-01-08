@@ -206,7 +206,7 @@ export const CustomersPage: React.FC = () => {
                   <Badge variant="secondary">{customer.loyaltyPoints || 0} pts</Badge>
                 </td>
                 <td className="customers-center">
-                  <Badge variant="success">R$ {parseFloat(customer.cashbackBalance || 0).toFixed(2)}</Badge>
+                  <Badge variant="success">R$ {parseFloat(String(customer.cashbackBalance || 0)).toFixed(2)}</Badge>
                 </td>
                 <td>
                   <button
@@ -611,7 +611,7 @@ export const CustomersPage: React.FC = () => {
                 <Card>
                   <div className="customers-detail-card customers-detail-card-cashback">
                     <p className="customers-detail-card-label">Cashback Disponível</p>
-                    <p className="customers-detail-card-value">R$ {parseFloat(selectedCustomer.cashbackBalance || 0).toFixed(2)}</p>
+                    <p className="customers-detail-card-value">R$ {parseFloat(String(selectedCustomer.cashbackBalance || 0)).toFixed(2)}</p>
                   </div>
                 </Card>
               </div>

@@ -3,6 +3,7 @@ import { useCashSessionStore } from '@/store';
 import { apiClient } from '@/services/api';
 import { Card, Button, Input, Modal, Loading, Alert } from '@/components/common';
 import { CreditCard, Play, Square } from 'lucide-react';
+import { printReceipt, formatCurrency, getPrintStyles } from '@/utils/printer';
 import './CashPage.css';
 
 export const CashPage: React.FC = () => {
@@ -29,7 +30,7 @@ export const CashPage: React.FC = () => {
     setLoading(false);
   }, [loadSession]);
 
-  const formatCurrency = (value: number) => `R$ ${Number(value || 0).toFixed(2)}`;
+  const formatCurrencyLocal = (value: number) => formatCurrency(value);
 
   const handlePrintClosingReceipt = (sessionData: any, declaredCash: number) => {
     if (!sessionData) return;
@@ -48,63 +49,80 @@ export const CashPage: React.FC = () => {
       ? (sessionData.openedBy?.fullName || sessionData.openedBy?.email || 'Operador')
       : (sessionData.openedBy || 'Operador');
 
-    const receiptHTML = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8">
-          <style>
-            @page { size: 80mm auto; margin: 0; }
-            body { font-family: 'Courier New', monospace; font-size: 11px; margin: 5mm; width: 70mm; }
-            .header { text-align: center; margin-bottom: 3mm; border-bottom: 1px dashed #000; padding-bottom: 3mm; }
-            .header h1 { font-size: 14px; margin: 0 0 2mm 0; font-weight: bold; }
-            .header p { margin: 1mm 0; font-size: 10px; }
-            .section { margin: 3mm 0; padding: 2mm 0; }
-            .section-title { font-weight: bold; margin-bottom: 2mm; border-bottom: 1px solid #ddd; padding-bottom: 1mm; }
-            .row { display: flex; justify-content: space-between; margin: 2mm 0; }
-            .highlight { font-weight: bold; font-size: 12px; }
-            .footer { text-align: center; margin-top: 5mm; padding-top: 3mm; border-top: 1px dashed #000; font-size: 9px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>FECHAMENTO DE CAIXA</h1>
-            <p>Terminal: ${sessionData.terminalId || 'TERMINAL_01'}</p>
-            <p>Operador: ${operator}</p>
-            <p>Abertura: ${openedAt}</p>
-            <p>Fechamento: ${closedAt}</p>
-          </div>
+    const content = `
+      <div class="print-header">
+        <div class="print-header-title">FECHAMENTO DE CAIXA</div>
+        <div class="print-header-subtitle">Gelatini - Gelados & Açaí</div>
+        <div class="print-header-info">Terminal: ${sessionData.terminalId || 'TERMINAL_01'}</div>
+        <div class="print-header-info">Operador: ${operator}</div>
+        <div class="print-header-info">Abertura: ${openedAt}</div>
+        <div class="print-header-info">Fechamento: ${closedAt}</div>
+      </div>
 
-          <div class="section">
-            <div class="section-title">Resumo</div>
-            <div class="row"><span>Saldo de Abertura</span><span>${formatCurrency(initialCash)}</span></div>
-            <div class="row"><span>Vendas - Dinheiro</span><span>${formatCurrency(totalCash)}</span></div>
-            <div class="row"><span>Vendas - Cartão</span><span>${formatCurrency(totalCard)}</span></div>
-            <div class="row"><span>Vendas - Pix</span><span>${formatCurrency(totalPix)}</span></div>
-            <div class="row highlight"><span>Total de Vendas</span><span>${formatCurrency(totalSales)}</span></div>
-          </div>
+      <div class="print-section">
+        <div class="print-section-title">Resumo de Vendas</div>
+        <div class="print-row">
+          <span class="print-row-label">Saldo de Abertura</span>
+          <span class="print-row-value">${formatCurrencyLocal(initialCash)}</span>
+        </div>
+        <div class="print-row">
+          <span class="print-row-label">Vendas - Dinheiro</span>
+          <span class="print-row-value">${formatCurrencyLocal(totalCash)}</span>
+        </div>
+        <div class="print-row">
+          <span class="print-row-label">Vendas - Cartão</span>
+          <span class="print-row-value">${formatCurrencyLocal(totalCard)}</span>
+        </div>
+        <div class="print-row">
+          <span class="print-row-label">Vendas - Pix</span>
+          <span class="print-row-value">${formatCurrencyLocal(totalPix)}</span>
+        </div>
+        <div class="print-row highlight total">
+          <span class="print-row-label">TOTAL DE VENDAS</span>
+          <span class="print-row-value">${formatCurrencyLocal(totalSales)}</span>
+        </div>
+      </div>
 
-          <div class="section">
-            <div class="section-title">Conferência</div>
-            <div class="row"><span>Esperado no Caixa</span><span>${formatCurrency(expectedCash)}</span></div>
-            <div class="row"><span>Declarado (Fechamento)</span><span>${formatCurrency(declaredCash)}</span></div>
-            <div class="row highlight"><span>Diferença</span><span>${formatCurrency(difference)}</span></div>
-          </div>
+      <div class="print-section">
+        <div class="print-section-title">Conferência de Caixa</div>
+        <div class="print-row">
+          <span class="print-row-label">Esperado no Caixa</span>
+          <span class="print-row-value">${formatCurrencyLocal(expectedCash)}</span>
+        </div>
+        <div class="print-row">
+          <span class="print-row-label">Declarado (Fechamento)</span>
+          <span class="print-row-value">${formatCurrencyLocal(declaredCash)}</span>
+        </div>
+        <div class="print-row highlight total">
+          <span class="print-row-label">DIFERENÇA</span>
+          <span class="print-row-value">${formatCurrencyLocal(difference)}</span>
+        </div>
+      </div>
 
-          <div class="footer">
-            <p>Assinatura: ___________________________</p>
-            <p>Obrigado pelo trabalho!</p>
-          </div>
-        </body>
-      </html>
+      <div class="print-section" style="margin-top: 8mm;">
+        <div class="print-row" style="border-bottom: 1px solid #000; padding-bottom: 2mm;">
+          <span>Assinado por: _________________</span>
+        </div>
+        <div class="print-row" style="font-size: 9px; margin-top: 3mm;">
+          <span>Operador: _________________</span>
+        </div>
+        <div class="print-row" style="font-size: 9px;">
+          <span>Gerente: _________________</span>
+        </div>
+      </div>
+
+      <div class="print-footer">
+        <div class="print-footer-text">Obrigado por seu trabalho!</div>
+        <div class="print-footer-line">Documento para arquivo</div>
+        <div class="print-footer-line" style="margin-top: 2mm;">Gelatini © 2024</div>
+      </div>
     `;
 
-    const printWindow = window.open('', '', 'width=400,height=600');
-    if (printWindow) {
-      printWindow.document.write(receiptHTML);
-      printWindow.document.close();
-      printWindow.print();
-    }
+    printReceipt({
+      title: 'Fechamento de Caixa',
+      subtitle: 'Gelatini - Gelados & Açaí',
+      content
+    });
   };
 
   const loadCashSessionsHistory = async () => {
@@ -123,19 +141,53 @@ export const CashPage: React.FC = () => {
 
   const loadTransactionsForSession = async (sessionId: string) => {
     try {
+      // Validar se sessionId é válido (UUID)
+      if (!sessionId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId)) {
+        console.error('sessionId inválido:', sessionId);
+        setSelectedSessionTransactions([]);
+        setLoadingSessionTransactions(false);
+        return;
+      }
+      
       setLoadingSessionTransactions(true);
       
-      // Buscar sales e comandas em paralelo
-      const [salesResponse, comandasResponse] = await Promise.all([
+      // Buscar sales e comandas em paralelo com tratamento individual de erros
+      const results = await Promise.allSettled([
         apiClient.get(`/sales?cashSessionId=${sessionId}&limit=100`),
-        apiClient.get(`/comandas?cashSessionId=${sessionId}&status=closed&limit=100`)
+        apiClient.get(`/comandas?cashSessionId=${sessionId}&status=closed&limit=100`),
+        apiClient.get(`/delivery/orders?cashSessionId=${sessionId}&limit=100`),
       ]);
       
-      const salesData = salesResponse.data?.data || salesResponse.data || [];
+      // Verificar qual requisição falhou
+      results.forEach((result, index) => {
+        const endpoints = ['/sales', '/comandas', '/delivery/orders'];
+        if (result.status === 'rejected') {
+          console.error(`Erro ao carregar ${endpoints[index]}:`, result.reason?.response?.data || result.reason?.message);
+        }
+      });
+      
+      // Se todas falharem, não prosseguir
+      if (results.every(r => r.status === 'rejected')) {
+        throw new Error('Falha ao carregar todas as transações');
+      }
+      
+      const salesResponse = results[0].status === 'fulfilled' ? results[0].value : null;
+      const comandasResponse = results[1].status === 'fulfilled' ? results[1].value : null;
+      const deliveryResponse = results[2].status === 'fulfilled' ? results[2].value : null;
+      
+      console.log('🔍 Delivery Response:', deliveryResponse);
+      console.log('🔍 Delivery Response.data:', deliveryResponse?.data);
+      
+      const salesData = salesResponse?.data?.data || salesResponse?.data || [];
       const sales = Array.isArray(salesData) ? salesData : [];
       
-      const comandasData = comandasResponse.data?.data || comandasResponse.data || [];
+      const comandasData = comandasResponse?.data?.data || comandasResponse?.data || [];
       const comandas = Array.isArray(comandasData) ? comandasData : [];
+
+      const deliveryData = deliveryResponse?.data?.data || deliveryResponse?.data || [];
+      const deliveryOrders = Array.isArray(deliveryData) ? deliveryData : [];
+      
+      console.log('🚚 Delivery Orders:', deliveryOrders);
       
       // Transformar comandas em formato de transação para exibição
       const comandaTransactions = comandas.map((comanda: any) => ({
@@ -149,11 +201,24 @@ export const CashPage: React.FC = () => {
         status: 'completed',
         saleType: 'comanda',
         comandaNumber: comanda.comandaNumber,
-        tableNumber: comanda.tableNumber
+        tableNumber: comanda.tableNumber,
+      }));
+
+      const deliveryTransactions = deliveryOrders.map((order: any) => ({
+        id: order.id,
+        saleNumber: order.orderNumber,
+        saleDate: order.orderedAt,
+        customer: order.customer,
+        total: order.total,
+        totalAmount: order.total,
+        payments: order.payments,
+        status: order.deliveryStatus || 'completed',
+        saleType: 'delivery',
+        deliveryStatus: order.deliveryStatus,
       }));
       
-      // Combinar sales e comandas
-      const allTransactions = [...sales, ...comandaTransactions];
+      // Combinar sales, comandas e delivery
+      const allTransactions = [...sales, ...comandaTransactions, ...deliveryTransactions];
       
       // Ordenar por data (mais recente primeiro)
       allTransactions.sort((a, b) => {
@@ -298,7 +363,7 @@ export const CashPage: React.FC = () => {
       <Card>
         <h3 className="cash-section-title">Histórico de Caixas</h3>
         {loadingSessions ? (
-          <div style={{ textAlign: 'center', padding: '2rem' }}>
+          <div className="cash-table-loading">
             <p>Carregando histórico...</p>
           </div>
         ) : cashSessions.length === 0 ? (
@@ -306,21 +371,17 @@ export const CashPage: React.FC = () => {
             <p>Nenhum histórico de caixa registrado</p>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              fontSize: '0.875rem'
-            }}>
+          <div className="cash-table-container">
+            <table className="cash-table">
               <thead>
-                <tr style={{ borderBottom: '2px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Terminal</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Usuário</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Abertura</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Fechamento</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '600' }}>Total de Vendas</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600' }}>Status</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600' }}>Ações</th>
+                <tr>
+                  <th>Terminal</th>
+                  <th>Usuário</th>
+                  <th>Abertura</th>
+                  <th>Fechamento</th>
+                  <th className="text-right">Total de Vendas</th>
+                  <th className="text-center">Status</th>
+                  <th className="text-center">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -336,50 +397,33 @@ export const CashPage: React.FC = () => {
                   const paymentDetails = `Dinheiro: R$ ${totalCash.toFixed(2)}\nCartão: R$ ${totalCard.toFixed(2)}\nPix: R$ ${totalPix.toFixed(2)}`;
                   
                   return (
-                    <tr key={session.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                      <td style={{ padding: '0.75rem', color: '#374151', fontWeight: '600' }}>
+                    <tr key={session.id}>
+                      <td className="font-semibold">
                         {session.terminalId || 'TERMINAL_01'}
                       </td>
-                      <td style={{ padding: '0.75rem', color: '#374151' }}>
+                      <td>
                         {typeof session.openedBy === 'object' ? (session.openedBy?.fullName || session.openedBy?.email || 'N/A') : (session.openedBy || 'N/A')}
                       </td>
-                      <td style={{ padding: '0.75rem', color: '#374151' }}>
+                      <td>
                         {session.openedAt ? new Date(session.openedAt).toLocaleString('pt-BR') : '-'}
                       </td>
-                      <td style={{ padding: '0.75rem', color: isOpen ? '#9ca3af' : '#374151' }}>
+                      <td className={isOpen ? 'text-open' : ''}>
                         {!isOpen && (session.closedAt || session.cashierClosedAt || session.managerClosedAt) 
                           ? new Date(session.closedAt || session.cashierClosedAt || session.managerClosedAt).toLocaleString('pt-BR') 
                           : (isOpen ? 'Aberto' : '-')}
                       </td>
-                      <td style={{ padding: '0.75rem', textAlign: 'right', color: '#059669', fontWeight: '600' }} title={paymentDetails}>
+                      <td className="text-right text-success" title={paymentDetails}>
                         R$ {typeof totalSales === 'number' && !isNaN(totalSales) ? totalSales.toFixed(2) : '0.00'}
                       </td>
-                      <td style={{ padding: '0.75rem', textAlign: 'center' }}>
-                        <span style={{
-                          padding: '0.25rem 0.75rem',
-                          borderRadius: '0.25rem',
-                          fontSize: '0.75rem',
-                          fontWeight: '600',
-                          backgroundColor: isOpen ? '#dcfce7' : '#f3f4f6',
-                          color: isOpen ? '#15803d' : '#374151'
-                        }}>
+                      <td className="text-center">
+                        <span className={`status-badge ${isOpen ? 'status-badge-open' : 'status-badge-closed'}`}>
                           {isOpen ? '🟢 Aberto' : '⚫ Fechado'}
                         </span>
                       </td>
-                      <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                      <td className="text-center">
                         <button
                           onClick={() => handleViewSessionTransactions(session)}
-                          style={{
-                            backgroundColor: '#3b82f6',
-                            color: 'white',
-                            border: 'none',
-                            padding: '0.5rem 0.75rem',
-                            borderRadius: '0.375rem',
-                            fontSize: '0.75rem',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            marginRight: '0.5rem'
-                          }}
+                          className="cash-table-action-btn"
                         >
                           📋 Vendas
                         </button>
@@ -400,7 +444,7 @@ export const CashPage: React.FC = () => {
         onClose={() => setIsTransactionsModalOpen(false)}
       >
         {loadingSessionTransactions ? (
-          <div style={{ textAlign: 'center', padding: '2rem' }}>
+          <div className="cash-table-loading">
             <p>Carregando vendas...</p>
           </div>
         ) : selectedSessionTransactions.length === 0 ? (
@@ -408,62 +452,57 @@ export const CashPage: React.FC = () => {
             <p>Nenhuma venda registrada nesta sessão</p>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto', maxHeight: '500px', overflowY: 'auto' }}>
-            <table style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              fontSize: '0.875rem'
-            }}>
-              <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f9fafb' }}>
-                <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Número</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Data/Hora</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Cliente</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '600' }}>Valor</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Método</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Status</th>
+          <div className="cash-modal-transactions">
+            <table className="cash-table">
+              <thead>
+                <tr>
+                  <th>Número</th>
+                  <th>Data/Hora</th>
+                  <th>Cliente</th>
+                  <th className="text-right">Valor</th>
+                  <th>Método</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {selectedSessionTransactions.map((transaction: any) => (
-                  <tr key={transaction.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                    <td style={{ padding: '0.75rem', color: '#374151' }}>
+                  <tr key={transaction.id}>
+                    <td>
                       {transaction.saleType === 'comanda' ? (
                         <div>
-                          <div style={{ fontWeight: '600', color: '#2563eb' }}>
+                          <div className="transaction-badge transaction-badge-comanda">
                             Comanda #{transaction.comandaNumber}
                           </div>
                           {transaction.tableNumber && (
-                            <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                            <div className="transaction-meta">
                               Mesa {transaction.tableNumber}
                             </div>
                           )}
+                        </div>
+                      ) : transaction.saleType === 'delivery' ? (
+                        <div>
+                          <div className="transaction-badge transaction-badge-delivery">
+                            Delivery #{transaction.saleNumber}
+                          </div>
                         </div>
                       ) : (
                         `#${transaction.saleNumber || transaction.id.slice(0, 8)}`
                       )}
                     </td>
-                    <td style={{ padding: '0.75rem', color: '#374151' }}>
+                    <td>
                       {transaction.saleDate ? new Date(transaction.saleDate).toLocaleString('pt-BR') : '-'}
                     </td>
-                    <td style={{ padding: '0.75rem', color: '#374151' }}>
+                    <td>
                       {transaction.customer?.name || 'Consumidor Final'}
                     </td>
-                    <td style={{ padding: '0.75rem', textAlign: 'right', color: '#059669', fontWeight: '600' }}>
+                    <td className="text-right text-success">
                       R$ {parseFloat(transaction.total || transaction.totalAmount || 0).toFixed(2)}
                     </td>
-                    <td style={{ padding: '0.75rem', color: '#374151' }}>
+                    <td>
                       {transaction.payments?.[0]?.paymentMethod || 'N/A'}
                     </td>
-                    <td style={{ padding: '0.75rem' }}>
-                      <span style={{
-                        padding: '0.25rem 0.75rem',
-                        borderRadius: '0.25rem',
-                        fontSize: '0.75rem',
-                        fontWeight: '600',
-                        backgroundColor: transaction.status === 'completed' ? '#d1fae5' : '#fef3c7',
-                        color: transaction.status === 'completed' ? '#065f46' : '#92400e'
-                      }}>
+                    <td>
+                      <span className={`status-badge ${transaction.status === 'completed' ? 'status-badge-completed' : 'status-badge-open'}`}>
                         {transaction.status === 'completed' ? 'Completa' : 'Pendente'}
                       </span>
                     </td>

@@ -3,6 +3,7 @@ import { Card, Button, Input, Modal, Loading, Alert } from '@/components/common'
 import { Plus, Minus, Trash2, ShoppingCart, DollarSign, UserPlus, Printer } from 'lucide-react';
 import { apiClient } from '@/services/api';
 import { useCashSessionStore, useCustomersStore } from '@/store';
+import { printReceipt, formatCurrency, getPrintStyles } from '@/utils/printer';
 import './ComandasPage.css';
 
 interface ComandaItem {
@@ -455,165 +456,73 @@ export const ComandasPage: React.FC = () => {
 
     const itemsHTML = selectedComanda.items.map((item) => `
       <tr>
-        <td class="receipt-item-name">${item.productName}</td>
-        <td class="receipt-item-qty">${item.quantity.toFixed(3)}</td>
-        <td class="receipt-item-price">R$ ${item.unitPrice.toFixed(2)}</td>
-        <td class="receipt-item-total">R$ ${item.subtotal.toFixed(2)}</td>
+        <td class="print-table-item-name">${item.productName}</td>
+        <td class="print-table-col-qty">${item.quantity.toFixed(3)}</td>
+        <td class="print-table-col-price">R$ ${item.unitPrice.toFixed(2)}</td>
+        <td class="print-table-col-total">R$ ${item.subtotal.toFixed(2)}</td>
       </tr>
     `).join('');
 
-    const receiptHTML = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8">
-          <title>Pré-Conta - Comanda #${selectedComanda.comandaNumber}</title>
-          <style>
-            body {
-              font-family: 'Courier New', monospace;
-              max-width: 80mm;
-              margin: 0;
-              padding: 10mm;
-              font-size: 13px;
-            }
-            .receipt-header {
-              text-align: center;
-              margin-bottom: 10mm;
-              border-bottom: 1px dashed #000;
-              padding-bottom: 5mm;
-            }
-            .receipt-title {
-              font-size: 16px;
-              font-weight: bold;
-              margin-bottom: 5mm;
-            }
-            .receipt-info {
-              font-size: 11px;
-              margin: 2mm 0;
-            }
-            .receipt-items {
-              width: 100%;
-              margin: 10mm 0;
-              border-collapse: collapse;
-            }
-            .receipt-items thead {
-              border-bottom: 1px dashed #000;
-            }
-            .receipt-items th {
-              text-align: left;
-              font-weight: bold;
-              font-size: 11px;
-              padding: 3mm 0;
-            }
-            .receipt-items td {
-              padding: 2mm 0;
-              font-size: 12px;
-            }
-            .receipt-item-name {
-              max-width: 30mm;
-              word-break: break-word;
-            }
-            .receipt-item-qty {
-              text-align: right;
-              width: 12mm;
-            }
-            .receipt-item-price {
-              text-align: right;
-              width: 15mm;
-            }
-            .receipt-item-total {
-              text-align: right;
-              width: 18mm;
-              font-weight: bold;
-            }
-            .receipt-totals {
-              border-top: 1px dashed #000;
-              border-bottom: 1px dashed #000;
-              padding: 5mm 0;
-              margin: 5mm 0;
-            }
-            .receipt-total-row {
-              display: flex;
-              justify-content: space-between;
-              margin: 2mm 0;
-              font-size: 13px;
-            }
-            .receipt-final-total {
-              font-size: 15px;
-              font-weight: bold;
-              margin-top: 3mm;
-            }
-            .receipt-footer {
-              text-align: center;
-              margin-top: 10mm;
-              font-size: 11px;
-              border-top: 1px dashed #000;
-              padding-top: 5mm;
-            }
-            @media print {
-              body { margin: 0; padding: 5mm; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="receipt-header">
-            <div class="receipt-title">PRÉ-CONTA</div>
-            <div class="receipt-info">Comanda #${selectedComanda.comandaNumber}</div>
-            ${selectedComanda.tableNumber ? `<div class="receipt-info">Mesa: ${selectedComanda.tableNumber}</div>` : ''}
-            <div class="receipt-info">Data: ${dateStr}</div>
-            <div class="receipt-info">Hora: ${timeStr}</div>
-          </div>
+    const content = `
+      <div class="print-header">
+        <div class="print-header-title">PRÉ-CONTA</div>
+        <div class="print-header-subtitle">Gelatini - Gelados & Açaí</div>
+        <div class="print-header-info">Comanda #${selectedComanda.comandaNumber}</div>
+        ${selectedComanda.tableNumber ? `<div class="print-header-info">Mesa: ${selectedComanda.tableNumber}</div>` : ''}
+        <div class="print-header-info">Data: ${dateStr} ${timeStr}</div>
+      </div>
 
-          <div class="receipt-info">
-            <strong>Cliente:</strong> ${customerInfo}
-          </div>
+      <div class="print-section">
+        <div class="print-row">
+          <span class="print-row-label"><strong>Cliente:</strong></span>
+          <span class="print-row-value">${customerInfo}</span>
+        </div>
+      </div>
 
-          <table class="receipt-items">
-            <thead>
-              <tr>
-                <th>Descrição</th>
-                <th class="receipt-item-qty">Qtd</th>
-                <th class="receipt-item-price">Valor</th>
-                <th class="receipt-item-total">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemsHTML}
-            </tbody>
-          </table>
+      <table class="print-table">
+        <thead>
+          <tr>
+            <th>Descrição</th>
+            <th class="print-table-col-qty">Qtd</th>
+            <th class="print-table-col-price">Valor</th>
+            <th class="print-table-col-total">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsHTML}
+        </tbody>
+      </table>
 
-          <div class="receipt-totals">
-            <div class="receipt-total-row">
-              <span>Subtotal:</span>
-              <span>R$ ${selectedComanda.subtotal.toFixed(2)}</span>
-            </div>
-            ${selectedComanda.discount > 0 ? `
-              <div class="receipt-total-row">
-                <span>Desconto:</span>
-                <span>-R$ ${selectedComanda.discount.toFixed(2)}</span>
-              </div>
-            ` : ''}
-            <div class="receipt-total-row receipt-final-total">
-              <span>TOTAL:</span>
-              <span>R$ ${selectedComanda.total.toFixed(2)}</span>
-            </div>
+      <div class="print-totals">
+        <div class="print-row">
+          <span class="print-row-label">Subtotal:</span>
+          <span class="print-row-value">${formatCurrency(selectedComanda.subtotal)}</span>
+        </div>
+        ${selectedComanda.discount > 0 ? `
+          <div class="print-row">
+            <span class="print-row-label">Desconto:</span>
+            <span class="print-row-value">-${formatCurrency(selectedComanda.discount)}</span>
           </div>
+        ` : ''}
+        <div class="print-row total highlight">
+          <span class="print-row-label">TOTAL:</span>
+          <span class="print-row-value">${formatCurrency(selectedComanda.total)}</span>
+        </div>
+      </div>
 
-          <div class="receipt-footer">
-            <div style="font-weight: bold; margin-bottom: 3mm;">*** PRÉ-CONTA ***</div>
-            <div>Documento não fiscal</div>
-            <div style="margin-top: 3mm; font-size: 9px;">Gelatini - Gelados & Açaí</div>
-          </div>
-        </body>
-      </html>
+      <div class="print-footer">
+        <div class="print-footer-text">*** PRÉ-CONTA ***</div>
+        <div class="print-footer-text">Documento não fiscal</div>
+        <div class="print-footer-text">Conferência do cliente</div>
+        <div class="print-footer-line">Gelatini © 2024</div>
+      </div>
     `;
 
-    const printWindow = window.open('', '', 'width=400,height=600');
-    if (printWindow) {
-      printWindow.document.write(receiptHTML);
-      printWindow.document.close();
-      printWindow.print();
-    }
+    printReceipt({
+      title: 'Pré-Conta - Comanda #' + selectedComanda.comandaNumber,
+      subtitle: 'Gelatini - Gelados & Açaí',
+      content
+    });
   };
 
   const handleCloseComanda = async (e?: React.FormEvent | React.MouseEvent) => {

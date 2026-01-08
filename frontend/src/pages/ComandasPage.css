@@ -293,12 +293,15 @@
   border: 1px solid var(--color-border);
   padding: 16px;
   box-shadow: var(--shadow-sm);
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
 }
 
 @media (min-width: 1024px) {
   .comanda-cart {
     position: sticky;
     top: 24px;
+    align-self: flex-start;
   }
 }
 

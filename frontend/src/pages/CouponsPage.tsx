@@ -99,12 +99,12 @@ export const CouponsPage: React.FC = () => {
       const response = await apiClient.post('/coupons', {
         code: code.toUpperCase(),
         description: description || undefined,
-        discountType,
+        couponType: discountType.toLowerCase(), // Backend espera 'percentage' ou 'fixed'
         discountValue: parseFloat(discountValue),
-        minPurchaseAmount: minPurchaseAmount ? parseFloat(minPurchaseAmount) : undefined,
-        maxDiscountAmount: maxDiscountAmount ? parseFloat(maxDiscountAmount) : undefined,
-        startDate: new Date(startDate).toISOString(),
-        endDate: new Date(endDate).toISOString(),
+        minPurchaseValue: minPurchaseAmount ? parseFloat(minPurchaseAmount) : undefined, // Backend espera minPurchaseValue
+        maxDiscount: maxDiscountAmount ? parseFloat(maxDiscountAmount) : undefined, // Backend espera maxDiscount
+        validFrom: new Date(startDate).toISOString(), // Backend espera validFrom
+        validTo: new Date(endDate).toISOString(), // Backend espera validTo
         usageLimit: usageLimit ? parseInt(usageLimit) : undefined,
       });
 

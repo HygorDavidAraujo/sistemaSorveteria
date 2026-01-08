@@ -1,4 +1,4 @@
-import { PrismaClient, DeliveryStatus } from '@prisma/client';
+import { PrismaClient, DeliveryStatus, PaymentMethod } from '@prisma/client';
 import prisma from '@infrastructure/database/prisma-client';
 import { AppError } from '@shared/errors/app-error';
 import { LoyaltyService } from '@application/use-cases/loyalty/loyalty.service';
@@ -12,6 +12,10 @@ export interface CreateDeliveryOrderDTO {
   items: Array<{
     productId: string;
     quantity: number;
+  }>;
+  payments?: Array<{
+    paymentMethod: PaymentMethod;
+    amount: number;
   }>;
   deliveryFee?: number;
   discount?: number;
@@ -264,14 +268,38 @@ export class DeliveryService {
         }
       }
 
-      // Atualizar totais do caixa
+      // Atualizar totais do caixa (por método + total)
+      const paymentTotals = {
+        totalSales: { increment: total },
+        totalCash: { increment: 0 },
+        totalCard: { increment: 0 },
+        totalPix: { increment: 0 },
+        totalOther: { increment: 0 },
+      };
+
+      if (data.payments && data.payments.length > 0) {
+        for (const payment of data.payments) {
+          switch (payment.paymentMethod) {
+            case 'cash':
+              paymentTotals.totalCash.increment += payment.amount;
+              break;
+            case 'debit_card':
+            case 'credit_card':
+              paymentTotals.totalCard.increment += payment.amount;
+              break;
+            case 'pix':
+              paymentTotals.totalPix.increment += payment.amount;
+              break;
+            default:
+              paymentTotals.totalOther.increment += payment.amount;
+              break;
+          }
+        }
+      }
+
       await tx.cashSession.update({
         where: { id: data.cashSessionId },
-        data: {
-          totalSales: {
-            increment: total,
-          },
-        },
+        data: paymentTotals,
       });
 
       if (customer) {

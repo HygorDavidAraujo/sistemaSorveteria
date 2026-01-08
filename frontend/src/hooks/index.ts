@@ -1,0 +1,1 @@
+export { useCompanyInfo } from './useCompanyInfo';

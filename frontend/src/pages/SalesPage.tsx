@@ -3,6 +3,7 @@ import { useSalesStore, useCashSessionStore } from '@/store';
 import { apiClient } from '@/services/api';
 import { Card, Button, Modal, Loading, Alert, Badge } from '@/components/common';
 import { Trash2, ShoppingCart, Plus, Minus, Printer } from 'lucide-react';
+import { printReceipt, formatCurrency, getPrintStyles } from '@/utils/printer';
 import type { Product, Customer } from '@/types';
 import './SalesPage.css';
 
@@ -260,7 +261,15 @@ export const SalesPage: React.FC = () => {
     setCurrentPaymentAmount('');
   };
 
-  const formatCurrency = (value: number) => `R$ ${Number(value || 0).toFixed(2)}`;
+  const getPaymentMethodLabel = (method: string): string => {
+    const labels: Record<string, string> = {
+      cash: 'Dinheiro',
+      credit_card: 'Cartão Crédito',
+      debit_card: 'Cartão Débito',
+      pix: 'PIX',
+    };
+    return labels[method] || method;
+  };
 
   const handlePrintPreview = () => {
     if (salesStore.items.length === 0) {
@@ -270,116 +279,108 @@ export const SalesPage: React.FC = () => {
     }
 
     const customerName = getCustomerName();
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('pt-BR');
+    const timeStr = now.toLocaleTimeString('pt-BR');
 
-    const receiptHTML = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8">
-          <style>
-            @page { size: 80mm auto; margin: 0; }
-            body { font-family: 'Courier New', monospace; font-size: 11px; margin: 5mm; width: 70mm; }
-            .header { text-align: center; margin-bottom: 3mm; border-bottom: 1px dashed #000; padding-bottom: 3mm; }
-            .header h1 { font-size: 14px; margin: 0 0 2mm 0; font-weight: bold; }
-            .header p { margin: 1mm 0; font-size: 10px; }
-            table { width: 100%; border-collapse: collapse; margin: 3mm 0; }
-            th { text-align: left; border-bottom: 1px solid #000; padding-bottom: 2mm; font-size: 10px; }
-            td { padding: 2mm 0; border-bottom: 1px dashed #ddd; font-size: 10px; }
-            .right { text-align: right; }
-            .totals { margin-top: 3mm; padding-top: 3mm; border-top: 1px solid #000; }
-            .total-row { display: flex; justify-content: space-between; margin: 2mm 0; }
-            .final-total { font-weight: bold; font-size: 12px; margin-top: 3mm; padding-top: 3mm; border-top: 2px solid #000; }
-            .footer { text-align: center; margin-top: 4mm; padding-top: 3mm; border-top: 1px dashed #000; font-size: 9px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>PRÉ-CONTA</h1>
-            <p>Cliente: ${customerName}</p>
-            <p>Data: ${new Date().toLocaleString('pt-BR')}</p>
+    const itemsHTML = salesStore.items.map((item) => {
+      const qtyLabel = item.saleType === 'weight'
+        ? `${item.quantity.toFixed(3)} kg`
+        : `${item.quantity}x`;
+      const unit = formatCurrency(item.unitPrice);
+      const lineTotal = formatCurrency(item.totalPrice);
+      return `
+        <tr>
+          <td class="print-table-item-name">
+            <div>${item.productName}</div>
+            <div class="print-table-item-detail">${qtyLabel} · ${unit}</div>
+          </td>
+          <td class="print-table-col-qty">${qtyLabel}</td>
+          <td class="print-table-col-total">${lineTotal}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const paymentsHTML = payments.length > 0 ? `
+      <div class="print-section">
+        <div class="print-section-title">Formas de Pagamento</div>
+        ${payments.map((p) => `
+          <div class="print-row">
+            <span class="print-row-label">${getPaymentMethodLabel(p.method)}</span>
+            <span class="print-row-value">${formatCurrency(p.amount)}</span>
           </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th class="right">Qtd</th>
-                <th class="right">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${salesStore.items.map((item) => {
-                const qtyLabel = item.saleType === 'weight'
-                  ? `${item.quantity.toFixed(3)} kg`
-                  : `${item.quantity}x`;
-                const unit = formatCurrency(item.unitPrice);
-                const lineTotal = formatCurrency(item.totalPrice);
-                return `
-                  <tr>
-                    <td>
-                      <div>${item.productName}</div>
-                      <div style="font-size:9px;color:#555;">${qtyLabel} · ${unit}</div>
-                    </td>
-                    <td class="right">${qtyLabel}</td>
-                    <td class="right">${lineTotal}</td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
-
-          <div class="totals">
-            <div class="total-row">
-              <span>Subtotal:</span>
-              <span>${formatCurrency(subtotal)}</span>
-            </div>
-            ${discountValue > 0 ? `
-              <div class="total-row">
-                <span>Desconto:</span>
-                <span>- ${formatCurrency(discountValue)}</span>
-              </div>
-            ` : ''}
-            <div class="total-row final-total">
-              <span>Total:</span>
-              <span>${formatCurrency(total)}</span>
-            </div>
+        `).join('')}
+        <div class="print-row highlight total">
+          <span class="print-row-label">Total Pago</span>
+          <span class="print-row-value">${formatCurrency(totalPaid)}</span>
+        </div>
+        ${missingAmount > 0 ? `
+          <div class="print-row" style="color: #d32f2f;">
+            <span class="print-row-label">⚠️ Falta</span>
+            <span class="print-row-value">${formatCurrency(missingAmount)}</span>
           </div>
-
-          ${payments.length > 0 ? `
-            <div class="totals">
-              <div class="total-row"><strong>Pagamentos Selecionados</strong></div>
-              ${payments.map((p) => {
-                const label = p.method === 'cash'
-                  ? 'Dinheiro'
-                  : p.method === 'credit_card'
-                    ? 'Cartão Crédito'
-                    : p.method === 'debit_card'
-                      ? 'Cartão Débito'
-                      : 'PIX';
-                return `<div class="total-row"><span>${label}</span><span>${formatCurrency(p.amount)}</span></div>`;
-              }).join('')}
-              <div class="total-row">
-                <span>Total Pago</span>
-                <span>${formatCurrency(totalPaid)}</span>
-              </div>
-              ${missingAmount > 0 ? `<div class="total-row"><span>Falta</span><span>${formatCurrency(missingAmount)}</span></div>` : ''}
-              ${changeAmount > 0 ? `<div class="total-row"><span>Troco</span><span>${formatCurrency(changeAmount)}</span></div>` : ''}
-            </div>
-          ` : ''}
-
-          <div class="footer">
-            <p>Prévia para conferência do cliente</p>
+        ` : ''}
+        ${changeAmount > 0 ? `
+          <div class="print-row">
+            <span class="print-row-label">Troco</span>
+            <span class="print-row-value">${formatCurrency(changeAmount)}</span>
           </div>
-        </body>
-      </html>
+        ` : ''}
+      </div>
+    ` : '';
+
+    const content = `
+      <div class="print-header">
+        <div class="print-header-title">PRÉ-CONTA</div>
+        <div class="print-header-subtitle">Gelatini - Gelados & Açaí</div>
+        <div class="print-header-info">Cliente: ${customerName}</div>
+        <div class="print-header-info">Data: ${dateStr} ${timeStr}</div>
+      </div>
+
+      <table class="print-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th class="print-table-col-qty">Qtd</th>
+            <th class="print-table-col-total">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsHTML}
+        </tbody>
+      </table>
+
+      <div class="print-totals">
+        <div class="print-row">
+          <span class="print-row-label">Subtotal:</span>
+          <span class="print-row-value">${formatCurrency(subtotal)}</span>
+        </div>
+        ${discountValue > 0 ? `
+          <div class="print-row">
+            <span class="print-row-label">Desconto:</span>
+            <span class="print-row-value">-${formatCurrency(discountValue)}</span>
+          </div>
+        ` : ''}
+        <div class="print-row total highlight">
+          <span class="print-row-label">TOTAL:</span>
+          <span class="print-row-value">${formatCurrency(total)}</span>
+        </div>
+      </div>
+
+      ${paymentsHTML}
+
+      <div class="print-footer">
+        <div class="print-footer-text">Prévia para conferência do cliente</div>
+        <div class="print-footer-line">Documento não fiscal</div>
+        <div class="print-footer-line">Gelatini © 2024</div>
+      </div>
     `;
 
-    const printWindow = window.open('', '', 'width=400,height=600');
-    if (printWindow) {
-      printWindow.document.write(receiptHTML);
-      printWindow.document.close();
-      printWindow.print();
-    }
+    printReceipt({
+      title: 'Pré-Conta - Venda PDV',
+      subtitle: 'Gelatini - Gelados & Açaí',
+      content
+    });
   };
 
   const handleRemovePayment = (index: number) => {

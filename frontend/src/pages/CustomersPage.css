@@ -368,6 +368,7 @@
 .customers-form-checkbox span {
   font-size: 14px;
   color: var(--color-dark);
+  -webkit-user-select: none;
   user-select: none;
 }
 

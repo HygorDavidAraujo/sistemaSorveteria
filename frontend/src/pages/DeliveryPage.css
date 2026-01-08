@@ -542,6 +542,11 @@
   display: flex;
   justify-content: space-between;
   margin-bottom: 0.5rem;
+.delivery-page__address-warning {
+  padding: 0.5rem;
+  color: #ef4444;
+  font-size: 0.8125rem;
+}
   font-size: 0.875rem;
   color: #6b7280;
 }
