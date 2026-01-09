@@ -466,10 +466,9 @@ export const ComandasPage: React.FC = () => {
     const content = `
       <div class="print-header">
         <div class="print-header-title">PRÉ-CONTA</div>
-        <div class="print-header-subtitle">Gelatini - Gelados & Açaí</div>
-        <div class="print-header-info">Comanda #${selectedComanda.comandaNumber}</div>
-        ${selectedComanda.tableNumber ? `<div class="print-header-info">Mesa: ${selectedComanda.tableNumber}</div>` : ''}
-        <div class="print-header-info">Data: ${dateStr} ${timeStr}</div>
+        <div class="print-header-info" style="text-align: center; margin-top: 6px;">Comanda #${selectedComanda.comandaNumber}</div>
+        ${selectedComanda.tableNumber ? `<div class=\"print-header-info\" style=\"text-align: center; margin-top: 4px;\">Mesa: ${selectedComanda.tableNumber}</div>` : ''}
+        <div class="print-header-info" style="text-align: center; margin-top: 4px;">Data: ${dateStr} ${timeStr}</div>
       </div>
 
       <div class="print-section">
@@ -520,7 +519,6 @@ export const ComandasPage: React.FC = () => {
 
     printReceipt({
       title: 'Pré-Conta - Comanda #' + selectedComanda.comandaNumber,
-      subtitle: 'Gelatini - Gelados & Açaí',
       content
     });
   };

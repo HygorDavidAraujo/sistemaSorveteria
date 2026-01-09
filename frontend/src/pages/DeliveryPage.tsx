@@ -536,9 +536,8 @@ CEP: ${address.zipCode || 'N/A'}${address.referencePoint ? ` | Ref: ${address.re
     const content = `
       <div class="print-header">
         <div class="print-header-title">🚚 DELIVERY</div>
-        <div class="print-header-subtitle">Gelatini - Gelados & Açaí</div>
-        <div class="print-header-info">Pedido #${order.orderNumber}</div>
-        <div class="print-header-info">Data: ${new Date(order.orderedAt).toLocaleString('pt-BR')}</div>
+        <div class="print-header-info" style="text-align: center; margin-top: 6px;">Pedido #${order.orderNumber}</div>
+        <div class="print-header-info" style="text-align: center; margin-top: 4px;">Data: ${new Date(order.orderedAt).toLocaleString('pt-BR')}</div>
       </div>
 
       <div class="print-section">
@@ -620,7 +619,6 @@ ${addressText}
 
     printReceipt({
       title: 'Pedido Delivery #' + order.orderNumber,
-      subtitle: 'Gelatini - Gelados & Açaí',
       content
     });
   };

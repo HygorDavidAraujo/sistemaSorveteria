@@ -99,13 +99,6 @@ export const Sidebar: React.FC = () => {
     <aside className="sidebar">
       {/* Logo */}
       <div className="sidebar__logo">
-        <div className="sidebar__logo-icon">
-          {getLogoUrl() ? (
-            <img src={getLogoUrl()!} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-          ) : (
-            'G'
-          )}
-        </div>
         <div className="sidebar__logo-text">
           <h1>{companyInfo?.tradeName || 'GELATINI'}</h1>
           <p>Gestão</p>

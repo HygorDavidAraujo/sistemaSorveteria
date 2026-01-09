@@ -52,11 +52,10 @@ export const CashPage: React.FC = () => {
     const content = `
       <div class="print-header">
         <div class="print-header-title">FECHAMENTO DE CAIXA</div>
-        <div class="print-header-subtitle">Gelatini - Gelados & Açaí</div>
-        <div class="print-header-info">Terminal: ${sessionData.terminalId || 'TERMINAL_01'}</div>
-        <div class="print-header-info">Operador: ${operator}</div>
-        <div class="print-header-info">Abertura: ${openedAt}</div>
-        <div class="print-header-info">Fechamento: ${closedAt}</div>
+        <div class="print-header-info" style="text-align: center; margin-top: 6px;">Terminal: ${sessionData.terminalId || 'TERMINAL_01'}</div>
+        <div class="print-header-info" style="text-align: center; margin-top: 4px;">Operador: ${operator}</div>
+        <div class="print-header-info" style="text-align: center; margin-top: 4px;">Abertura: ${openedAt}</div>
+        <div class="print-header-info" style="text-align: center; margin-top: 4px;">Fechamento: ${closedAt}</div>
       </div>
 
       <div class="print-section">
@@ -120,7 +119,6 @@ export const CashPage: React.FC = () => {
 
     printReceipt({
       title: 'Fechamento de Caixa',
-      subtitle: 'Gelatini - Gelados & Açaí',
       content
     });
   };

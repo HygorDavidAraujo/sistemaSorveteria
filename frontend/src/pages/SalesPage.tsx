@@ -332,9 +332,8 @@ export const SalesPage: React.FC = () => {
     const content = `
       <div class="print-header">
         <div class="print-header-title">PRÉ-CONTA</div>
-        <div class="print-header-subtitle">Gelatini - Gelados & Açaí</div>
-        <div class="print-header-info">Cliente: ${customerName}</div>
-        <div class="print-header-info">Data: ${dateStr} ${timeStr}</div>
+        <div class="print-header-info" style="text-align: center; margin-top: 6px;">Cliente: ${customerName}</div>
+        <div class="print-header-info" style="text-align: center; margin-top: 4px;">Data: ${dateStr} ${timeStr}</div>
       </div>
 
       <table class="print-table">
@@ -378,7 +377,6 @@ export const SalesPage: React.FC = () => {
 
     printReceipt({
       title: 'Pré-Conta - Venda PDV',
-      subtitle: 'Gelatini - Gelados & Açaí',
       content
     });
   };
