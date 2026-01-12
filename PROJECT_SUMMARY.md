@@ -159,7 +159,7 @@ Use o Postman, Insomnia ou PowerShell para testar:
 
 ```powershell
 # Login
-$login = @{ email = "admin@gelatini.com"; password = "admin123" } | ConvertTo-Json
+$login = @{ email = "hygordavidaraujo@gmail.com"; password = "admin123" } | ConvertTo-Json
 $response = Invoke-RestMethod -Uri "http://localhost:3000/api/v1/auth/login" -Method Post -ContentType "application/json" -Body $login
 $token = $response.data.accessToken
 

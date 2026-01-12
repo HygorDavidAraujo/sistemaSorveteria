@@ -66,6 +66,15 @@ router.get(
 );
 
 /**
+ * GET /financial/transactions/summary - Resumo de transações
+ */
+router.get(
+  '/transactions/summary',
+  authorize(['admin', 'manager']),
+  financialController.getTransactionsSummary
+);
+
+/**
  * GET /financial/transactions/:id - Obter transação por ID
  */
 router.get('/transactions/:id', authorize(['admin', 'manager']), financialController.getTransaction);
@@ -97,15 +106,6 @@ router.post(
   authorize(['admin', 'manager']),
   validate(cancelTransactionSchema),
   financialController.cancelTransaction
-);
-
-/**
- * GET /financial/transactions/summary - Resumo de transações
- */
-router.get(
-  '/transactions/summary',
-  authorize(['admin', 'manager']),
-  financialController.getTransactionsSummary
 );
 
 /**

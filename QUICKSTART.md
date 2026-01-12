@@ -71,7 +71,7 @@ Senha: admin123
 ```powershell
 # PowerShell
 $body = @{
-    email = "admin@gelatini.com"
+    email = "hygordavidaraujo@gmail.com"
     password = "admin123"
 } | ConvertTo-Json
 

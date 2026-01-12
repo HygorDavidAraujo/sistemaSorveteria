@@ -152,6 +152,90 @@ export interface FinancialReport {
   netRevenue: number;
 }
 
+export interface TransactionsSummaryReport {
+  totalIncome: number;
+  totalExpense: number;
+  pending: number;
+  scheduled: number;
+  paid: number;
+  overdue: number;
+}
+
+export interface DREReport {
+  period: { startDate: string; endDate: string };
+  grossRevenue: number;
+  discounts: number;
+  netRevenue: number;
+  costOfGoodsSold: number;
+  grossProfit: number;
+  grossProfitMargin: number;
+  operatingExpenses: number;
+  operatingProfit: number;
+  operatingMargin: number;
+  financialIncome: number;
+  financialExpenses: number;
+  financialResult: number;
+  otherIncome: number;
+  otherExpenses: number;
+  profitBeforeTaxes: number;
+  taxes: number;
+  netProfit: number;
+  netMargin: number;
+}
+
+export interface CashFlowReport {
+  period: { startDate: string; endDate: string };
+  initialBalance: number;
+  inflows: {
+    sales: number;
+    accountsReceivable: number;
+    otherIncome: number;
+    total: number;
+  };
+  outflows: {
+    cogs: number;
+    operatingExpenses: number;
+    accountsPayable: number;
+    taxes: number;
+    investments: number;
+    other: number;
+    total: number;
+  };
+  netCashFlow: number;
+  finalBalance: number;
+}
+
+export interface ProfitabilityReport {
+  period: { startDate: string; endDate: string };
+  grossProfitMargin: number;
+  operatingMargin: number;
+  netMargin: number;
+  roi: number;
+  breakEvenPoint: number;
+  contributionMargin: number;
+}
+
+export interface FinancialIndicatorsReport {
+  currentRatio: number;
+  quickRatio: number;
+  debtToEquity: number;
+  returnOnAssets: number;
+  returnOnEquity: number;
+  inventoryTurnover: number;
+  receivablesTurnover: number;
+}
+
+export interface ComparativeReport {
+  current: DREReport;
+  previous: DREReport;
+  variation: {
+    revenueVariation: number;
+    revenueVariationPercent: number;
+    netProfitVariation: number;
+    netProfitVariationPercent: number;
+  };
+}
+
 export interface AuthResponse {
   accessToken: string;
   user: User;

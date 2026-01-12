@@ -10,7 +10,7 @@ services:
       POSTGRES_DB: gelatini_db
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -67,7 +67,6 @@ services:
       - ./backend:/app
       - /app/node_modules
       - backend_logs:/app/logs
-    command: sh -c "npx prisma migrate deploy && npm run dev"
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
       interval: 30s

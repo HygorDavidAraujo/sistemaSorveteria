@@ -18,6 +18,7 @@ export interface CreateDeliveryOrderDTO {
     amount: number;
   }>;
   deliveryFee?: number;
+  additionalFee?: number;
   discount?: number;
   estimatedTime?: number;
   customerNotes?: string;
@@ -207,6 +208,7 @@ export class DeliveryService {
     }
 
     const deliveryFee = data.deliveryFee ?? 0;
+    const additionalFee = data.additionalFee ?? 0;
     const discount = data.discount ?? 0;
     const baseForCoupon = Math.max(subtotal + deliveryFee - discount, 0);
 
@@ -221,7 +223,7 @@ export class DeliveryService {
       couponDiscount = validatedCoupon.discountAmount;
     }
 
-    const total = subtotal + deliveryFee - discount - couponDiscount;
+    const total = subtotal + deliveryFee + additionalFee - discount - couponDiscount;
 
     let loyaltyPointsEarned = 0;
     let cashbackEarned = 0;
@@ -243,6 +245,7 @@ export class DeliveryService {
           cashSessionId: data.cashSessionId,
           subtotal,
           deliveryFee,
+          additionalFee,
           discount: discount + couponDiscount,
           total,
           estimatedTime: data.estimatedTime,

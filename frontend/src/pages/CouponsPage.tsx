@@ -56,6 +56,83 @@ export const CouponsPage: React.FC = () => {
     loadData();
   }, []);
 
+  const toNumberOrUndefined = (value: unknown): number | undefined => {
+    if (value === null || value === undefined || value === '') return undefined;
+    const numeric = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(numeric) ? numeric : undefined;
+  };
+
+  const normalizeCouponType = (value: unknown): Coupon['discountType'] => {
+    const normalized = String(value || '')
+      .trim()
+      .toLowerCase();
+    if (normalized === 'percentage' || normalized === 'percent' || normalized === 'percentual') {
+      return 'PERCENTAGE';
+    }
+    if (normalized === 'fixed' || normalized === 'value' || normalized === 'valor') {
+      return 'FIXED';
+    }
+
+    // If it already comes as FIXED/PERCENTAGE
+    if (String(value).toUpperCase() === 'PERCENTAGE') return 'PERCENTAGE';
+    return 'FIXED';
+  };
+
+  const normalizeCoupon = (raw: any): Coupon => {
+    const discountType = (raw?.discountType as Coupon['discountType'] | undefined)
+      ? raw.discountType
+      : normalizeCouponType(raw?.couponType);
+
+    const discountValue =
+      toNumberOrUndefined(raw?.discountValue) ??
+      toNumberOrUndefined(raw?.discount_value) ??
+      0;
+
+    const minPurchaseAmount =
+      toNumberOrUndefined(raw?.minPurchaseAmount) ??
+      toNumberOrUndefined(raw?.minPurchaseValue);
+
+    const maxDiscountAmount =
+      toNumberOrUndefined(raw?.maxDiscountAmount) ??
+      toNumberOrUndefined(raw?.maxDiscount);
+
+    const startDate =
+      raw?.startDate ??
+      raw?.validFrom ??
+      raw?.valid_from ??
+      new Date().toISOString();
+
+    // Backend allows validTo nullable; keep UI stable by using a far-future date.
+    const endDate =
+      raw?.endDate ??
+      raw?.validTo ??
+      raw?.valid_to ??
+      '9999-12-31T23:59:59.999Z';
+
+    const status = String(raw?.status ?? '').toLowerCase();
+    const isActive = typeof raw?.isActive === 'boolean' ? raw.isActive : status === 'active';
+
+    return {
+      id: String(raw?.id ?? ''),
+      code: String(raw?.code ?? ''),
+      description: raw?.description ?? undefined,
+      discountType,
+      discountValue,
+      minPurchaseAmount,
+      maxDiscountAmount,
+      startDate,
+      endDate,
+      usageLimit:
+        (typeof raw?.usageLimit === 'number' ? raw.usageLimit : toNumberOrUndefined(raw?.usageLimit)) ??
+        undefined,
+      usageCount:
+        (typeof raw?.usageCount === 'number' ? raw.usageCount : toNumberOrUndefined(raw?.usageCount)) ??
+        0,
+      isActive,
+      createdAt: raw?.createdAt ?? new Date().toISOString(),
+    };
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -64,9 +141,29 @@ export const CouponsPage: React.FC = () => {
         apiClient.get('/coupons/statistics').catch(() => ({ data: null })),
       ]);
 
-      // Extract data from response: { status: 'success', data: [...] }
-      setCoupons(Array.isArray(couponsRes.data) ? couponsRes.data : (couponsRes.data?.data || []));
-      setStatistics(statsRes.data?.data || statsRes.data);
+      // couponsRes is already response.data from Axios.
+      const couponsPayload: any = couponsRes?.data ?? couponsRes;
+      const rawCoupons: any[] = Array.isArray(couponsPayload)
+        ? couponsPayload
+        : Array.isArray(couponsPayload?.data)
+          ? couponsPayload.data
+          : Array.isArray(couponsPayload?.data?.data)
+            ? couponsPayload.data.data
+            : [];
+
+      setCoupons(rawCoupons.map(normalizeCoupon));
+
+      const statsPayload: any = statsRes?.data?.data ?? statsRes?.data ?? statsRes;
+      if (statsPayload) {
+        setStatistics({
+          totalCoupons: Number(statsPayload.totalCoupons ?? 0),
+          activeCoupons: Number(statsPayload.activeCoupons ?? 0),
+          totalUsed: Number(statsPayload.totalUsed ?? 0),
+          averageDiscount: Number(statsPayload.averageDiscount ?? 0),
+        });
+      } else {
+        setStatistics(null);
+      }
       setError(null);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erro ao carregar cupons');
@@ -108,7 +205,7 @@ export const CouponsPage: React.FC = () => {
         usageLimit: usageLimit ? parseInt(usageLimit) : undefined,
       });
 
-      setCoupons([...coupons, response.data || response]);
+      setCoupons([...coupons, normalizeCoupon(response.data || response)]);
       setSuccess('Cupom criado com sucesso!');
       setIsCreateModalOpen(false);
       resetForm();
@@ -123,18 +220,18 @@ export const CouponsPage: React.FC = () => {
     if (!selectedCoupon) return;
 
     try {
+      // Backend update endpoint expects: description, minPurchaseValue, maxDiscount, usageLimit, validTo, status.
       const response = await apiClient.put(`/coupons/${selectedCoupon.id}`, {
         description: description || undefined,
-        discountType,
-        discountValue: parseFloat(discountValue),
-        minPurchaseAmount: minPurchaseAmount ? parseFloat(minPurchaseAmount) : undefined,
-        maxDiscountAmount: maxDiscountAmount ? parseFloat(maxDiscountAmount) : undefined,
-        startDate: new Date(startDate).toISOString(),
-        endDate: new Date(endDate).toISOString(),
+        minPurchaseValue: minPurchaseAmount ? parseFloat(minPurchaseAmount) : undefined,
+        maxDiscount: maxDiscountAmount ? parseFloat(maxDiscountAmount) : undefined,
         usageLimit: usageLimit ? parseInt(usageLimit) : undefined,
+        validTo: endDate ? new Date(endDate).toISOString() : undefined,
+        // Keep existing active state unless UI adds a status selector.
+        status: selectedCoupon.isActive ? 'active' : 'inactive',
       });
 
-      const updatedCoupon = response.data || response;
+      const updatedCoupon = normalizeCoupon(response.data || response);
       setCoupons(coupons.map((c) => (c.id === selectedCoupon.id ? updatedCoupon : c)));
       setSuccess('Cupom atualizado com sucesso!');
       setIsEditModalOpen(false);
@@ -155,7 +252,7 @@ export const CouponsPage: React.FC = () => {
         response = await apiClient.post(`/coupons/${coupon.id}/activate`);
       }
 
-      const updatedCoupon = response.data || response;
+      const updatedCoupon = normalizeCoupon(response.data || response);
       setCoupons(coupons.map((c) => (c.id === coupon.id ? updatedCoupon : c)));
       setSuccess(coupon.isActive ? 'Cupom desativado!' : 'Cupom ativado!');
       setTimeout(() => setSuccess(null), 3000);
@@ -204,13 +301,19 @@ export const CouponsPage: React.FC = () => {
   });
 
   const formatDiscount = (coupon: Coupon) => {
+    const value = Number.isFinite(coupon.discountValue) ? coupon.discountValue : 0;
     if (coupon.discountType === 'PERCENTAGE') {
-      return `${coupon.discountValue}%`;
+      return `${value}%`;
     }
-    return `R$ ${coupon.discountValue.toFixed(2)}`;
+    return `R$ ${value.toFixed(2)}`;
   };
 
-  const isExpired = (endDate: string) => new Date(endDate) < new Date();
+  const isExpired = (endDate: string) => {
+    if (!endDate) return false;
+    const date = new Date(endDate);
+    if (Number.isNaN(date.getTime())) return false;
+    return date < new Date();
+  };
 
   if (loading) return <Loading message="Carregando cupons..." />;
 
@@ -262,8 +365,9 @@ export const CouponsPage: React.FC = () => {
       {/* Controls */}
       <div className="coupons-controls">
         <div className="coupons-filter">
-          <label>Filtrar:</label>
+          <label htmlFor="couponFilter">Filtrar:</label>
           <select
+            id="couponFilter"
             value={filter}
             onChange={(e) => setFilter(e.target.value as any)}
             className="filter-select"

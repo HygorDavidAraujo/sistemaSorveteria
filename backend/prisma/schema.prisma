@@ -233,6 +233,7 @@ model Sale {
   subtotal             Decimal               @db.Decimal(10, 2)
   discount             Decimal               @default(0) @db.Decimal(10, 2)
   deliveryFee          Decimal               @default(0) @map("delivery_fee") @db.Decimal(10, 2)
+  additionalFee        Decimal               @default(0) @map("additional_fee") @db.Decimal(10, 2)
   total                Decimal               @db.Decimal(10, 2)
   loyaltyPointsUsed    Int                   @default(0) @map("loyalty_points_used")
   loyaltyPointsEarned  Int                   @default(0) @map("loyalty_points_earned")
@@ -328,6 +329,7 @@ model Comanda {
   cashSessionId    String           @map("cash_session_id") @db.Uuid
   subtotal         Decimal          @default(0) @db.Decimal(10, 2)
   discount         Decimal          @default(0) @db.Decimal(10, 2)
+  additionalFee    Decimal          @default(0) @map("additional_fee") @db.Decimal(10, 2)
   total            Decimal          @default(0) @db.Decimal(10, 2)
   status           ComandaStatus    @default(open)
   openedAt         DateTime         @default(now()) @map("opened_at") @db.Timestamptz(6)
@@ -394,6 +396,7 @@ model DeliveryOrder {
   cashSessionId     String          @map("cash_session_id") @db.Uuid
   subtotal          Decimal         @db.Decimal(10, 2)
   deliveryFee       Decimal         @default(0) @map("delivery_fee") @db.Decimal(10, 2)
+  additionalFee     Decimal         @default(0) @map("additional_fee") @db.Decimal(10, 2)
   discount          Decimal         @default(0) @db.Decimal(10, 2)
   total             Decimal         @db.Decimal(10, 2)
   deliveryStatus    DeliveryStatus  @default(received) @map("delivery_status")

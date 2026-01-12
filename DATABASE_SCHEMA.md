@@ -931,7 +931,7 @@ CREATE UNIQUE INDEX ON mv_daily_metrics(sale_date);
 ### Default Admin User
 ```sql
 INSERT INTO users (email, password_hash, full_name, role, is_active)
-VALUES ('admin@gelatini.com', '$2b$10$...', 'Administrador', 'admin', true);
+VALUES ('hygordavidaraujo@gmail.com', '$2b$10$...', 'Administrador', 'admin', true);
 ```
 
 ### Default Financial Categories

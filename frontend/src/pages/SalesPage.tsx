@@ -1,13 +1,16 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSalesStore, useCashSessionStore } from '@/store';
 import { apiClient } from '@/services/api';
 import { Card, Button, Modal, Loading, Alert, Badge } from '@/components/common';
 import { Trash2, ShoppingCart, Plus, Minus, Printer } from 'lucide-react';
 import { printReceipt, formatCurrency, getPrintStyles } from '@/utils/printer';
+import { clearCartDraft, loadCartDraft, saveCartDraft } from '@/utils/cartDraft';
 import type { Product, Customer } from '@/types';
 import './SalesPage.css';
 
 export const SalesPage: React.FC = () => {
+  const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,7 +25,9 @@ export const SalesPage: React.FC = () => {
   const [currentPaymentAmount, setCurrentPaymentAmount] = useState('');
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
   const [discountCode, setDiscountCode] = useState('');
+  const [couponDiscountValue, setCouponDiscountValue] = useState(0);
   const [discountValue, setDiscountValue] = useState(0);
+  const [additionalFee, setAdditionalFee] = useState(0);
   const [weightInputs, setWeightInputs] = useState<Record<string, string>>({});
   const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
   const [pendingWeightProduct, setPendingWeightProduct] = useState<Product | null>(null);
@@ -51,9 +56,59 @@ export const SalesPage: React.FC = () => {
   const salesStore = useSalesStore();
   const { currentSession, loadSession } = useCashSessionStore();
 
+  const toMoneyNumber = (value: unknown): number => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value.replace(',', '.'));
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+  };
+
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    const draft = loadCartDraft();
+    if (!draft || draft.mode !== 'pdv') return;
+
+    if (draft.items.length > 0) {
+      salesStore.setItems(draft.items);
+    }
+    setSelectedCustomer(draft.selectedCustomerId ?? '');
+    setDiscountCode(draft.couponCode ?? '');
+    setCouponDiscountValue(Number(draft.couponDiscountValue ?? 0));
+    setDiscountValue(Number(draft.discountValue ?? 0));
+    setAdditionalFee(Number(draft.additionalFee ?? 0));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const hasDraftData =
+      salesStore.items.length > 0 ||
+      !!selectedCustomer ||
+      !!discountCode ||
+      couponDiscountValue > 0 ||
+      discountValue > 0 ||
+      additionalFee > 0;
+
+    if (!hasDraftData) {
+      const existing = loadCartDraft();
+      if (existing?.mode === 'pdv') clearCartDraft();
+      return;
+    }
+
+    saveCartDraft({
+      mode: 'pdv',
+      items: salesStore.items,
+      selectedCustomerId: selectedCustomer || undefined,
+      couponCode: discountCode || undefined,
+      couponDiscountValue,
+      discountValue,
+      additionalFee,
+    });
+  }, [salesStore.items, selectedCustomer, discountCode, couponDiscountValue, discountValue, additionalFee]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -84,6 +139,46 @@ export const SalesPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCancelSale = () => {
+    const hasData =
+      salesStore.items.length > 0 ||
+      !!selectedCustomer ||
+      !!discountCode ||
+      couponDiscountValue > 0 ||
+      discountValue > 0 ||
+      additionalFee > 0 ||
+      payments.length > 0;
+
+    if (hasData) {
+      const ok = window.confirm('Cancelar venda e limpar todos os dados do PDV?');
+      if (!ok) return;
+    }
+
+    salesStore.clear();
+    setSelectedCustomer('');
+    setCustomerSearchTerm('');
+    setIsCustomerSearchOpen(false);
+
+    setDiscountCode('');
+    setCouponDiscountValue(0);
+    setDiscountValue(0);
+    setAdditionalFee(0);
+
+    setPayments([]);
+    setPaymentMethod('cash');
+    setCurrentPaymentAmount('');
+    setIsCheckoutModalOpen(false);
+
+    setWeightInputs({});
+    setIsWeightModalOpen(false);
+    setPendingWeightProduct(null);
+    setTempWeight('');
+
+    clearCartDraft();
+    setSuccess('Venda cancelada');
+    setTimeout(() => setSuccess(null), 2000);
   };
 
   const filteredCustomers = useMemo(() => {
@@ -221,8 +316,9 @@ export const SalesPage: React.FC = () => {
     if (!discountCode) return;
     try {
       const response = await apiClient.validateCoupon(discountCode);
-      if (response && response.discount_value) {
-        setDiscountValue(response.discount_value);
+      const rawDiscount = response?.discount_value ?? response?.discountValue;
+      if (rawDiscount !== undefined && rawDiscount !== null) {
+        setCouponDiscountValue(toMoneyNumber(rawDiscount));
         setSuccess('Cupom aplicado com sucesso!');
         setTimeout(() => setSuccess(null), 3000);
       }
@@ -232,11 +328,28 @@ export const SalesPage: React.FC = () => {
     }
   };
 
+  const handleSwitchMode = (target: 'pdv' | 'comanda' | 'delivery') => {
+    saveCartDraft({
+      mode: target,
+      items: salesStore.items,
+      selectedCustomerId: selectedCustomer || undefined,
+      couponCode: discountCode || undefined,
+      couponDiscountValue,
+      discountValue,
+      additionalFee,
+    });
+
+    if (target === 'delivery') navigate('/delivery');
+    else if (target === 'comanda') navigate('/comandas');
+    else navigate('/sales');
+  };
+
   const { subtotal, total } = useMemo(() => {
     const subtotal = salesStore.items.reduce((sum, item) => sum + item.totalPrice, 0);
-    const total = subtotal - discountValue;
+    const totalDiscount = couponDiscountValue + discountValue;
+    const total = subtotal + additionalFee - totalDiscount;
     return { subtotal, total: Math.max(0, total) };
-  }, [salesStore.items, discountValue]);
+  }, [salesStore.items, couponDiscountValue, discountValue, additionalFee]);
 
   const { totalPaid, missingAmount, changeAmount } = useMemo(() => {
     const totalPaidCalc = payments.reduce((sum, p) => sum + p.amount, 0);
@@ -354,10 +467,16 @@ export const SalesPage: React.FC = () => {
           <span class="print-row-label">Subtotal:</span>
           <span class="print-row-value">${formatCurrency(subtotal)}</span>
         </div>
-        ${discountValue > 0 ? `
+        ${additionalFee > 0 ? `
+          <div class="print-row">
+            <span class="print-row-label">Acréscimo:</span>
+            <span class="print-row-value">${formatCurrency(additionalFee)}</span>
+          </div>
+        ` : ''}
+        ${(couponDiscountValue + discountValue) > 0 ? `
           <div class="print-row">
             <span class="print-row-label">Desconto:</span>
-            <span class="print-row-value">-${formatCurrency(discountValue)}</span>
+            <span class="print-row-value">-${formatCurrency(couponDiscountValue + discountValue)}</span>
           </div>
         ` : ''}
         <div class="print-row total highlight">
@@ -407,6 +526,8 @@ export const SalesPage: React.FC = () => {
         return;
       }
 
+      const totalDiscount = couponDiscountValue + discountValue;
+
       await apiClient.createSale({
         cashSessionId: currentSession.id,
         customerId: selectedCustomer || undefined,
@@ -417,17 +538,21 @@ export const SalesPage: React.FC = () => {
           discount: 0,
         })),
         payments: payments.map((p) => ({ paymentMethod: p.method, amount: p.amount })),
-        discount: discountValue,
+        discount: totalDiscount,
         deliveryFee: 0,
+        additionalFee,
         loyaltyPointsUsed: 0,
         couponCode: discountCode || undefined,
       });
 
       setSuccess('Venda finalizada com sucesso!');
       salesStore.clear();
+      clearCartDraft();
       setSelectedCustomer('');
       setDiscountCode('');
+      setCouponDiscountValue(0);
       setDiscountValue(0);
+      setAdditionalFee(0);
       setPaymentMethod('cash');
       setPayments([]);
       setCurrentPaymentAmount('');
@@ -504,7 +629,29 @@ export const SalesPage: React.FC = () => {
 
         {/* Cart */}
         <div className="sales-page__cart">
-          <h2 className="sales-page__cart-title">Carrinho</h2>
+          <div className="sales-page__cart-title-row">
+            <h2 className="sales-page__cart-title">Carrinho</h2>
+            <div className="sales-page__cart-title-actions">
+              <select
+                title="Trocar módulo mantendo itens"
+                value="pdv"
+                onChange={(e) => handleSwitchMode(e.target.value as any)}
+                className="sales-page__cart-mode-select"
+              >
+                <option value="pdv">PDV</option>
+                <option value="comanda">Comanda</option>
+                <option value="delivery">Delivery</option>
+              </select>
+              <button
+                type="button"
+                onClick={handleCancelSale}
+                className="sales-page__cart-cancel-sale-btn"
+                title="Cancelar venda e limpar tudo"
+              >
+                Cancelar venda
+              </button>
+            </div>
+          </div>
 
           {/* Items */}
           <div className="sales-page__cart-items">
@@ -707,6 +854,30 @@ export const SalesPage: React.FC = () => {
                   </button>
                 </div>
               </div>
+
+              <div className="sales-page__cart-section">
+                <label className="sales-page__cart-section-label">Acréscimo (R$)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={additionalFee}
+                  onChange={(e) => setAdditionalFee(toMoneyNumber(e.target.value))}
+                  placeholder="0,00"
+                  className="sales-page__cart-coupon-input"
+                />
+              </div>
+
+              <div className="sales-page__cart-section">
+                <label className="sales-page__cart-section-label">Desconto Geral (R$)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={discountValue}
+                  onChange={(e) => setDiscountValue(toMoneyNumber(e.target.value))}
+                  placeholder="0,00"
+                  className="sales-page__cart-coupon-input"
+                />
+              </div>
             </>
           )}
 
@@ -717,10 +888,16 @@ export const SalesPage: React.FC = () => {
                 <span className="sales-page__cart-totals-label">Subtotal:</span>
                 <span className="sales-page__cart-totals-value">R$ {subtotal.toFixed(2)}</span>
               </div>
-              {discountValue > 0 && (
+              {additionalFee > 0 && (
+                <div className="sales-page__cart-totals-row">
+                  <span className="sales-page__cart-totals-label">Acréscimo:</span>
+                  <span className="sales-page__cart-totals-value">R$ {additionalFee.toFixed(2)}</span>
+                </div>
+              )}
+              {couponDiscountValue + discountValue > 0 && (
                 <div className="sales-page__cart-totals-row sales-page__cart-totals-row--discount">
                   <span className="sales-page__cart-totals-label">Desconto:</span>
-                  <span className="sales-page__cart-totals-value">-R$ {discountValue.toFixed(2)}</span>
+                  <span className="sales-page__cart-totals-value">-R$ {(couponDiscountValue + discountValue).toFixed(2)}</span>
                 </div>
               )}
               <div className="sales-page__cart-totals-row sales-page__cart-totals-row--final">
@@ -1055,10 +1232,16 @@ export const SalesPage: React.FC = () => {
               <span className="sales-page__modal-label">Subtotal:</span>
               <span className="sales-page__modal-value">R$ {subtotal.toFixed(2)}</span>
             </div>
-            {discountValue > 0 && (
+            {additionalFee > 0 && (
+              <div className="sales-page__modal-row">
+                <span className="sales-page__modal-label">Acréscimo:</span>
+                <span className="sales-page__modal-value">R$ {additionalFee.toFixed(2)}</span>
+              </div>
+            )}
+            {couponDiscountValue + discountValue > 0 && (
               <div className="sales-page__modal-row sales-page__modal-row--discount">
                 <span className="sales-page__modal-label">Desconto:</span>
-                <span className="sales-page__modal-value">-R$ {discountValue.toFixed(2)}</span>
+                <span className="sales-page__modal-value">-R$ {(couponDiscountValue + discountValue).toFixed(2)}</span>
               </div>
             )}
             <div className="sales-page__modal-row sales-page__modal-row--total">

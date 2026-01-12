@@ -1,27 +1,39 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { apiClient } from '@/services/api';
 import { Card, Button, Loading, Alert } from '@/components/common';
 import { BarChart3, Download } from 'lucide-react';
 import { format } from 'date-fns';
+import type {
+  TransactionsSummaryReport,
+  DREReport,
+  CashFlowReport,
+  ProfitabilityReport,
+  FinancialIndicatorsReport,
+  ComparativeReport,
+} from '@/types';
 import './ReportsPage.css';
 
-interface ReportData {
-  period: string;
-  totalSales: number;
-  totalCash: number;
-  totalCard: number;
-  totalPix: number;
-  discountsApplied: number;
-  loyaltyRedeemed: number;
-  cashbackRedeemed: number;
-  netRevenue: number;
-}
+type ReportKind =
+  | 'summary'
+  | 'dre'
+  | 'cash-flow'
+  | 'profitability'
+  | 'comparative'
+  | 'indicators';
 
 export const ReportsPage: React.FC = () => {
-  const [reportType, setReportType] = useState<'daily' | 'monthly'>('daily');
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
-  const [report, setReport] = useState<ReportData | null>(null);
+  const [reportKind, setReportKind] = useState<ReportKind>('dre');
+  const [startDate, setStartDate] = useState(format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [report, setReport] = useState<
+    | TransactionsSummaryReport
+    | DREReport
+    | CashFlowReport
+    | ProfitabilityReport
+    | FinancialIndicatorsReport
+    | ComparativeReport
+    | null
+  >(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,58 +41,81 @@ export const ReportsPage: React.FC = () => {
     loadReport();
   }, []);
 
+  const periodLabel = useMemo(() => {
+    if (reportKind === 'indicators') return 'Indicadores (geral)';
+    return `${startDate} → ${endDate}`;
+  }, [reportKind, startDate, endDate]);
+
   const loadReport = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      let data;
-      if (reportType === 'daily') {
-        const response = await apiClient.getDailyReport(selectedDate);
-        // Extract data from response structure
-        // The response might be { data: [...], total, limit, offset } OR { period, totalSales, ... }
-        // If it has a 'data' property that is an array, it's transaction data, not a report
-        if (response.data && Array.isArray(response.data)) {
-          // It's transaction data, generate a report from it
-          data = {
-            period: selectedDate,
-            totalSales: 0,
-            totalCash: 0,
-            totalCard: 0,
-            totalPix: 0,
-            discountsApplied: 0,
-            loyaltyRedeemed: 0,
-            cashbackRedeemed: 0,
-            netRevenue: 0,
-          };
-        } else {
-          data = response.data || response;
+      const unwrap = (res: any) => res?.data?.data ?? res?.data ?? res;
+
+      if (reportKind !== 'indicators' && startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+          setError('Período inválido');
+          setReport(null);
+          return;
         }
-      } else {
-        const [year, month] = selectedMonth.split('-');
-        const response = await apiClient.getMonthlyReport(parseInt(month), parseInt(year));
-        // Extract data from response structure
-        if (response.data && Array.isArray(response.data)) {
-          // It's transaction data, generate a report from it
-          data = {
-            period: selectedMonth,
-            totalSales: 0,
-            totalCash: 0,
-            totalCard: 0,
-            totalPix: 0,
-            discountsApplied: 0,
-            loyaltyRedeemed: 0,
-            cashbackRedeemed: 0,
-            netRevenue: 0,
-          };
-        } else {
-          data = response.data || response;
+        if (start > end) {
+          setError('Data inicial não pode ser maior que a data final');
+          setReport(null);
+          return;
         }
       }
 
+      let data: any;
+      switch (reportKind) {
+        case 'summary':
+          data = unwrap(await apiClient.getTransactionsSummary(startDate, endDate));
+          break;
+        case 'dre':
+          data = unwrap(await apiClient.getDREReport(startDate, endDate));
+          break;
+        case 'cash-flow':
+          data = unwrap(await apiClient.getCashFlowReport(startDate, endDate));
+          break;
+        case 'profitability':
+          data = unwrap(await apiClient.getProfitabilityReport(startDate, endDate));
+          break;
+        case 'comparative':
+          data = unwrap(await apiClient.getComparativeReport(startDate, endDate));
+          break;
+        case 'indicators':
+          data = unwrap(await apiClient.getIndicatorsReport());
+          break;
+        default:
+          data = null;
+      }
+
       setReport(data);
-    } catch (err) {
-      setError('Erro ao carregar relatório');
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const payload = err?.response?.data;
+
+      const backendMessage =
+        payload?.message ??
+        payload?.error ??
+        (typeof payload === 'string' ? payload : undefined);
+
+      const detailsFromBackend = Array.isArray(payload?.details)
+        ? payload.details
+            .map((d: any) => d?.message || d?.detail || d)
+            .filter(Boolean)
+            .join(', ')
+        : undefined;
+
+      const composed =
+        detailsFromBackend ||
+        backendMessage ||
+        err?.message ||
+        'Erro ao carregar relatório';
+
+      setError(status ? `${composed} (HTTP ${status})` : composed);
     } finally {
       setLoading(false);
     }
@@ -93,32 +128,108 @@ export const ReportsPage: React.FC = () => {
   const downloadReport = () => {
     if (!report) return;
 
-    const csv = [
-      ['RELATÓRIO FINANCEIRO'],
-      ['Período:', report.period],
-      [''],
-      ['RESUMO DE VENDAS'],
-      ['Total de Vendas', `R$ ${Number(report.totalSales || 0).toFixed(2)}`],
-      [''],
-      ['FORMAS DE PAGAMENTO'],
-      ['Dinheiro', `R$ ${Number(report.totalCash || 0).toFixed(2)}`],
-      ['Cartão Crédito', `R$ ${Number(report.totalCard || 0).toFixed(2)}`],
-      ['PIX', `R$ ${Number(report.totalPix || 0).toFixed(2)}`],
-      [''],
-      ['DESCONTOS E PROMOÇÕES'],
-      ['Descontos Aplicados', `R$ ${Number(report.discountsApplied || 0).toFixed(2)}`],
-      ['Pontos Lealdade Resgatados', `R$ ${Number(report.loyaltyRedeemed || 0).toFixed(2)}`],
-      ['Cashback Resgatado', `R$ ${Number(report.cashbackRedeemed || 0).toFixed(2)}`],
-      [''],
-      ['RESULTADO LÍQUIDO'],
-      ['Receita Líquida', `R$ ${Number(report.netRevenue || 0).toFixed(2)}`],
-    ]
-      .map((row) => row.join(','))
-      .join('\n');
+    const money = (value: any) => `R$ ${Number(value || 0).toFixed(2)}`;
+    const pct = (value: any) => `${Number(value || 0).toFixed(2)}%`;
+
+    const rows: string[][] = [];
+    rows.push(['RELATÓRIOS FINANCEIROS']);
+    rows.push(['Tipo:', reportKind]);
+    rows.push(['Período:', periodLabel]);
+    rows.push(['']);
+
+    if (reportKind === 'summary') {
+      const r = report as TransactionsSummaryReport;
+      rows.push(['RESUMO DE TRANSAÇÕES']);
+      rows.push(['Receitas', money(r.totalIncome)]);
+      rows.push(['Despesas', money(r.totalExpense)]);
+      rows.push(['Saldo (Receita - Despesa)', money((r.totalIncome || 0) - (r.totalExpense || 0))]);
+      rows.push(['']);
+      rows.push(['STATUS']);
+      rows.push(['Pendentes', String(r.pending || 0)]);
+      rows.push(['Pagas', String(r.paid || 0)]);
+      rows.push(['Vencidas', String(r.overdue || 0)]);
+    } else if (reportKind === 'dre') {
+      const r = report as DREReport;
+      rows.push(['DRE (DEMONSTRAÇÃO DO RESULTADO)']);
+      rows.push(['Receita Bruta', money(r.grossRevenue)]);
+      rows.push(['Descontos', money(r.discounts)]);
+      rows.push(['Receita Líquida', money(r.netRevenue)]);
+      rows.push(['CPV (COGS)', money(r.costOfGoodsSold)]);
+      rows.push(['Lucro Bruto', money(r.grossProfit)]);
+      rows.push(['Margem Bruta', pct(r.grossProfitMargin)]);
+      rows.push(['Despesas Operacionais', money(r.operatingExpenses)]);
+      rows.push(['Lucro Operacional', money(r.operatingProfit)]);
+      rows.push(['Margem Operacional', pct(r.operatingMargin)]);
+      rows.push(['Receitas Financeiras', money(r.financialIncome)]);
+      rows.push(['Despesas Financeiras', money(r.financialExpenses)]);
+      rows.push(['Resultado Financeiro', money(r.financialResult)]);
+      rows.push(['Outras Receitas', money(r.otherIncome)]);
+      rows.push(['Outras Despesas', money(r.otherExpenses)]);
+      rows.push(['Lucro Antes de Impostos', money(r.profitBeforeTaxes)]);
+      rows.push(['Impostos', money(r.taxes)]);
+      rows.push(['Lucro Líquido', money(r.netProfit)]);
+      rows.push(['Margem Líquida', pct(r.netMargin)]);
+    } else if (reportKind === 'cash-flow') {
+      const r = report as CashFlowReport;
+      rows.push(['FLUXO DE CAIXA']);
+      rows.push(['Saldo Inicial', money(r.initialBalance)]);
+      rows.push(['']);
+      rows.push(['ENTRADAS']);
+      rows.push(['Vendas', money(r.inflows?.sales)]);
+      rows.push(['Contas a Receber', money(r.inflows?.accountsReceivable)]);
+      rows.push(['Outras Entradas', money(r.inflows?.otherIncome)]);
+      rows.push(['Total Entradas', money(r.inflows?.total)]);
+      rows.push(['']);
+      rows.push(['SAÍDAS']);
+      rows.push(['CPV (COGS)', money(r.outflows?.cogs)]);
+      rows.push(['Despesas Operacionais', money(r.outflows?.operatingExpenses)]);
+      rows.push(['Contas a Pagar', money(r.outflows?.accountsPayable)]);
+      rows.push(['Impostos', money(r.outflows?.taxes)]);
+      rows.push(['Investimentos', money(r.outflows?.investments)]);
+      rows.push(['Outras Saídas', money(r.outflows?.other)]);
+      rows.push(['Total Saídas', money(r.outflows?.total)]);
+      rows.push(['']);
+      rows.push(['Fluxo Líquido', money(r.netCashFlow)]);
+      rows.push(['Saldo Final', money(r.finalBalance)]);
+    } else if (reportKind === 'profitability') {
+      const r = report as ProfitabilityReport;
+      rows.push(['ANÁLISE DE LUCRATIVIDADE']);
+      rows.push(['Margem Bruta', pct(r.grossProfitMargin)]);
+      rows.push(['Margem Operacional', pct(r.operatingMargin)]);
+      rows.push(['Margem Líquida', pct(r.netMargin)]);
+      rows.push(['ROI', pct(r.roi)]);
+      rows.push(['Ponto de Equilíbrio', money(r.breakEvenPoint)]);
+      rows.push(['Margem de Contribuição', pct(r.contributionMargin)]);
+    } else if (reportKind === 'comparative') {
+      const r = report as ComparativeReport;
+      rows.push(['RELATÓRIO COMPARATIVO']);
+      rows.push(['']);
+      rows.push(['ATUAL - Receita Líquida', money(r.current?.netRevenue)]);
+      rows.push(['ANTERIOR - Receita Líquida', money(r.previous?.netRevenue)]);
+      rows.push(['Variação Receita', money(r.variation?.revenueVariation)]);
+      rows.push(['Variação Receita (%)', pct(r.variation?.revenueVariationPercent)]);
+      rows.push(['']);
+      rows.push(['ATUAL - Lucro Líquido', money(r.current?.netProfit)]);
+      rows.push(['ANTERIOR - Lucro Líquido', money(r.previous?.netProfit)]);
+      rows.push(['Variação Lucro', money(r.variation?.netProfitVariation)]);
+      rows.push(['Variação Lucro (%)', pct(r.variation?.netProfitVariationPercent)]);
+    } else if (reportKind === 'indicators') {
+      const r = report as FinancialIndicatorsReport;
+      rows.push(['INDICADORES FINANCEIROS']);
+      rows.push(['Liquidez Corrente', String(r.currentRatio ?? '')]);
+      rows.push(['Liquidez Seca', String(r.quickRatio ?? '')]);
+      rows.push(['Dívida/Patrimônio', String(r.debtToEquity ?? '')]);
+      rows.push(['ROA', String(r.returnOnAssets ?? '')]);
+      rows.push(['ROE', String(r.returnOnEquity ?? '')]);
+      rows.push(['Giro de Estoque', String(r.inventoryTurnover ?? '')]);
+      rows.push(['Giro de Recebíveis', String(r.receivablesTurnover ?? '')]);
+    }
+
+    const csv = rows.map((row) => row.join(',')).join('\n');
 
     const element = document.createElement('a');
     element.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv));
-    element.setAttribute('download', `relatorio-${report.period}.csv`);
+    element.setAttribute('download', `relatorio-${reportKind}-${periodLabel}.csv`);
     element.style.display = 'none';
     document.body.appendChild(element);
     element.click();
@@ -132,184 +243,362 @@ export const ReportsPage: React.FC = () => {
         <h1>Relatórios Financeiros</h1>
       </div>
 
-      {error && <Alert variant="danger" onClose={() => setError(null)}>{error}</Alert>}
+      {error && (
+        <Alert variant="danger" onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
 
-      {/* Report Options */}
       <Card>
         <div className="reports-options-grid">
-          {/* Report Type Selection */}
           <div>
             <label className="reports-label">Tipo de Relatório</label>
             <select
               title="Selecione o tipo de relatório"
-              value={reportType}
+              value={reportKind}
               onChange={(e) => {
-                setReportType(e.target.value as any);
+                setReportKind(e.target.value as any);
                 setReport(null);
               }}
               className="reports-select"
             >
-              <option value="daily">Diário</option>
-              <option value="monthly">Mensal</option>
+              <option value="dre">DRE (Resultado)</option>
+              <option value="cash-flow">Fluxo de Caixa</option>
+              <option value="profitability">Lucratividade</option>
+              <option value="comparative">Comparativo</option>
+              <option value="indicators">Indicadores</option>
+              <option value="summary">Resumo de Transações</option>
             </select>
           </div>
 
-          {/* Date/Month Selection */}
-          {reportType === 'daily' ? (
-            <div>
-              <label className="reports-label">Data</label>
-              <input
-                type="date"
-                title="Selecione a data do relatório"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="reports-input"
-              />
-            </div>
-          ) : (
-            <div>
-              <label className="reports-label">Período</label>
-              <input
-                type="text"
-                placeholder="MM/AAAA"
-                title="Digite o período (MM/AAAA)"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="reports-input"
-              />
-            </div>
+          {reportKind !== 'indicators' && (
+            <>
+              <div>
+                <label className="reports-label">Data Inicial</label>
+                <input
+                  type="date"
+                  title="Selecione a data inicial"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="reports-input"
+                />
+              </div>
+
+              <div>
+                <label className="reports-label">Data Final</label>
+                <input
+                  type="date"
+                  title="Selecione a data final"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="reports-input"
+                />
+              </div>
+            </>
           )}
 
-          {/* Generate Button */}
           <div className="reports-button-wrapper">
-            <Button
-              variant="primary"
-              onClick={handleGenerateReport}
-              isLoading={loading}
-            >
+            <Button variant="primary" onClick={handleGenerateReport} isLoading={loading}>
               Gerar Relatório
             </Button>
           </div>
         </div>
       </Card>
 
-      {/* Report Content */}
       {loading ? (
         <Loading message="Gerando relatório..." />
       ) : report ? (
-        <>
-          <div className="reports-grid">
-            {/* Main Metrics */}
-            <div className="reports-metrics">
-              <Card>
-                <div className="reports-metric-card reports-metric-period">
-                  <p className="reports-metric-label">Período</p>
-                  <p className="reports-metric-value">{report.period}</p>
-                </div>
-              </Card>
-
-              <Card>
-                <div className="reports-metric-card reports-metric-sales">
-                  <p className="reports-metric-label">Total de Vendas</p>
-                  <p className="reports-metric-value reports-metric-value-large">R$ {Number(report.totalSales || 0).toFixed(2)}</p>
-                </div>
-              </Card>
-
-              <Card>
-                <div className="reports-metric-card reports-metric-revenue">
-                  <p className="reports-metric-label">Receita Líquida</p>
-                  <p className="reports-metric-value reports-metric-value-large">R$ {Number(report.netRevenue || 0).toFixed(2)}</p>
-                </div>
-              </Card>
-            </div>
-
-            {/* Payment Methods */}
+        <div className="reports-grid">
+          <div className="reports-metrics">
             <Card>
-              <h3 className="reports-section-title">Formas de Pagamento</h3>
-              <div className="reports-payment-methods">
-                <div className="reports-payment-item">
-                  <span className="reports-payment-name">Dinheiro</span>
-                  <span className="reports-payment-value reports-payment-cash">
-                    R$ {Number(report.totalCash || 0).toFixed(2)}
-                  </span>
-                </div>
-                <div className="reports-payment-item">
-                  <span className="reports-payment-name">Cartão Crédito</span>
-                  <span className="reports-payment-value reports-payment-card">
-                    R$ {Number(report.totalCard || 0).toFixed(2)}
-                  </span>
-                </div>
-                <div className="reports-payment-item">
-                  <span className="reports-payment-name">PIX</span>
-                  <span className="reports-payment-value reports-payment-pix">
-                    R$ {Number(report.totalPix || 0).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Percentages */}
-              <div className="reports-percentages">
-                <p className="reports-percentage">
-                  Dinheiro: {(Number(report.totalCash || 0) / Number(report.totalSales || 1) * 100).toFixed(1)}%
-                </p>
-                <p className="reports-percentage">
-                  Cartão: {(Number(report.totalCard || 0) / Number(report.totalSales || 1) * 100).toFixed(1)}%
-                </p>
-                <p className="reports-percentage">
-                  PIX: {(Number(report.totalPix || 0) / Number(report.totalSales || 1) * 100).toFixed(1)}%
-                </p>
+              <div className="reports-metric-card reports-metric-period">
+                <p className="reports-metric-label">Período</p>
+                <p className="reports-metric-value">{periodLabel}</p>
               </div>
             </Card>
+
+            {reportKind === 'dre' && (
+              <>
+                <Card>
+                  <div className="reports-metric-card reports-metric-sales">
+                    <p className="reports-metric-label">Receita Líquida</p>
+                    <p className="reports-metric-value reports-metric-value-large">
+                      R$ {Number((report as DREReport).netRevenue || 0).toFixed(2)}
+                    </p>
+                  </div>
+                </Card>
+                <Card>
+                  <div className="reports-metric-card reports-metric-revenue">
+                    <p className="reports-metric-label">Lucro Líquido</p>
+                    <p className="reports-metric-value reports-metric-value-large">
+                      R$ {Number((report as DREReport).netProfit || 0).toFixed(2)}
+                    </p>
+                  </div>
+                </Card>
+              </>
+            )}
+
+            {reportKind === 'cash-flow' && (
+              <>
+                <Card>
+                  <div className="reports-metric-card reports-metric-sales">
+                    <p className="reports-metric-label">Fluxo Líquido</p>
+                    <p className="reports-metric-value reports-metric-value-large">
+                      R$ {Number((report as CashFlowReport).netCashFlow || 0).toFixed(2)}
+                    </p>
+                  </div>
+                </Card>
+                <Card>
+                  <div className="reports-metric-card reports-metric-revenue">
+                    <p className="reports-metric-label">Saldo Final</p>
+                    <p className="reports-metric-value reports-metric-value-large">
+                      R$ {Number((report as CashFlowReport).finalBalance || 0).toFixed(2)}
+                    </p>
+                  </div>
+                </Card>
+              </>
+            )}
+
+            {reportKind === 'summary' && (
+              <>
+                <Card>
+                  <div className="reports-metric-card reports-metric-sales">
+                    <p className="reports-metric-label">Receitas</p>
+                    <p className="reports-metric-value reports-metric-value-large">
+                      R$ {Number((report as TransactionsSummaryReport).totalIncome || 0).toFixed(2)}
+                    </p>
+                  </div>
+                </Card>
+                <Card>
+                  <div className="reports-metric-card reports-metric-revenue">
+                    <p className="reports-metric-label">Despesas</p>
+                    <p className="reports-metric-value reports-metric-value-large">
+                      R$ {Number((report as TransactionsSummaryReport).totalExpense || 0).toFixed(2)}
+                    </p>
+                  </div>
+                </Card>
+              </>
+            )}
           </div>
 
-          {/* Discounts and Promotions */}
           <Card>
-            <h3 className="reports-section-title">Descontos e Promoções</h3>
-            <div className="reports-discounts-grid">
-              <div className="reports-discount-item">
-                <p className="reports-discount-label">Descontos Aplicados</p>
-                <p className="reports-discount-value reports-discount-danger">
-                  -R$ {Number(report.discountsApplied || 0).toFixed(2)}
-                </p>
-              </div>
-              <div className="reports-discount-item">
-                <p className="reports-discount-label">Pontos Lealdade Resgatados</p>
-                <p className="reports-discount-value reports-discount-secondary">
-                  -R$ {Number(report.loyaltyRedeemed || 0).toFixed(2)}
-                </p>
-              </div>
-              <div className="reports-discount-item">
-                <p className="reports-discount-label">Cashback Resgatado</p>
-                <p className="reports-discount-value reports-discount-warning">
-                  -R$ {Number(report.cashbackRedeemed || 0).toFixed(2)}
-                </p>
-              </div>
+            <div className="reports-card-header">
+              <h3 className="reports-section-title">Detalhamento</h3>
+              <Button variant="secondary" onClick={downloadReport}>
+                <Download size={16} />
+                Exportar CSV
+              </Button>
             </div>
 
-            <div className="reports-total-deductions">
-              <p className="reports-total-label">Total de Abatimentos</p>
-              <p className="reports-total-value">
-                -R${' '}
-                {(
-                  Number(report.discountsApplied || 0) +
-                  Number(report.loyaltyRedeemed || 0) +
-                  Number(report.cashbackRedeemed || 0)
-                ).toFixed(2)}
-              </p>
-            </div>
+            {reportKind === 'dre' && (
+              <div className="reports-details-grid">
+                {([
+                  ['Receita Bruta', (report as DREReport).grossRevenue],
+                  ['Descontos', (report as DREReport).discounts],
+                  ['Receita Líquida', (report as DREReport).netRevenue],
+                  ['CPV (COGS)', (report as DREReport).costOfGoodsSold],
+                  ['Lucro Bruto', (report as DREReport).grossProfit],
+                  ['Margem Bruta (%)', (report as DREReport).grossProfitMargin],
+                  ['Despesas Operacionais', (report as DREReport).operatingExpenses],
+                  ['Lucro Operacional', (report as DREReport).operatingProfit],
+                  ['Margem Operacional (%)', (report as DREReport).operatingMargin],
+                  ['Receitas Financeiras', (report as DREReport).financialIncome],
+                  ['Despesas Financeiras', (report as DREReport).financialExpenses],
+                  ['Resultado Financeiro', (report as DREReport).financialResult],
+                  ['Outras Receitas', (report as DREReport).otherIncome],
+                  ['Outras Despesas', (report as DREReport).otherExpenses],
+                  ['Lucro Antes de Impostos', (report as DREReport).profitBeforeTaxes],
+                  ['Impostos', (report as DREReport).taxes],
+                  ['Lucro Líquido', (report as DREReport).netProfit],
+                  ['Margem Líquida (%)', (report as DREReport).netMargin],
+                ] as Array<[string, number]>).map(([label, value]) => (
+                  <div key={label} className="reports-detail-item">
+                    <span className="reports-detail-label">{label}</span>
+                    <span className="reports-detail-value">
+                      {label.includes('(%)')
+                        ? `${Number(value || 0).toFixed(2)}%`
+                        : `R$ ${Number(value || 0).toFixed(2)}`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {reportKind === 'cash-flow' && (
+              <div className="reports-details-grid">
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Saldo Inicial</span>
+                  <span className="reports-detail-value">
+                    R$ {Number((report as CashFlowReport).initialBalance || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Entradas (Total)</span>
+                  <span className="reports-detail-value">
+                    R$ {Number((report as CashFlowReport).inflows?.total || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Saídas (Total)</span>
+                  <span className="reports-detail-value">
+                    R$ {Number((report as CashFlowReport).outflows?.total || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Fluxo Líquido</span>
+                  <span className="reports-detail-value">
+                    R$ {Number((report as CashFlowReport).netCashFlow || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Saldo Final</span>
+                  <span className="reports-detail-value">
+                    R$ {Number((report as CashFlowReport).finalBalance || 0).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {reportKind === 'profitability' && (
+              <div className="reports-details-grid">
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Margem Bruta</span>
+                  <span className="reports-detail-value">
+                    {Number((report as ProfitabilityReport).grossProfitMargin || 0).toFixed(2)}%
+                  </span>
+                </div>
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Margem Operacional</span>
+                  <span className="reports-detail-value">
+                    {Number((report as ProfitabilityReport).operatingMargin || 0).toFixed(2)}%
+                  </span>
+                </div>
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Margem Líquida</span>
+                  <span className="reports-detail-value">
+                    {Number((report as ProfitabilityReport).netMargin || 0).toFixed(2)}%
+                  </span>
+                </div>
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">ROI</span>
+                  <span className="reports-detail-value">
+                    {Number((report as ProfitabilityReport).roi || 0).toFixed(2)}%
+                  </span>
+                </div>
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Ponto de Equilíbrio</span>
+                  <span className="reports-detail-value">
+                    R$ {Number((report as ProfitabilityReport).breakEvenPoint || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Margem de Contribuição</span>
+                  <span className="reports-detail-value">
+                    {Number((report as ProfitabilityReport).contributionMargin || 0).toFixed(2)}%
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {reportKind === 'comparative' && (
+              <div className="reports-details-grid">
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Atual - Receita Líquida</span>
+                  <span className="reports-detail-value">
+                    R$ {Number((report as ComparativeReport).current?.netRevenue || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Anterior - Receita Líquida</span>
+                  <span className="reports-detail-value">
+                    R$ {Number((report as ComparativeReport).previous?.netRevenue || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Variação Receita</span>
+                  <span className="reports-detail-value">
+                    R$ {Number((report as ComparativeReport).variation?.revenueVariation || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Variação Receita (%)</span>
+                  <span className="reports-detail-value">
+                    {Number((report as ComparativeReport).variation?.revenueVariationPercent || 0).toFixed(2)}%
+                  </span>
+                </div>
+
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Atual - Lucro Líquido</span>
+                  <span className="reports-detail-value">
+                    R$ {Number((report as ComparativeReport).current?.netProfit || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Anterior - Lucro Líquido</span>
+                  <span className="reports-detail-value">
+                    R$ {Number((report as ComparativeReport).previous?.netProfit || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Variação Lucro</span>
+                  <span className="reports-detail-value">
+                    R$ {Number((report as ComparativeReport).variation?.netProfitVariation || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Variação Lucro (%)</span>
+                  <span className="reports-detail-value">
+                    {Number((report as ComparativeReport).variation?.netProfitVariationPercent || 0).toFixed(2)}%
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {reportKind === 'indicators' && (
+              <div className="reports-details-grid">
+                {([
+                  ['Liquidez Corrente', (report as FinancialIndicatorsReport).currentRatio],
+                  ['Liquidez Seca', (report as FinancialIndicatorsReport).quickRatio],
+                  ['Dívida/Patrimônio', (report as FinancialIndicatorsReport).debtToEquity],
+                  ['ROA', (report as FinancialIndicatorsReport).returnOnAssets],
+                  ['ROE', (report as FinancialIndicatorsReport).returnOnEquity],
+                  ['Giro de Estoque', (report as FinancialIndicatorsReport).inventoryTurnover],
+                  ['Giro de Recebíveis', (report as FinancialIndicatorsReport).receivablesTurnover],
+                ] as Array<[string, number]>).map(([label, value]) => (
+                  <div key={label} className="reports-detail-item">
+                    <span className="reports-detail-label">{label}</span>
+                    <span className="reports-detail-value">
+                      {value === undefined || value === null ? '' : String(value)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {reportKind === 'summary' && (
+              <div className="reports-details-grid">
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Saldo (Receita - Despesa)</span>
+                  <span className="reports-detail-value">
+                    R$ {Number(((report as TransactionsSummaryReport).totalIncome || 0) - ((report as TransactionsSummaryReport).totalExpense || 0)).toFixed(2)}
+                  </span>
+                </div>
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Pendentes</span>
+                  <span className="reports-detail-value">{Number((report as TransactionsSummaryReport).pending || 0)}</span>
+                </div>
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Pagas</span>
+                  <span className="reports-detail-value">{Number((report as TransactionsSummaryReport).paid || 0)}</span>
+                </div>
+                <div className="reports-detail-item">
+                  <span className="reports-detail-label">Vencidas</span>
+                  <span className="reports-detail-value">{Number((report as TransactionsSummaryReport).overdue || 0)}</span>
+                </div>
+              </div>
+            )}
           </Card>
-
-          {/* Download Button */}
-          <div className="reports-download">
-            <Button
-              variant="secondary"
-              onClick={downloadReport}
-            >
-              <Download size={18} />
-              Baixar Relatório (CSV)
-            </Button>
-          </div>
-        </>
+        </div>
       ) : (
         <Card>
           <div className="reports-empty">

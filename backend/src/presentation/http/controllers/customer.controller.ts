@@ -79,9 +79,36 @@ export class CustomerController {
       const { id } = req.params;
       const customer = await customerService.findById(id);
 
+      const hasAnyAddressField =
+        !!customer.street ||
+        !!customer.number ||
+        !!customer.neighborhood ||
+        !!customer.city ||
+        !!customer.state ||
+        !!customer.zipCode ||
+        !!customer.referencePoint ||
+        !!customer.complement;
+
+      const addresses = hasAnyAddressField
+        ? [
+            {
+              id: customer.id,
+              street: customer.street,
+              number: customer.number,
+              complement: customer.complement,
+              neighborhood: customer.neighborhood,
+              city: customer.city,
+              state: customer.state,
+              zipCode: customer.zipCode,
+              referencePoint: customer.referencePoint,
+              isDefault: true,
+            },
+          ]
+        : [];
+
       res.json({
         status: 'success',
-        data: customer.addresses || [],
+        data: addresses,
       });
     } catch (error) {
       next(error);

@@ -38,25 +38,69 @@ export const DashboardPage: React.FC = () => {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      const unwrap = (res: any) => res?.data ?? res;
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startDate = monthStart.toISOString();
+      const endDate = now.toISOString();
 
-      const [salesRes] = await Promise.all([
-        apiClient.get('/sales'),
-        loadSession(),
-        loadProducts(),
-        loadCustomers(),
+      await Promise.all([loadSession(), loadProducts(), loadCustomers()]);
+
+      // IMPORTANT: Cash session totals include PDV + Comandas + Delivery.
+      // Dashboard "Faturamento" should reflect the gross revenue for the month,
+      // counting only CLOSED cash sessions (cashier_closed + manager_closed).
+      const limit = 100;
+
+      const sumRevenueByStatus = async (status: 'cashier_closed' | 'manager_closed') => {
+        let page = 1;
+        let totalPages = 1;
+        let subtotal = 0;
+
+        do {
+          const sessionsResp: any = await apiClient.get('/cash-sessions/history', {
+            params: {
+              startDate,
+              endDate,
+              status,
+              page,
+              limit,
+            },
+          });
+
+          const sessionsArray = Array.isArray(sessionsResp?.data) ? sessionsResp.data : [];
+          const pagination = sessionsResp?.pagination;
+
+          for (const session of sessionsArray) {
+            subtotal += Number(session?.totalSales ?? 0);
+          }
+
+          totalPages = Number(pagination?.totalPages ?? 1);
+          page += 1;
+        } while (page <= totalPages);
+
+        return subtotal;
+      };
+
+      const [cashierClosedRevenue, managerClosedRevenue] = await Promise.all([
+        sumRevenueByStatus('cashier_closed'),
+        sumRevenueByStatus('manager_closed'),
       ]);
 
-      const salesData = unwrap(salesRes)?.data ?? unwrap(salesRes) ?? [];
-      const salesArray = Array.isArray(salesData) ? salesData : [];
+      const totalRevenue = cashierClosedRevenue + managerClosedRevenue;
 
-      const totalRevenue = salesArray.reduce(
-        (sum, sale: any) => sum + Number(sale?.totalAmount ?? sale?.total ?? 0),
-        0
-      );
+      // Keep the "Vendas" card as number of PDV sales (not including comandas/delivery)
+      const salesResp: any = await apiClient.get('/sales', {
+        params: {
+          startDate,
+          endDate,
+          status: 'completed',
+          page: 1,
+          limit: 1,
+        },
+      });
+      const totalSales = Number(salesResp?.pagination?.total ?? 0);
 
       setStats({
-        totalSales: salesArray.length,
+        totalSales,
         totalRevenue,
         totalCustomers: customers.length,
         totalProducts: products.length,

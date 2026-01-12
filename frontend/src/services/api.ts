@@ -190,8 +190,41 @@ export class ApiClient {
   }
 
   // Financial Reports
-  async getFinancialReport(startDate: string, endDate: string) {
-    const response = await this.client.get('/financial/report', {
+  async getTransactionsSummary(startDate: string, endDate: string) {
+    const response = await this.client.get('/financial/transactions/summary', {
+      params: { startDate, endDate },
+    });
+    return response.data;
+  }
+
+  async getDREReport(startDate: string, endDate: string) {
+    const response = await this.client.get('/financial/reports/dre', {
+      params: { startDate, endDate },
+    });
+    return response.data;
+  }
+
+  async getCashFlowReport(startDate: string, endDate: string) {
+    const response = await this.client.get('/financial/reports/cash-flow', {
+      params: { startDate, endDate },
+    });
+    return response.data;
+  }
+
+  async getProfitabilityReport(startDate: string, endDate: string) {
+    const response = await this.client.get('/financial/reports/profitability', {
+      params: { startDate, endDate },
+    });
+    return response.data;
+  }
+
+  async getIndicatorsReport() {
+    const response = await this.client.get('/financial/reports/indicators');
+    return response.data;
+  }
+
+  async getComparativeReport(startDate: string, endDate: string) {
+    const response = await this.client.get('/financial/reports/comparative', {
       params: { startDate, endDate },
     });
     return response.data;
@@ -205,10 +238,11 @@ export class ApiClient {
   }
 
   async getMonthlyReport(month: number, year: number) {
-    const response = await this.client.get('/financial/monthly', {
-      params: { month, year },
-    });
-    return response.data;
+    const start = new Date(year, month - 1, 1);
+    const end = new Date(year, month, 0);
+    const startDate = start.toISOString().slice(0, 10);
+    const endDate = end.toISOString().slice(0, 10);
+    return this.getTransactionsSummary(startDate, endDate);
   }
 
   // Generic HTTP Methods

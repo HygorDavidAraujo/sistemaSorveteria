@@ -26,6 +26,7 @@ export const ProductsPage: React.FC = () => {
     name: '',
     description: '',
     price: '',
+    costPrice: '',
     code: '',
     category: '',
     available: true,
@@ -75,6 +76,7 @@ export const ProductsPage: React.FC = () => {
     try {
       const categoryId = isUuid(form.category) ? form.category : undefined;
       const priceValue = parseFloat(form.price);
+      const costPriceValue = form.costPrice.trim() ? parseFloat(form.costPrice) : NaN;
       const codeSource = (form.code || form.name || '').trim();
       const normalizedCode = codeSource
         .replace(/\s+/g, '-')
@@ -89,6 +91,11 @@ export const ProductsPage: React.FC = () => {
 
       if (!editingId && (Number.isNaN(priceValue) || priceValue <= 0)) {
         setError('Preço deve ser maior que zero');
+        return;
+      }
+
+      if (form.costPrice.trim() && (Number.isNaN(costPriceValue) || costPriceValue <= 0)) {
+        setError('Preço de custo deve ser maior que zero');
         return;
       }
 
@@ -108,6 +115,12 @@ export const ProductsPage: React.FC = () => {
 
       if (!editingId || normalizedCode) productData.code = normalizedCode;
       if (!Number.isNaN(priceValue) && priceValue > 0) productData.salePrice = priceValue;
+      if (!Number.isNaN(costPriceValue) && costPriceValue > 0) {
+        productData.costPrice = costPriceValue;
+      } else if (editingId && !form.costPrice.trim()) {
+        // Permite limpar preço de custo na edição
+        productData.costPrice = null;
+      }
       if (categoryId) productData.categoryId = categoryId;
 
       if (editingId) {
@@ -125,6 +138,7 @@ export const ProductsPage: React.FC = () => {
         name: '', 
         description: '', 
         price: '', 
+        costPrice: '',
         code: '', 
         category: '', 
         available: true, 
@@ -146,7 +160,8 @@ export const ProductsPage: React.FC = () => {
     setForm({
       name: product.name || '',
       description: product.description || '',
-      price: (product.salePrice || product.costPrice || 0).toString(),
+      price: (product.salePrice ?? 0).toString(),
+      costPrice: product.costPrice !== undefined && product.costPrice !== null ? String(product.costPrice) : '',
       code: product.code || '',
       category: categoryValue || '',
       available: product.isActive !== undefined ? product.isActive : true,
@@ -194,6 +209,7 @@ export const ProductsPage: React.FC = () => {
               name: '', 
               description: '', 
               price: '', 
+              costPrice: '',
               code: '', 
               category: '', 
               available: true, 
@@ -251,8 +267,14 @@ export const ProductsPage: React.FC = () => {
             <div className="products-page__card-info">
               <div className="products-page__info-row">
                 <span className="products-page__info-label">Preço:</span>
-                <span className="products-page__info-value">R$ {parseFloat(String(product.salePrice || product.costPrice || 0)).toFixed(2)}</span>
+                <span className="products-page__info-value">R$ {parseFloat(String(product.salePrice ?? 0)).toFixed(2)}</span>
               </div>
+              {product.costPrice !== undefined && product.costPrice !== null && String(product.costPrice).trim() !== '' && (
+                <div className="products-page__info-row">
+                  <span className="products-page__info-label">Custo:</span>
+                  <span className="products-page__info-value">R$ {parseFloat(String(product.costPrice)).toFixed(2)}</span>
+                </div>
+              )}
               <div className="products-page__info-row">
                 <span className="products-page__info-label">Categoria:</span>
                 <span className="products-page__info-value">{getCategoryName(product.category)}</span>
@@ -339,6 +361,19 @@ export const ProductsPage: React.FC = () => {
                 className="products-page__form-input"
                 title="Preço do produto"
                 required
+              />
+            </div>
+
+            <div className="products-page__form-group">
+              <label className="products-page__form-label">Preço de Custo (opcional)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={form.costPrice}
+                onChange={(e) => setForm({ ...form, costPrice: e.target.value })}
+                className="products-page__form-input"
+                title="Preço de custo do produto"
+                placeholder="Ex: 5.50"
               />
             </div>
 

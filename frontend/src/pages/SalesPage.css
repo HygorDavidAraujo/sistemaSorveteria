@@ -261,6 +261,48 @@
   line-height: 1.2;
 }
 
+.sales-page__cart-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.sales-page__cart-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.sales-page__cart-cancel-sale-btn {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid #fecaca;
+  background: #fff;
+  color: #b91c1c;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sales-page__cart-cancel-sale-btn:hover {
+  background: #fef2f2;
+}
+
+.sales-page__cart-mode-select {
+  max-width: 220px;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #0f172a;
+  font-size: 0.875rem;
+}
+
 .sales-page__cart-items {
   min-height: 400px;
   max-height: 500px;

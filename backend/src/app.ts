@@ -24,6 +24,8 @@ import settingsRoutes from '@presentation/http/routes/settings.routes';
 export function createApp(): Application {
   const app = express();
 
+  const isProduction = process.env.NODE_ENV === 'production';
+
   // Security middleware
   app.use(helmet());
 
@@ -36,13 +38,21 @@ export function createApp(): Application {
   );
 
   // Rate limiting
-  const limiter = rateLimit({
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'), // 1 minuto
-    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '1000'), // 1000 requisições por minuto
-    message: 'Muitas requisições deste IP, tente novamente mais tarde',
-    skip: (req) => req.path === '/health', // Não contar health checks
-  });
-  app.use(limiter);
+  // In dev/test, this is disabled by default to avoid 429s from React dev behavior
+  // and fast navigation between modules. Enable explicitly with RATE_LIMIT_ENABLED=true.
+  const rateLimitEnabled = (process.env.RATE_LIMIT_ENABLED ?? (isProduction ? 'true' : 'false'))
+    .toLowerCase()
+    .trim() === 'true';
+
+  if (rateLimitEnabled) {
+    const limiter = rateLimit({
+      windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'), // 1 minuto
+      max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '1000'), // 1000 requisições por minuto
+      message: 'Muitas requisições deste IP, tente novamente mais tarde',
+      skip: (req) => req.path === '/health' || req.method === 'OPTIONS',
+    });
+    app.use(limiter);
+  }
 
   // Body parsing
   app.use(express.json({ limit: '10mb' }));

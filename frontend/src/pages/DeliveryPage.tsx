@@ -1,29 +1,29 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDeliveryStore, useCashSessionStore, useProductsStore, useCustomersStore } from '@/store';
 import { apiClient } from '@/services/api';
 import { Truck, Plus, Minus, Trash2, UserPlus, Printer, MapPin, Clock } from 'lucide-react';
 import { printReceipt, formatCurrency, getPrintStyles } from '@/utils/printer';
+import { clearCartDraft, loadCartDraft, saveCartDraft } from '@/utils/cartDraft';
 import type { Product, Customer } from '@/types';
 import './DeliveryPage.css';
 
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 export const DeliveryPage: React.FC = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   
   // Cliente e endereço
-  const [selectedCustomer, setSelectedCustomerRaw] = useState<string>('');
-  const setSelectedCustomer = (value: string) => {
-    console.log('📝 setSelectedCustomer chamado com:', value, 'stack:', new Error().stack);
-    setSelectedCustomerRaw(value);
-  };
+  const [selectedCustomer, setSelectedCustomer] = useState<string>('');
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
   const [isCustomerSearchOpen, setIsCustomerSearchOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<string>('');
   const [customerAddresses, setCustomerAddresses] = useState<any[]>([]);
   const [deliveryFee, setDeliveryFee] = useState<number>(0);
+  const [additionalFee, setAdditionalFee] = useState<number>(0);
   
   // Produto e busca
   const [productSearchTerm, setProductSearchTerm] = useState('');
@@ -54,10 +54,19 @@ export const DeliveryPage: React.FC = () => {
   const [payments, setPayments] = useState<Array<{ method: string; amount: number }>>([]);
   const [currentPaymentAmount, setCurrentPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'credit_card' | 'debit_card' | 'pix'>('cash');
-  const [discountValue, setDiscountValue] = useState(0);
+  const [discountValue, setDiscountValue] = useState<number>(0);
   const [estimatedTime, setEstimatedTime] = useState<number>(30);
   const [customerNotes, setCustomerNotes] = useState('');
   const [internalNotes, setInternalNotes] = useState('');
+
+  const toMoneyNumber = (value: unknown): number => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value.replace(',', '.'));
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+  };
   
   // Pedidos
   const [orders, setOrders] = useState<any[]>([]);
@@ -72,6 +81,56 @@ export const DeliveryPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    const draft = loadCartDraft();
+    if (!draft || draft.mode !== 'delivery') return;
+
+    if (draft.items.length > 0) {
+      deliveryStore.setItems(draft.items);
+    }
+    setSelectedCustomer(draft.selectedCustomerId ?? '');
+    setDiscountValue(Number(draft.discountValue ?? 0));
+    setAdditionalFee(Number(draft.additionalFee ?? 0));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const hasDraftData =
+      deliveryStore.items.length > 0 ||
+      !!selectedCustomer ||
+      toMoneyNumber(discountValue) > 0 ||
+      additionalFee > 0;
+
+    if (!hasDraftData) {
+      const existing = loadCartDraft();
+      if (existing?.mode === 'delivery') clearCartDraft();
+      return;
+    }
+
+    saveCartDraft({
+      mode: 'delivery',
+      items: deliveryStore.items,
+      selectedCustomerId: selectedCustomer || undefined,
+      discountValue: toMoneyNumber(discountValue),
+      additionalFee,
+    });
+  }, [deliveryStore.items, selectedCustomer, discountValue, additionalFee]);
+
+  const handleSwitchMode = (target: 'pdv' | 'comanda' | 'delivery') => {
+    saveCartDraft({
+      mode: target,
+      items: deliveryStore.items,
+      selectedCustomerId: selectedCustomer || undefined,
+      discountValue: toMoneyNumber(discountValue),
+      additionalFee,
+      deliveryFee,
+    });
+
+    if (target === 'delivery') navigate('/delivery');
+    else if (target === 'comanda') navigate('/comandas');
+    else navigate('/sales');
+  };
 
   useEffect(() => {
     console.log('⚡ useEffect[selectedCustomer] disparado. selectedCustomer:', selectedCustomer);
@@ -119,6 +178,51 @@ export const DeliveryPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCancelSale = () => {
+    const hasData =
+      deliveryStore.items.length > 0 ||
+      !!selectedCustomer ||
+      !!selectedAddress ||
+      deliveryFee > 0 ||
+      toMoneyNumber(discountValue) > 0 ||
+      additionalFee > 0 ||
+      payments.length > 0 ||
+      !!customerNotes.trim() ||
+      !!internalNotes.trim();
+
+    if (hasData) {
+      const ok = window.confirm('Cancelar venda do Delivery e limpar todos os dados?');
+      if (!ok) return;
+    }
+
+    deliveryStore.clear();
+    setSelectedCustomer('');
+    setCustomerSearchTerm('');
+    setIsCustomerSearchOpen(false);
+    setSelectedAddress('');
+    setCustomerAddresses([]);
+    setDeliveryFee(0);
+    setAdditionalFee(0);
+    setDiscountValue(0);
+    setEstimatedTime(30);
+    setCustomerNotes('');
+    setInternalNotes('');
+
+    setPayments([]);
+    setPaymentMethod('cash');
+    setCurrentPaymentAmount('');
+    setIsCheckoutModalOpen(false);
+
+    setProductSearchTerm('');
+    setIsWeightModalOpen(false);
+    setWeightQuantity('');
+    setSelectedWeightProduct(null);
+
+    clearCartDraft();
+    setSuccess('Venda cancelada');
+    setTimeout(() => setSuccess(null), 2000);
   };
 
   const loadOrders = async () => {
@@ -462,7 +566,8 @@ export const DeliveryPage: React.FC = () => {
         })),
         payments: payments.map(p => ({ paymentMethod: p.method as any, amount: p.amount })),
         deliveryFee,
-        discount: discountValue,
+        additionalFee,
+        discount: discountValueNum,
         estimatedTime,
         customerNotes: customerNotes || undefined,
         internalNotes: internalNotes || undefined,
@@ -476,9 +581,11 @@ export const DeliveryPage: React.FC = () => {
       setTimeout(() => setSuccess(null), 3000);
       
       // Limpar carrinho e formulário
-      deliveryStore.items.forEach(item => deliveryStore.removeItem(item.id));
+      deliveryStore.clear();
+      clearCartDraft();
       setPayments([]);
       setDiscountValue(0);
+      setAdditionalFee(0);
       setCustomerNotes('');
       setInternalNotes('');
       setSelectedCustomer('');
@@ -579,6 +686,12 @@ ${addressText}
           <span class="print-row-label">Taxa de Entrega:</span>
           <span class="print-row-value">${formatCurrency(parseFloat(order.deliveryFee))}</span>
         </div>
+        ${parseFloat((order as any).additionalFee || 0) > 0 ? `
+          <div class="print-row">
+            <span class="print-row-label">Acréscimo:</span>
+            <span class="print-row-value">${formatCurrency(parseFloat((order as any).additionalFee))}</span>
+          </div>
+        ` : ''}
         ${parseFloat(order.discount) > 0 ? `
           <div class="print-row">
             <span class="print-row-label">Desconto:</span>
@@ -647,7 +760,8 @@ ${addressText}
 
   const rawSubtotal = deliveryStore.items.reduce((sum, item) => sum + item.totalPrice, 0);
   const subtotal = round2(rawSubtotal);
-  const total = round2(subtotal + deliveryFee - discountValue);
+  const discountValueNum = toMoneyNumber(discountValue);
+  const total = round2(subtotal + deliveryFee + additionalFee - discountValueNum);
   const totalPaid = round2(payments.reduce((sum, p) => sum + p.amount, 0));
   const missingAmount = round2(Math.max(0, total - totalPaid));
   const changeAmount = round2(Math.max(0, totalPaid - total));
@@ -713,7 +827,29 @@ ${addressText}
 
         {/* Carrinho */}
         <div className="delivery-page__cart">
-          <h2>Carrinho</h2>
+          <div className="delivery-page__cart-title-row">
+            <h2>Carrinho</h2>
+            <div className="delivery-page__cart-title-actions">
+              <select
+                title="Trocar módulo mantendo itens"
+                value="delivery"
+                onChange={(e) => handleSwitchMode(e.target.value as any)}
+                className="delivery-page__cart-mode-select"
+              >
+                <option value="pdv">PDV</option>
+                <option value="comanda">Comanda</option>
+                <option value="delivery">Delivery</option>
+              </select>
+              <button
+                type="button"
+                onClick={handleCancelSale}
+                className="delivery-page__cart-cancel-sale-btn"
+                title="Cancelar venda e limpar tudo"
+              >
+                Cancelar venda
+              </button>
+            </div>
+          </div>
           
           {deliveryStore.items.length === 0 ? (
             <p className="delivery-page__cart-empty">Carrinho vazio</p>
@@ -874,6 +1010,28 @@ ${addressText}
 
               <div className="delivery-page__cart-totals">
                 <div className="delivery-page__cart-total-row">
+                  <span>Acréscimo (R$):</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={additionalFee}
+                    onChange={(e) => setAdditionalFee(toMoneyNumber(e.target.value))}
+                    className="delivery-page__cart-inline-input"
+                    placeholder="0,00"
+                  />
+                </div>
+                <div className="delivery-page__cart-total-row">
+                  <span>Desconto (R$):</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={discountValueNum}
+                    onChange={(e) => setDiscountValue(toMoneyNumber(e.target.value))}
+                    className="delivery-page__cart-inline-input"
+                    placeholder="0,00"
+                  />
+                </div>
+                <div className="delivery-page__cart-total-row">
                   <span>Subtotal:</span>
                   <span>R$ {subtotal.toFixed(2)}</span>
                 </div>
@@ -881,10 +1039,16 @@ ${addressText}
                   <span>Taxa de Entrega:</span>
                   <span>R$ {deliveryFee.toFixed(2)}</span>
                 </div>
-                {discountValue > 0 && (
+                {additionalFee > 0 && (
+                  <div className="delivery-page__cart-total-row">
+                    <span>Acréscimo:</span>
+                    <span>R$ {additionalFee.toFixed(2)}</span>
+                  </div>
+                )}
+                {discountValueNum > 0 && (
                   <div className="delivery-page__cart-total-row">
                     <span>Desconto:</span>
-                    <span>-R$ {discountValue.toFixed(2)}</span>
+                    <span>-R$ {discountValueNum.toFixed(2)}</span>
                   </div>
                 )}
                 <div className="delivery-page__cart-total-row delivery-page__cart-total-final">
@@ -1240,6 +1404,12 @@ ${addressText}
                 <div className="delivery-page__order-totals">
                   <div><span>Subtotal:</span><span>R$ {parseFloat(selectedOrder.subtotal).toFixed(2)}</span></div>
                   <div><span>Taxa:</span><span>R$ {parseFloat(selectedOrder.deliveryFee).toFixed(2)}</span></div>
+                  {parseFloat((selectedOrder as any).additionalFee || 0) > 0 && (
+                    <div><span>Acréscimo:</span><span>R$ {parseFloat((selectedOrder as any).additionalFee).toFixed(2)}</span></div>
+                  )}
+                  {parseFloat(selectedOrder.discount || 0) > 0 && (
+                    <div><span>Desconto:</span><span>-R$ {parseFloat(selectedOrder.discount).toFixed(2)}</span></div>
+                  )}
                   <div><strong>Total:</strong><strong>R$ {parseFloat(selectedOrder.total).toFixed(2)}</strong></div>
                 </div>
               </div>

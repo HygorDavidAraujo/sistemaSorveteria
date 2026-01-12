@@ -87,6 +87,7 @@ interface SalesStore {
   addItem: (item: any) => void;
   removeItem: (itemId: string) => void;
   updateItem: (itemId: string, quantity: number, totalPrice?: number) => void;
+  setItems: (items: any[]) => void;
   clear: () => void;
   setTotal: (total: number) => void;
 }
@@ -145,6 +146,8 @@ export const useSalesStore = create<SalesStore>((set) => ({
     }));
   },
 
+  setItems: (items: any[]) => set({ items: Array.isArray(items) ? items : [] }),
+
   clear: () => set({ items: [], total: 0 }),
 
   setTotal: (total: number) => set({ total }),
@@ -157,6 +160,7 @@ interface DeliveryStore {
   addItem: (item: any) => void;
   removeItem: (itemId: string) => void;
   updateItem: (itemId: string, quantity: number, totalPrice?: number) => void;
+  setItems: (items: any[]) => void;
   clear: () => void;
   setTotal: (total: number) => void;
 }
@@ -209,6 +213,8 @@ export const useDeliveryStore = create<DeliveryStore>((set) => ({
         .filter((i) => i.quantity > 0),
     }));
   },
+
+  setItems: (items: any[]) => set({ items: Array.isArray(items) ? items : [] }),
 
   clear: () => set({ items: [], total: 0 }),
 
@@ -335,10 +341,8 @@ export const useCustomersStore = create<CustomersStore>((set, get) => ({
     set({ isLoading: true });
     try {
       const response = await apiClient.getCustomers();
-      console.log('👥 loadCustomers response:', response);
       // apiClient.getCustomers() já retorna response.data que é { status, data }
       const customersData = response.data || response;
-      console.log('👥 customersData:', customersData);
       set({ 
         customers: customersData,
         lastLoadTime: now,

@@ -206,50 +206,43 @@ export const cancelAccountReceivableSchema = Joi.object({
 /**
  * DRE Report Validators
  */
-export const dreReportSchema = Joi.object({
-  startDate: Joi.date().iso().required().messages({
-    'date.iso': 'Data deve estar em formato ISO',
+const reportDateRangeQuerySchema = Joi.object({
+  startDate: Joi.string().isoDate().required().messages({
+    'string.isoDate': 'Data deve estar em formato ISO',
     'any.required': 'Data inicial é obrigatória',
   }),
-  endDate: Joi.date()
-    .iso()
-    .required()
-    .min(Joi.ref('startDate'))
-    .messages({
-      'date.iso': 'Data deve estar em formato ISO',
-      'any.required': 'Data final é obrigatória',
-      'date.min': 'Data final não pode ser anterior à data inicial',
-    }),
+  endDate: Joi.string().isoDate().required().messages({
+    'string.isoDate': 'Data deve estar em formato ISO',
+    'any.required': 'Data final é obrigatória',
+  }),
+})
+  .custom((value, helpers) => {
+    const start = new Date(value.startDate);
+    const end = new Date(value.endDate);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return helpers.error('any.invalid');
+    }
+
+    if (start > end) {
+      return helpers.error('any.custom');
+    }
+
+    return value;
+  })
+  .messages({
+    'any.custom': 'Data final não pode ser anterior à data inicial',
+    'any.invalid': 'Data deve estar em formato ISO',
+  });
+
+export const dreReportSchema = Joi.object({
+  query: reportDateRangeQuerySchema,
 });
 
 export const cashFlowSchema = Joi.object({
-  startDate: Joi.date().iso().required().messages({
-    'date.iso': 'Data deve estar em formato ISO',
-    'any.required': 'Data inicial é obrigatória',
-  }),
-  endDate: Joi.date()
-    .iso()
-    .required()
-    .min(Joi.ref('startDate'))
-    .messages({
-      'date.iso': 'Data deve estar em formato ISO',
-      'any.required': 'Data final é obrigatória',
-      'date.min': 'Data final não pode ser anterior à data inicial',
-    }),
+  query: reportDateRangeQuerySchema,
 });
 
 export const comparativeReportSchema = Joi.object({
-  startDate: Joi.date().iso().required().messages({
-    'date.iso': 'Data deve estar em formato ISO',
-    'any.required': 'Data inicial é obrigatória',
-  }),
-  endDate: Joi.date()
-    .iso()
-    .required()
-    .min(Joi.ref('startDate'))
-    .messages({
-      'date.iso': 'Data deve estar em formato ISO',
-      'any.required': 'Data final é obrigatória',
-      'date.min': 'Data final não pode ser anterior à data inicial',
-    }),
+  query: reportDateRangeQuerySchema,
 });

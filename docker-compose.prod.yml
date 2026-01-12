@@ -77,6 +77,8 @@ services:
       - API_PORT=3000
       - API_HOST=0.0.0.0
       - LOG_LEVEL=info
+      - RUN_MIGRATIONS=true
+      - RUN_SEED=false
     ports:
       - "${API_PORT:-3000}:3000"
     depends_on:
@@ -87,7 +89,7 @@ services:
     volumes:
       - backend_logs_prod:/app/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 5

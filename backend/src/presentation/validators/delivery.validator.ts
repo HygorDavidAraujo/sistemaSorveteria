@@ -15,6 +15,7 @@ export const deliveryValidators = {
         .min(1)
         .required(),
       deliveryFee: Joi.number().min(0).optional(),
+      additionalFee: Joi.number().min(0).optional(),
       discount: Joi.number().min(0).optional(),
       couponCode: Joi.string().trim().max(50).optional(),
       estimatedTime: Joi.number().integer().positive().optional(),

@@ -29,6 +29,7 @@ export interface CreateSaleDTO {
   items: SaleItemInput[];
   payments: PaymentInput[];
   discount?: number;
+  additionalFee?: number;
   deliveryFee?: number;
   loyaltyPointsUsed?: number;
   createdById: string;
@@ -269,8 +270,9 @@ export class SaleService {
     }
 
     const deliveryFee = data.deliveryFee || 0;
+    const additionalFee = data.additionalFee || 0;
     const grossTotal =
-      subtotal - saleDiscount - couponDiscount - loyaltyDiscount + deliveryFee;
+      subtotal - saleDiscount - couponDiscount - loyaltyDiscount + deliveryFee + additionalFee;
 
     if (grossTotal < 0) {
       throw new AppError('Total da venda não pode ser negativo', 400);
@@ -336,6 +338,7 @@ export class SaleService {
           subtotal,
           discount: saleDiscount + couponDiscount + loyaltyDiscount,
           deliveryFee,
+          additionalFee,
           total,
           loyaltyPointsUsed,
           loyaltyPointsEarned,

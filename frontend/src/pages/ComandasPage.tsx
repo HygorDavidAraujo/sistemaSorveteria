@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, Button, Input, Modal, Loading, Alert } from '@/components/common';
 import { Plus, Minus, Trash2, ShoppingCart, DollarSign, UserPlus, Printer } from 'lucide-react';
 import { apiClient } from '@/services/api';
 import { useCashSessionStore, useCustomersStore } from '@/store';
 import { printReceipt, formatCurrency, getPrintStyles } from '@/utils/printer';
+import { clearCartDraft, loadCartDraft, saveCartDraft, type CartDraft, type CartDraftItem } from '@/utils/cartDraft';
 import './ComandasPage.css';
 
 interface ComandaItem {
@@ -26,6 +28,7 @@ interface Comanda {
   items: ComandaItem[];
   subtotal: number;
   discount: number;
+  additionalFee?: number;
   total: number;
   openedAt: string;
   closedAt?: string;
@@ -76,6 +79,7 @@ const normalizeComanda = (comanda: any): Comanda => ({
     : [],
   subtotal: Number(comanda?.subtotal ?? 0),
   discount: Number(comanda?.discount ?? 0),
+  additionalFee: comanda?.additionalFee !== undefined ? Number(comanda?.additionalFee ?? 0) : undefined,
   total: Number(comanda?.total ?? 0),
   openedAt: comanda?.openedAt || '',
   closedAt: comanda?.closedAt || undefined,
@@ -87,12 +91,14 @@ const normalizeComandaList = (data: any): Comanda[] => {
 };
 
 export const ComandasPage: React.FC = () => {
+  const navigate = useNavigate();
   const { currentSession, loadSession } = useCashSessionStore();
   const { customers, loadCustomers } = useCustomersStore();
   const [comandas, setComandas] = useState<Comanda[]>([]);
   const [selectedComanda, setSelectedComanda] = useState<Comanda | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isCancellingSale, setIsCancellingSale] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -108,7 +114,10 @@ export const ComandasPage: React.FC = () => {
   const [quantity, setQuantity] = useState('1');
   const [observation, setObservation] = useState('');
   const [discount, setDiscount] = useState('0');
+  const [additionalFee, setAdditionalFee] = useState('0');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  const [draftToImport, setDraftToImport] = useState<CartDraft | null>(null);
+  const [isImportDraftModalOpen, setIsImportDraftModalOpen] = useState(false);
   const [isNewCustomerModalOpen, setIsNewCustomerModalOpen] = useState(false);
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
   const [isCustomerSearchOpen, setIsCustomerSearchOpen] = useState(false);
@@ -138,6 +147,15 @@ export const ComandasPage: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [currentPaymentAmount, setCurrentPaymentAmount] = useState('');
   const [quantityInputs, setQuantityInputs] = useState<Record<string, string>>({});
+
+  const toMoneyNumber = (value: unknown): number => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value.replace(',', '.'));
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+  };
 
   // Filtered products based on search
   const filteredProducts = useMemo(() => {
@@ -171,6 +189,55 @@ export const ComandasPage: React.FC = () => {
     loadSession();
     loadCustomers();
   }, [loadSession, loadCustomers]);
+
+  useEffect(() => {
+    const draft = loadCartDraft();
+    if (draft?.mode === 'comanda' && draft.items.length > 0) {
+      setDraftToImport(draft);
+      setDiscount(String(draft.discountValue ?? '0'));
+      setAdditionalFee(String(draft.additionalFee ?? '0'));
+      setIsImportDraftModalOpen(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!draftToImport?.selectedCustomerId || customers.length === 0) return;
+    const customer = customers.find((c: any) => c.id === draftToImport.selectedCustomerId);
+    if (customer?.name) {
+      setCustomerName(customer.name);
+    }
+  }, [draftToImport, customers]);
+
+  const handleSwitchMode = (target: 'pdv' | 'comanda' | 'delivery') => {
+    const itemsFromSelectedComanda: CartDraftItem[] =
+      selectedComanda?.status === 'OPEN'
+        ? (selectedComanda.items || []).map((item) => ({
+            id: item.productId,
+            productId: item.productId,
+            productName: item.productName,
+            quantity: Number(item.quantity || 0),
+            unitPrice: Number(item.unitPrice || 0),
+            totalPrice: Number(item.subtotal || 0),
+          }))
+        : [];
+
+    const items: CartDraftItem[] =
+      itemsFromSelectedComanda.length > 0 ? itemsFromSelectedComanda : (draftToImport?.items || []);
+
+    if (items.length > 0) {
+      saveCartDraft({
+        mode: target,
+        items,
+        selectedCustomerId: selectedCustomerId || draftToImport?.selectedCustomerId,
+        discountValue: toMoneyNumber(discount),
+        additionalFee: toMoneyNumber(additionalFee),
+      });
+    }
+
+    if (target === 'delivery') navigate('/delivery');
+    else if (target === 'pdv') navigate('/sales');
+    else navigate('/comandas');
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -233,6 +300,7 @@ export const ComandasPage: React.FC = () => {
     setCurrentPaymentAmount('');
     setPaymentMethod('cash');
     setDiscount(String(selectedComanda?.discount ?? '0'));
+    setAdditionalFee(String(selectedComanda?.additionalFee ?? '0'));
     setQuantityInputs({});
     setSelectedCustomerId('');
     setCustomerSearchTerm('');
@@ -244,9 +312,12 @@ export const ComandasPage: React.FC = () => {
     const discountValue = selectedComanda?.status === 'OPEN'
       ? parseFloat(discount || '0')
       : selectedComanda?.discount || 0;
+    const additionalValue = selectedComanda?.status === 'OPEN'
+      ? parseFloat(additionalFee || '0')
+      : (selectedComanda?.additionalFee || 0);
     const totalToPay = selectedComanda?.status === 'CLOSED'
       ? selectedComanda.total
-      : Math.max(0, subtotalValue - discountValue);
+      : Math.max(0, Number(subtotalValue) + Math.max(0, additionalValue) - Math.max(0, discountValue));
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
     const remaining = Math.max(0, totalToPay - totalPaid);
     const change = Math.max(0, totalPaid - totalToPay);
@@ -254,16 +325,16 @@ export const ComandasPage: React.FC = () => {
     return {
       subtotalValue,
       discountValue,
+      additionalValue: Math.max(0, additionalValue || 0),
       totalToPay,
       totalPaid,
       remaining,
       change,
       isPaid: totalPaid > 0 && remaining === 0,
     };
-  }, [selectedComanda, discount, payments]);
+  }, [selectedComanda, discount, additionalFee, payments]);
 
-  const handleOpenComanda = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const openComandaAndMaybeImport = async () => {
     
     // Verifica se existe sessão de caixa aberta
     if (!currentSession?.id) {
@@ -293,7 +364,26 @@ export const ComandasPage: React.FC = () => {
       });
 
       const newComanda = normalizeComanda(response.data?.data || response.data || response);
-      setComandas([...comandas, newComanda]);
+
+      if (draftToImport && draftToImport.items.length > 0) {
+        for (const item of draftToImport.items) {
+          await apiClient.post(`/comandas/${newComanda.id}/items`, {
+            productId: item.productId,
+            quantity: item.quantity,
+          });
+        }
+
+        const updatedComanda = await apiClient.get(`/comandas/${newComanda.id}`);
+        const comandaData = normalizeComanda(updatedComanda.data?.data || updatedComanda.data);
+        setComandas([...comandas, comandaData]);
+        setSelectedComanda(comandaData);
+        clearCartDraft();
+        setDraftToImport(null);
+        setIsImportDraftModalOpen(false);
+      } else {
+        setComandas([...comandas, newComanda]);
+        setSelectedComanda(newComanda);
+      }
       setSuccess('Comanda aberta com sucesso!');
       setIsOpenComandaModalOpen(false);
       setTableNumber('');
@@ -301,6 +391,88 @@ export const ComandasPage: React.FC = () => {
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erro ao abrir comanda');
+    }
+  };
+
+  const handleOpenComanda = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await openComandaAndMaybeImport();
+  };
+
+  const handleDiscardDraftImport = () => {
+    clearCartDraft();
+    setDraftToImport(null);
+    setIsImportDraftModalOpen(false);
+    setDiscount('0');
+    setAdditionalFee('0');
+  };
+
+  const handleCancelSale = async () => {
+    if (!selectedComanda) {
+      // Fallback: at least clear draft/UI if the button is ever shown without a selected comanda
+      clearCartDraft();
+      setDraftToImport(null);
+      setIsImportDraftModalOpen(false);
+      setSuccess('Venda cancelada');
+      setTimeout(() => setSuccess(null), 2000);
+      return;
+    }
+
+    const ok = window.confirm(
+      `Cancelar a Comanda #${selectedComanda.comandaNumber} e remover todos os itens? Essa ação NÃO pode ser desfeita.`
+    );
+    if (!ok) return;
+
+    const reason = window.prompt('Informe o motivo do cancelamento:', 'Cancelado pelo usuário');
+    if (!reason || reason.trim() === '') {
+      setError('É necessário informar um motivo para cancelar a comanda');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    setIsCancellingSale(true);
+    try {
+      // Remove items explicitly (requested behavior), then cancel the comanda.
+      const comandaId = selectedComanda.id;
+      const itemsToRemove = Array.isArray(selectedComanda.items) ? selectedComanda.items : [];
+
+      for (const item of itemsToRemove) {
+        try {
+          await apiClient.delete(`/comandas/${comandaId}/items/${item.id}`);
+        } catch {
+          // Best-effort deletion; continue.
+        }
+      }
+
+      await apiClient.post(`/comandas/${comandaId}/cancel`, { reason: reason.trim() });
+
+      setComandas((prev) => prev.filter((c) => c.id !== comandaId));
+      setSelectedComanda(null);
+
+      setPayments([]);
+      setPaymentMethod('cash');
+      setCurrentPaymentAmount('');
+      setQuantityInputs({});
+
+      setDiscount('0');
+      setAdditionalFee('0');
+      setSelectedCustomerId('');
+      setCustomerName('');
+      setTableNumber('');
+      setCustomerSearchTerm('');
+      setIsCustomerSearchOpen(false);
+
+      clearCartDraft();
+      setDraftToImport(null);
+      setIsImportDraftModalOpen(false);
+
+      setSuccess('Comanda cancelada e itens removidos com sucesso!');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Erro ao cancelar comanda');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setIsCancellingSale(false);
     }
   };
 
@@ -447,6 +619,16 @@ export const ComandasPage: React.FC = () => {
   const handlePrintPreBill = () => {
     if (!selectedComanda) return;
 
+    const subtotalValue = Number(selectedComanda.subtotal || 0);
+    const discountValue =
+      selectedComanda.status === 'OPEN' ? paymentSummary.discountValue : Number(selectedComanda.discount || 0);
+    const additionalValue =
+      selectedComanda.status === 'OPEN'
+        ? paymentSummary.additionalValue
+        : Number(selectedComanda.additionalFee || 0);
+    const totalValue =
+      selectedComanda.status === 'OPEN' ? paymentSummary.totalToPay : Number(selectedComanda.total || 0);
+
     const now = new Date();
     const dateStr = now.toLocaleDateString('pt-BR');
     const timeStr = now.toLocaleTimeString('pt-BR');
@@ -495,17 +677,23 @@ export const ComandasPage: React.FC = () => {
       <div class="print-totals">
         <div class="print-row">
           <span class="print-row-label">Subtotal:</span>
-          <span class="print-row-value">${formatCurrency(selectedComanda.subtotal)}</span>
+          <span class="print-row-value">${formatCurrency(subtotalValue)}</span>
         </div>
-        ${selectedComanda.discount > 0 ? `
+        ${discountValue > 0 ? `
           <div class="print-row">
             <span class="print-row-label">Desconto:</span>
-            <span class="print-row-value">-${formatCurrency(selectedComanda.discount)}</span>
+            <span class="print-row-value">-${formatCurrency(discountValue)}</span>
+          </div>
+        ` : ''}
+        ${additionalValue > 0 ? `
+          <div class="print-row">
+            <span class="print-row-label">Acréscimo:</span>
+            <span class="print-row-value">${formatCurrency(additionalValue)}</span>
           </div>
         ` : ''}
         <div class="print-row total highlight">
           <span class="print-row-label">TOTAL:</span>
-          <span class="print-row-value">${formatCurrency(selectedComanda.total)}</span>
+          <span class="print-row-value">${formatCurrency(totalValue)}</span>
         </div>
       </div>
 
@@ -542,6 +730,7 @@ export const ComandasPage: React.FC = () => {
     try {
       const response = await apiClient.post(`/comandas/${selectedComanda.id}/close`, {
         discount: paymentSummary.discountValue,
+        additionalFee: paymentSummary.additionalValue,
         payments: payments.map(p => ({
           paymentMethod: p.method,
           amount: p.amount
@@ -552,6 +741,7 @@ export const ComandasPage: React.FC = () => {
       updateSelectedComandaState(comandaData);
       setSuccess('Comanda fechada com sucesso!');
       setDiscount('0');
+      setAdditionalFee('0');
       setPayments([]);
       setCurrentPaymentAmount('');
       setTimeout(() => setSuccess(null), 3000);
@@ -591,26 +781,6 @@ export const ComandasPage: React.FC = () => {
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erro ao reabrir comanda');
       setTimeout(() => setError(null), 3000);
-    }
-  };
-
-  const handleCancelComanda = async () => {
-    if (!selectedComanda) return;
-
-    const reason = window.prompt('Por favor, informe o motivo do cancelamento:');
-    if (!reason || reason.trim() === '') {
-      setError('É necessário informar um motivo para cancelar a comanda');
-      return;
-    }
-
-    try {
-      await apiClient.post(`/comandas/${selectedComanda.id}/cancel`, { reason: reason.trim() });
-      setComandas(comandas.filter((c) => c.id !== selectedComanda.id));
-      setSelectedComanda(null);
-      setSuccess('Comanda cancelada com sucesso!');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Erro ao cancelar comanda');
     }
   };
 
@@ -750,7 +920,30 @@ export const ComandasPage: React.FC = () => {
 
               <div className="comanda-cart">
                 <div className="comanda-cart-header">
-                  <h3>Itens da Comanda</h3>
+                  <div className="comanda-cart-title-row">
+                    <h3>Itens da Comanda</h3>
+                    <div className="comanda-cart-title-actions">
+                      <select
+                        className="comanda-cart-mode-select"
+                        value="comanda"
+                        onChange={(e) => handleSwitchMode(e.target.value as any)}
+                        title="Trocar módulo"
+                      >
+                        <option value="pdv">PDV</option>
+                        <option value="comanda">Comanda</option>
+                        <option value="delivery">Delivery</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleCancelSale}
+                        className="comanda-cart-cancel-sale-btn"
+                        title="Cancelar a comanda e remover todos os itens"
+                        disabled={isCancellingSale || selectedComanda.status === 'CANCELLED'}
+                      >
+                        {isCancellingSale ? 'Cancelando...' : 'Cancelar venda'}
+                      </button>
+                    </div>
+                  </div>
                   {selectedComanda.status === 'OPEN' && (
                     <Button
                       size="sm"
@@ -927,6 +1120,24 @@ export const ComandasPage: React.FC = () => {
 
                 {selectedComanda.status === 'OPEN' && (
                   <div className="comanda-cart-section comanda-cart-discount">
+                    <label className="comanda-cart-section-label">Acréscimo</label>
+                    <input
+                      type="text"
+                      value={additionalFee}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(',', '.');
+                        if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                          setAdditionalFee(value);
+                        }
+                      }}
+                      placeholder="0,00"
+                      className="comanda-cart-discount-input"
+                    />
+                  </div>
+                )}
+
+                {selectedComanda.status === 'OPEN' && (
+                  <div className="comanda-cart-section comanda-cart-discount">
                     <label className="comanda-cart-section-label">Desconto</label>
                     <input
                       type="text"
@@ -948,6 +1159,12 @@ export const ComandasPage: React.FC = () => {
                     <span>Subtotal</span>
                     <span className="comanda-cart-totals-value">{formatCurrency(paymentSummary.subtotalValue)}</span>
                   </div>
+                  {paymentSummary.additionalValue > 0 && (
+                    <div className="comanda-cart-totals-row">
+                      <span>Acréscimo</span>
+                      <span className="comanda-cart-totals-value">{formatCurrency(paymentSummary.additionalValue)}</span>
+                    </div>
+                  )}
                   {paymentSummary.discountValue > 0 && (
                     <div className="comanda-cart-totals-row comanda-cart-totals-row--discount">
                       <span>Desconto</span>
@@ -1089,12 +1306,6 @@ export const ComandasPage: React.FC = () => {
                 </div>
               )}
 
-              <button
-                onClick={handleCancelComanda}
-                className="comanda-cancel-btn"
-              >
-                Cancelar Comanda
-              </button>
             </Card>
           </div>
         )}
@@ -1142,6 +1353,40 @@ export const ComandasPage: React.FC = () => {
             />
           </div>
         </form>
+      </Modal>
+
+      {/* Draft Import Modal */}
+      <Modal
+        isOpen={isImportDraftModalOpen}
+        title="Importar itens para Comanda"
+        onClose={() => setIsImportDraftModalOpen(false)}
+        footer={
+          <div className="modal-footer">
+            <Button variant="secondary" onClick={handleDiscardDraftImport}>
+              Descartar
+            </Button>
+            <Button
+              variant="primary"
+              onClick={async () => {
+                await openComandaAndMaybeImport();
+              }}
+            >
+              Abrir comanda e importar
+            </Button>
+          </div>
+        }
+      >
+        <div className="comanda-draft-import-body">
+          <p>
+            Encontramos itens salvos ao trocar de módulo. Deseja abrir uma comanda e importar esses itens?
+          </p>
+          <div>
+            <strong>Itens:</strong> {draftToImport?.items?.length ?? 0}
+          </div>
+          {!currentSession?.id && (
+            <Alert type="warning" message="Nenhuma sessão de caixa aberta. Abra o caixa para importar." />
+          )}
+        </div>
       </Modal>
 
       {/* Add Item Modal */}

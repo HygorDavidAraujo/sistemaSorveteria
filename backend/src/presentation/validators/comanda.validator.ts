@@ -71,6 +71,7 @@ export const comandaValidators = {
   closeComanda: Joi.object({
     body: Joi.object({
       discount: Joi.number().min(0).default(0),
+      additionalFee: Joi.number().min(0).default(0),
       couponCode: Joi.string().trim().max(50).optional(),
       payments: Joi.array()
         .items(

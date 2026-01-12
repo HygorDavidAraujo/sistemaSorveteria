@@ -25,6 +25,7 @@ export interface UpdateItemDTO {
 
 export interface CloseComandaDTO {
   discount?: number;
+  additionalFee?: number;
   couponCode?: string;
   payments: {
     paymentMethod: PaymentMethod;
@@ -575,6 +576,7 @@ export class ComandaService {
     }
 
     const discount = data.discount || 0;
+    const additionalFee = data.additionalFee || 0;
     const baseForCoupon = Math.max(Number(comanda.subtotal) - discount, 0);
 
     let couponDiscount = 0;
@@ -588,7 +590,7 @@ export class ComandaService {
       couponDiscount = validatedCoupon.discountAmount;
     }
 
-    const total = Number(comanda.subtotal) - discount - couponDiscount;
+    const total = Number(comanda.subtotal) + additionalFee - discount - couponDiscount;
 
     const totalPayments = data.payments.reduce((sum, p) => sum + p.amount, 0);
 
@@ -629,6 +631,7 @@ export class ComandaService {
         where: { id: comandaId },
         data: {
           discount: discount + couponDiscount,
+          additionalFee,
           total,
           status: 'closed',
           closedAt: new Date(),
@@ -773,6 +776,7 @@ export class ComandaService {
           closedAt: null,
           closedById: null,
           discount: 0,
+          additionalFee: 0,
           total: comanda.subtotal,
           isAdjusted: true,
           adjustmentReason: reason,

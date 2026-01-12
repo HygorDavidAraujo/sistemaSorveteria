@@ -1,5 +1,16 @@
-import prisma from '../src/infrastructure/database/prisma-client';
+import path from 'path';
+import dotenv from 'dotenv';
+import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+
+const prisma = new PrismaClient({
+  log:
+    process.env.NODE_ENV === 'development'
+      ? ['query', 'error', 'warn']
+      : ['error'],
+});
 
 async function main() {
   console.log('🌱 Starting database seeding...');
@@ -319,9 +330,6 @@ async function main() {
     });
 
     console.log('✓ Cash session totals updated');*/
-  }
-
-  console.log('🎉 Database seeding completed!');
   }
 
   console.log('🎉 Database seeding completed!');

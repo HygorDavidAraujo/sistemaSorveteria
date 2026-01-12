@@ -25,6 +25,17 @@ export class FinancialController {
     this.financialService = new FinancialService();
   }
 
+  private parseDateInput(value: string, endOfDay: boolean): Date {
+    // Se vier no formato YYYY-MM-DD, interpretar como data local (dia inteiro)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [y, m, d] = value.split('-').map((n) => parseInt(n, 10));
+      return new Date(y, m - 1, d, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
+    }
+
+    // Caso venha com timestamp ISO completo, respeitar
+    return new Date(value);
+  }
+
   /**
    * Criar transação financeira
    * POST /financial/transactions
@@ -170,8 +181,8 @@ export class FinancialController {
     const { startDate, endDate } = req.query;
 
     const summary = await this.financialService.getTransactionsSummary(
-      new Date(startDate as string),
-      new Date(endDate as string)
+      this.parseDateInput(startDate as string, false),
+      this.parseDateInput(endDate as string, true)
     );
 
     res.json({
@@ -186,11 +197,15 @@ export class FinancialController {
    */
   getDailyReport = asyncHandler(async (req: Request, res: Response) => {
     const { date } = req.query;
-    const reportDate = date ? new Date(date as string) : new Date();
+    const reportDate = date ? this.parseDateInput(date as string, false) : new Date();
+
+    // Normalizar para início e fim do dia local
+    const start = new Date(reportDate.getFullYear(), reportDate.getMonth(), reportDate.getDate(), 0, 0, 0, 0);
+    const end = new Date(reportDate.getFullYear(), reportDate.getMonth(), reportDate.getDate(), 23, 59, 59, 999);
 
     const summary = await this.financialService.getTransactionsSummary(
-      reportDate,
-      reportDate
+      start,
+      end
     );
 
     res.json({
@@ -703,6 +718,14 @@ export class DREController {
     this.dreService = new DREService();
   }
 
+  private parseDateInput(value: string, endOfDay: boolean): Date {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [y, m, d] = value.split('-').map((n) => parseInt(n, 10));
+      return new Date(y, m - 1, d, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
+    }
+    return new Date(value);
+  }
+
   /**
    * Gerar DRE
    * GET /financial/reports/dre
@@ -711,8 +734,8 @@ export class DREController {
     const { startDate, endDate } = req.query;
 
     const dre = await this.dreService.generateDREReport({
-      startDate: new Date(startDate as string),
-      endDate: new Date(endDate as string),
+      startDate: this.parseDateInput(startDate as string, false),
+      endDate: this.parseDateInput(endDate as string, true),
     });
 
     res.json({
@@ -729,8 +752,8 @@ export class DREController {
     const { startDate, endDate } = req.query;
 
     const cashFlow = await this.dreService.generateCashFlow({
-      startDate: new Date(startDate as string),
-      endDate: new Date(endDate as string),
+      startDate: this.parseDateInput(startDate as string, false),
+      endDate: this.parseDateInput(endDate as string, true),
     });
 
     res.json({
@@ -747,8 +770,8 @@ export class DREController {
     const { startDate, endDate } = req.query;
 
     const analysis = await this.dreService.analyzeProfitability({
-      startDate: new Date(startDate as string),
-      endDate: new Date(endDate as string),
+      startDate: this.parseDateInput(startDate as string, false),
+      endDate: this.parseDateInput(endDate as string, true),
     });
 
     res.json({
@@ -778,8 +801,8 @@ export class DREController {
     const { startDate, endDate } = req.query;
 
     const report = await this.dreService.generateComparativeReport(
-      new Date(startDate as string),
-      new Date(endDate as string)
+      this.parseDateInput(startDate as string, false),
+      this.parseDateInput(endDate as string, true)
     );
 
     res.json({

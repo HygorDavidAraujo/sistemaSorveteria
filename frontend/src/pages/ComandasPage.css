@@ -312,6 +312,66 @@
   gap: 12px;
 }
 
+.comanda-cart-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.comanda-cart-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.comanda-cart-cancel-sale-btn {
+  height: 34px;
+  padding: 6px 10px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fff;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.comanda-cart-cancel-sale-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.comanda-cart-cancel-sale-btn:hover {
+  background: #fef2f2;
+}
+
+.comanda-draft-import-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.comanda-cart-title-row h3 {
+  margin: 0;
+}
+
+.comanda-cart-mode-select {
+  height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: white;
+  font-size: 13px;
+  color: var(--color-dark);
+}
+
+.comanda-cart-mode-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
 .comanda-cart-items {
   min-height: 260px;
   max-height: 480px;
@@ -817,24 +877,6 @@
 
 .comanda-actions button {
   width: 100%;
-}
-
-.comanda-cancel-btn {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--border-radius);
-  background: transparent;
-  color: var(--color-danger);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.comanda-cancel-btn:hover {
-  background: rgba(239, 68, 68, 0.05);
-  border-color: var(--color-danger);
 }
 
 /* Modal Footer */
