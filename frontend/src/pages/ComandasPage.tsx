@@ -16,6 +16,8 @@ interface ComandaItem {
   unitPrice: number;
   subtotal: number;
   observation?: string;
+  sizeId?: string;
+  flavorsTotal?: number;
   status: 'PENDING' | 'READY' | 'SERVED';
 }
 
@@ -39,8 +41,11 @@ interface Product {
   name: string;
   code?: string;
   description?: string;
-  price: number;
-  category: string;
+  salePrice: number;
+  saleType?: string;
+  isActive?: boolean;
+  category?: any;
+  sizePrices?: any[];
 }
 
 const normalizeProduct = (product: any): Product => ({
@@ -48,8 +53,11 @@ const normalizeProduct = (product: any): Product => ({
   name: product?.name || '',
   code: product?.code || undefined,
   description: product?.description || undefined,
-  price: Number(product?.price ?? 0),
-  category: product?.category || '',
+  salePrice: Number(product?.salePrice ?? product?.price ?? 0),
+  saleType: product?.saleType || undefined,
+  isActive: product?.isActive ?? undefined,
+  category: product?.category || undefined,
+  sizePrices: product?.sizePrices || undefined,
 });
 
 const normalizeProductList = (data: any): Product[] => {
@@ -65,6 +73,8 @@ const normalizeComandaItem = (item: any): ComandaItem => ({
   unitPrice: Number(item?.unitPrice ?? 0),
   subtotal: Number(item?.subtotal ?? 0),
   observation: item?.observation || undefined,
+  sizeId: item?.sizeId ? String(item.sizeId) : undefined,
+  flavorsTotal: item?.flavorsTotal !== undefined && item?.flavorsTotal !== null ? Number(item.flavorsTotal) : undefined,
   status: item?.status || 'PENDING',
 });
 
@@ -148,6 +158,14 @@ export const ComandasPage: React.FC = () => {
   const [currentPaymentAmount, setCurrentPaymentAmount] = useState('');
   const [quantityInputs, setQuantityInputs] = useState<Record<string, string>>({});
 
+  // Montado
+  const [isAssembledModalOpen, setIsAssembledModalOpen] = useState(false);
+  const [assembledCategoryId, setAssembledCategoryId] = useState<string>('');
+  const [assembledSizeId, setAssembledSizeId] = useState<string>('');
+  const [assembledFlavorsTotal, setAssembledFlavorsTotal] = useState<string>('1');
+  const [assembledSelectedFlavors, setAssembledSelectedFlavors] = useState<Product[]>([]);
+  const [assembledSearchTerm, setAssembledSearchTerm] = useState('');
+
   const toMoneyNumber = (value: unknown): number => {
     if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
     if (typeof value === 'string') {
@@ -155,6 +173,90 @@ export const ComandasPage: React.FC = () => {
       return Number.isFinite(parsed) ? parsed : 0;
     }
     return 0;
+  };
+
+  const getProductCategory = (product: Product) => {
+    const cat: any = (product as any)?.category;
+    return typeof cat === 'object' ? cat : null;
+  };
+
+  const assembledSize = useMemo(() => {
+    const anyProduct = assembledSelectedFlavors[0];
+    const category = anyProduct ? getProductCategory(anyProduct) : null;
+    const sizes = Array.isArray(category?.sizes) ? category.sizes : [];
+    return sizes.find((s: any) => String(s.id) === String(assembledSizeId)) || null;
+  }, [assembledSelectedFlavors, assembledSizeId]);
+
+  const assembledMaxFlavors = assembledSize?.maxFlavors ? Number(assembledSize.maxFlavors) : 1;
+  const assembledFlavorsTotalNumber = Math.max(1, Math.min(assembledMaxFlavors, parseInt(assembledFlavorsTotal || '1', 10) || 1));
+
+  const assembledAvailableFlavors = useMemo(() => {
+    if (!assembledCategoryId) return [];
+    const term = assembledSearchTerm.trim().toLowerCase();
+    return products
+      .filter((p) => {
+        const cat: any = getProductCategory(p);
+        if (!cat) return false;
+        if (String(cat.id) !== String(assembledCategoryId)) return false;
+        if (p.isActive === false) return false;
+        if (!term) return true;
+        return (p.name || '').toLowerCase().includes(term) || (p.code || '').toLowerCase().includes(term);
+      })
+      .slice(0, 30);
+  }, [products, assembledCategoryId, assembledSearchTerm]);
+
+  const addAssembledFlavor = (product: Product) => {
+    if (assembledSelectedFlavors.length >= assembledFlavorsTotalNumber) return;
+    setAssembledSelectedFlavors((prev) => [...prev, product]);
+  };
+
+  const removeAssembledFlavor = (index: number) => {
+    setAssembledSelectedFlavors((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const confirmAssembledComanda = async () => {
+    if (!selectedComanda) return;
+    try {
+      const sizeId = String(assembledSizeId);
+      if (!sizeId) throw new Error('Selecione um tamanho');
+      if (!assembledSize) throw new Error('Tamanho inválido');
+
+      const flavorsTotal = assembledFlavorsTotalNumber;
+      if (assembledSelectedFlavors.length !== flavorsTotal) {
+        throw new Error(`Selecione ${flavorsTotal} sabor(es)`);
+      }
+
+      const qty = Math.max(1, Math.floor(parseFloat(quantity) || 1));
+
+      for (const p of assembledSelectedFlavors) {
+        await apiClient.post(`/comandas/${selectedComanda.id}/items`, {
+          productId: p.id,
+          quantity: qty,
+          observation: observation || undefined,
+          sizeId,
+          flavorsTotal,
+        });
+      }
+
+      await refreshSelectedComanda(selectedComanda.id);
+      setSuccess('Item montado adicionado com sucesso!');
+      setTimeout(() => setSuccess(null), 3000);
+
+      setIsAssembledModalOpen(false);
+      setAssembledCategoryId('');
+      setAssembledSizeId('');
+      setAssembledFlavorsTotal('1');
+      setAssembledSelectedFlavors([]);
+      setAssembledSearchTerm('');
+
+      setSelectedProduct('');
+      setProductSearchTerm('');
+      setQuantity('1');
+      setObservation('');
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Erro ao adicionar item montado');
+      setTimeout(() => setError(null), 3000);
+    }
   };
 
   // Filtered products based on search
@@ -483,6 +585,29 @@ export const ComandasPage: React.FC = () => {
       return;
     }
 
+    const selected = products.find((p) => p.id === selectedProduct);
+    if (selected) {
+      const category = getProductCategory(selected);
+      const isAssembled = category?.categoryType === 'assembled';
+      if (isAssembled) {
+        const sizes = Array.isArray(category?.sizes) ? category.sizes : [];
+        if (sizes.length === 0) {
+          setError('Categoria Montado sem tamanhos cadastrados');
+          setTimeout(() => setError(null), 3000);
+          return;
+        }
+
+        setIsAddItemModalOpen(false);
+        setAssembledCategoryId(String(category.id));
+        setAssembledSizeId(String(sizes[0].id));
+        setAssembledFlavorsTotal('1');
+        setAssembledSelectedFlavors([selected]);
+        setAssembledSearchTerm('');
+        setIsAssembledModalOpen(true);
+        return;
+      }
+    }
+
     const qty = parseFloat(quantity);
     if (!qty || qty <= 0) {
       setError('Quantidade deve ser maior que zero');
@@ -537,6 +662,126 @@ export const ComandasPage: React.FC = () => {
       setQuantityInputs((prev) => {
         const next = { ...prev };
         delete next[item.id];
+        return next;
+      });
+      setSuccess('Quantidade atualizada com sucesso!');
+      setTimeout(() => setSuccess(null), 2000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Erro ao atualizar quantidade');
+      setTimeout(() => setError(null), 3000);
+    }
+  };
+
+  const getComandaItemSizeLabel = (item: ComandaItem): string => {
+    const sizeId = item?.sizeId ? String(item.sizeId) : '';
+    if (!sizeId) return '';
+
+    const product = products.find((p: any) => String(p?.id) === String(item.productId));
+    const category = product ? getProductCategory(product as any) : null;
+    const sizes = Array.isArray(category?.sizes) ? category.sizes : [];
+    const found = sizes.find((s: any) => String(s.id) === sizeId);
+    return found?.name ? String(found.name) : '';
+  };
+
+  const groupedComandaItems = useMemo(() => {
+    type GroupEntry = {
+      kind: 'group';
+      groupKey: string;
+      sizeLabel: string;
+      flavorsTotal: number;
+      items: ComandaItem[];
+      total: number;
+      quantity: number;
+      observation?: string;
+    };
+    type ItemEntry = { kind: 'item'; item: ComandaItem };
+
+    const items = selectedComanda?.items || [];
+    const result: Array<GroupEntry | ItemEntry> = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const sizeId = it?.sizeId ? String(it.sizeId) : '';
+      const flavorsTotal = Number(it?.flavorsTotal ?? 0);
+      const shouldGroup = Boolean(sizeId) && flavorsTotal > 1;
+
+      if (!shouldGroup) {
+        result.push({ kind: 'item', item: it });
+        continue;
+      }
+
+      const take = items.slice(i, i + flavorsTotal);
+      const sameGroup =
+        take.length === flavorsTotal &&
+        take.every((x) => {
+          const xSizeId = x?.sizeId ? String(x.sizeId) : '';
+          const xFlavors = Number(x?.flavorsTotal ?? 0);
+          return (
+            xSizeId === sizeId &&
+            xFlavors === flavorsTotal &&
+            Number(x.quantity) === Number(it.quantity) &&
+            String(x.observation || '') === String(it.observation || '')
+          );
+        });
+
+      if (!sameGroup) {
+        result.push({ kind: 'item', item: it });
+        continue;
+      }
+
+      const total = take.reduce((sum, x) => {
+        const lineTotal = Number.isFinite(x.subtotal) ? x.subtotal : Number(x.unitPrice || 0) * Number(x.quantity || 0);
+        return sum + (Number.isFinite(lineTotal) ? lineTotal : 0);
+      }, 0);
+
+      result.push({
+        kind: 'group',
+        groupKey: `grp_${it.id}`,
+        sizeLabel: getComandaItemSizeLabel(it),
+        flavorsTotal,
+        items: take,
+        total,
+        quantity: it.quantity,
+        observation: it.observation,
+      });
+
+      i += flavorsTotal - 1;
+    }
+
+    return result;
+  }, [selectedComanda?.items, products]);
+
+  const handleRemoveGroupItems = async (items: ComandaItem[]) => {
+    if (!selectedComanda) return;
+    try {
+      await Promise.all(items.map((it) => apiClient.delete(`/comandas/${selectedComanda.id}/items/${it.id}`)));
+      await refreshSelectedComanda(selectedComanda.id);
+      setSuccess('Item montado removido com sucesso!');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Erro ao remover item montado');
+      setTimeout(() => setError(null), 3000);
+    }
+  };
+
+  const handleUpdateGroupQuantity = async (items: ComandaItem[], newQuantity: number, groupKey?: string) => {
+    if (!selectedComanda || selectedComanda.status !== 'OPEN') return;
+    const safeQuantity = Math.max(1, Number.isFinite(newQuantity) ? newQuantity : 1);
+
+    try {
+      await Promise.all(
+        items.map((it) =>
+          apiClient.put(`/comandas/${selectedComanda.id}/items/${it.id}`, {
+            quantity: safeQuantity,
+          })
+        )
+      );
+
+      await refreshSelectedComanda(selectedComanda.id);
+      setQuantityInputs((prev) => {
+        const next = { ...prev };
+        for (const it of items) delete next[it.id];
+        if (groupKey) delete next[groupKey];
         return next;
       });
       setSuccess('Quantidade atualizada com sucesso!');
@@ -960,77 +1205,170 @@ export const ComandasPage: React.FC = () => {
                   {selectedComanda.items.length === 0 ? (
                     <p className="comanda-cart-empty">Nenhum item selecionado</p>
                   ) : (
-                    selectedComanda.items.map((item) => (
-                      <div key={item.id} className="comanda-cart-item">
-                        <div className="comanda-cart-item-info">
-                          <p className="comanda-cart-item-name">{item.productName}</p>
-                          {item.observation && (
-                            <p className="comanda-cart-item-observation">{item.observation}</p>
-                          )}
+                    groupedComandaItems.map((entry) => {
+                      if (entry.kind === 'group') {
+                        const title = `Montado${entry.sizeLabel ? ` - ${entry.sizeLabel}` : ''} (${entry.flavorsTotal} sabor(es))`;
+                        return (
+                          <div key={entry.groupKey} className="comanda-cart-item">
+                            <div className="comanda-cart-item-info">
+                              <p className="comanda-cart-item-name">{title}</p>
+                              {entry.observation && (
+                                <p className="comanda-cart-item-observation">{entry.observation}</p>
+                              )}
 
-                          {selectedComanda.status === 'OPEN' ? (
-                            <div className="comanda-cart-item-controls">
-                              <button
-                                onClick={() => handleUpdateItemQuantity(item, item.quantity - 1)}
-                                className="comanda-cart-item-btn"
-                                title="Diminuir quantidade"
-                              >
-                                <Minus size={14} />
-                              </button>
-                              <input
-                                type="text"
-                                className="comanda-cart-item-quantity"
-                                value={quantityInputs[item.id] !== undefined ? quantityInputs[item.id] : item.quantity.toString()}
-                                onChange={(e) => setQuantityInputs({ ...quantityInputs, [item.id]: e.target.value })}
-                                onBlur={(e) => {
-                                  const raw = e.target.value.replace(',', '.');
-                                  const parsed = parseFloat(raw);
-                                  if (!isNaN(parsed) && parsed > 0) {
-                                    handleUpdateItemQuantity(item, parsed);
-                                  } else {
-                                    setQuantityInputs((prev) => {
-                                      const next = { ...prev };
-                                      delete next[item.id];
-                                      return next;
-                                    });
-                                  }
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    (e.target as HTMLInputElement).blur();
-                                  }
-                                }}
-                                title="Quantidade do item"
-                              />
-                              <button
-                                onClick={() => handleUpdateItemQuantity(item, item.quantity + 1)}
-                                className="comanda-cart-item-btn"
-                                title="Aumentar quantidade"
-                              >
-                                <Plus size={14} />
-                              </button>
-                              <span className="comanda-cart-item-total">
-                                {formatCurrency(item.unitPrice * item.quantity)}
-                              </span>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+                                {entry.items.map((it) => (
+                                  <div
+                                    key={it.id}
+                                    style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13 }}
+                                  >
+                                    <span>
+                                      {it.productName}
+                                      {it.quantity > 1 ? ` x${it.quantity}` : ''}
+                                    </span>
+                                    <span style={{ color: 'rgba(0,0,0,0.65)' }}>
+                                      {formatCurrency(it.unitPrice * it.quantity)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {selectedComanda.status === 'OPEN' ? (
+                                <div className="comanda-cart-item-controls" style={{ marginTop: 10 }}>
+                                  <button
+                                    onClick={() => handleUpdateGroupQuantity(entry.items, entry.quantity - 1, entry.groupKey)}
+                                    className="comanda-cart-item-btn"
+                                    title="Diminuir quantidade"
+                                  >
+                                    <Minus size={14} />
+                                  </button>
+                                  <input
+                                    type="text"
+                                    className="comanda-cart-item-quantity"
+                                    value={
+                                      quantityInputs[entry.groupKey] !== undefined
+                                        ? quantityInputs[entry.groupKey]
+                                        : entry.quantity.toString()
+                                    }
+                                    onChange={(e) => setQuantityInputs({ ...quantityInputs, [entry.groupKey]: e.target.value })}
+                                    onBlur={(e) => {
+                                      const raw = e.target.value.replace(',', '.');
+                                      const parsed = parseFloat(raw);
+                                      if (!isNaN(parsed) && parsed > 0) {
+                                        handleUpdateGroupQuantity(entry.items, parsed, entry.groupKey);
+                                      } else {
+                                        setQuantityInputs((prev) => {
+                                          const next = { ...prev };
+                                          delete next[entry.groupKey];
+                                          return next;
+                                        });
+                                      }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        (e.target as HTMLInputElement).blur();
+                                      }
+                                    }}
+                                    title="Quantidade do item montado"
+                                  />
+                                  <button
+                                    onClick={() => handleUpdateGroupQuantity(entry.items, entry.quantity + 1, entry.groupKey)}
+                                    className="comanda-cart-item-btn"
+                                    title="Aumentar quantidade"
+                                  >
+                                    <Plus size={14} />
+                                  </button>
+                                  <span className="comanda-cart-item-total">{formatCurrency(entry.total)}</span>
+                                </div>
+                              ) : (
+                                <p className="comanda-cart-item-qty-readonly">Total — {formatCurrency(entry.total)}</p>
+                              )}
                             </div>
-                          ) : (
-                            <p className="comanda-cart-item-qty-readonly">
-                              {item.quantity}x {formatCurrency(item.unitPrice)} — {formatCurrency(item.subtotal)}
-                            </p>
+
+                            {selectedComanda.status === 'OPEN' && (
+                              <button
+                                onClick={() => handleRemoveGroupItems(entry.items)}
+                                className="comanda-cart-item-remove"
+                                title="Remover item montado"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      const item = entry.item;
+                      return (
+                        <div key={item.id} className="comanda-cart-item">
+                          <div className="comanda-cart-item-info">
+                            <p className="comanda-cart-item-name">{item.productName}</p>
+                            {item.observation && (
+                              <p className="comanda-cart-item-observation">{item.observation}</p>
+                            )}
+
+                            {selectedComanda.status === 'OPEN' ? (
+                              <div className="comanda-cart-item-controls">
+                                <button
+                                  onClick={() => handleUpdateItemQuantity(item, item.quantity - 1)}
+                                  className="comanda-cart-item-btn"
+                                  title="Diminuir quantidade"
+                                >
+                                  <Minus size={14} />
+                                </button>
+                                <input
+                                  type="text"
+                                  className="comanda-cart-item-quantity"
+                                  value={quantityInputs[item.id] !== undefined ? quantityInputs[item.id] : item.quantity.toString()}
+                                  onChange={(e) => setQuantityInputs({ ...quantityInputs, [item.id]: e.target.value })}
+                                  onBlur={(e) => {
+                                    const raw = e.target.value.replace(',', '.');
+                                    const parsed = parseFloat(raw);
+                                    if (!isNaN(parsed) && parsed > 0) {
+                                      handleUpdateItemQuantity(item, parsed);
+                                    } else {
+                                      setQuantityInputs((prev) => {
+                                        const next = { ...prev };
+                                        delete next[item.id];
+                                        return next;
+                                      });
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      (e.target as HTMLInputElement).blur();
+                                    }
+                                  }}
+                                  title="Quantidade do item"
+                                />
+                                <button
+                                  onClick={() => handleUpdateItemQuantity(item, item.quantity + 1)}
+                                  className="comanda-cart-item-btn"
+                                  title="Aumentar quantidade"
+                                >
+                                  <Plus size={14} />
+                                </button>
+                                <span className="comanda-cart-item-total">{formatCurrency(item.unitPrice * item.quantity)}</span>
+                              </div>
+                            ) : (
+                              <p className="comanda-cart-item-qty-readonly">
+                                {item.quantity}x {formatCurrency(item.unitPrice)} — {formatCurrency(item.subtotal)}
+                              </p>
+                            )}
+                          </div>
+
+                          {selectedComanda.status === 'OPEN' && (
+                            <button
+                              onClick={() => handleRemoveItem(item.id)}
+                              className="comanda-cart-item-remove"
+                              title="Remover item"
+                            >
+                              <Trash2 size={16} />
+                            </button>
                           )}
                         </div>
-
-                        {selectedComanda.status === 'OPEN' && (
-                          <button
-                            onClick={() => handleRemoveItem(item.id)}
-                            className="comanda-cart-item-remove"
-                            title="Remover item"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
 
@@ -1384,7 +1722,9 @@ export const ComandasPage: React.FC = () => {
             <strong>Itens:</strong> {draftToImport?.items?.length ?? 0}
           </div>
           {!currentSession?.id && (
-            <Alert type="warning" message="Nenhuma sessão de caixa aberta. Abra o caixa para importar." />
+            <Alert variant="warning">
+              Nenhuma sessão de caixa aberta. Abra o caixa para importar.
+            </Alert>
           )}
         </div>
       </Modal>
@@ -1446,7 +1786,7 @@ export const ComandasPage: React.FC = () => {
                       <span>{p.name}</span>
                     </div>
                     <div className="product-search-item-price">
-                      R$ {p.price.toFixed(2)}
+                      R$ {Number(p.salePrice || 0).toFixed(2)}
                     </div>
                   </div>
                 ))
@@ -1486,6 +1826,103 @@ export const ComandasPage: React.FC = () => {
             />
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        isOpen={isAssembledModalOpen}
+        title="Montar produto"
+        onClose={() => setIsAssembledModalOpen(false)}
+        footer={
+          <div className="modal-footer">
+            <Button variant="secondary" onClick={() => setIsAssembledModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button variant="primary" onClick={confirmAssembledComanda as any}>
+              Confirmar
+            </Button>
+          </div>
+        }
+      >
+        <div className="form-group">
+          <label>Tamanho</label>
+          <select
+            value={assembledSizeId}
+            onChange={(e) => setAssembledSizeId(e.target.value)}
+            className="products-page__form-select"
+          >
+            {(() => {
+              const anyProduct = assembledSelectedFlavors[0];
+              const category = anyProduct ? getProductCategory(anyProduct) : null;
+              const sizes = Array.isArray(category?.sizes) ? category.sizes : [];
+              return sizes.map((s: any) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ));
+            })()}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label>Sabores</label>
+          <Input
+            type="number"
+            min={1}
+            max={assembledMaxFlavors}
+            value={assembledFlavorsTotal}
+            onChange={(e) => setAssembledFlavorsTotal(e.target.value)}
+          />
+          <small style={{ color: 'rgba(0,0,0,0.6)' }}>Máx: {assembledMaxFlavors}</small>
+        </div>
+
+        <div className="form-group">
+          <label>Sabores selecionados</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {assembledSelectedFlavors.map((p, idx) => (
+              <div key={`${p.id}-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <div>
+                  {p.name}
+                  <span style={{ color: 'rgba(0,0,0,0.6)' }}> #{idx + 1}</span>
+                </div>
+                <Button variant="secondary" size="sm" onClick={() => removeAssembledFlavor(idx)}>
+                  Remover
+                </Button>
+              </div>
+            ))}
+            <div style={{ color: 'rgba(0,0,0,0.6)' }}>
+              {assembledSelectedFlavors.length}/{assembledFlavorsTotalNumber}
+            </div>
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label>Adicionar sabor</label>
+          <Input
+            type="text"
+            value={assembledSearchTerm}
+            onChange={(e) => setAssembledSearchTerm(e.target.value)}
+            placeholder="Buscar sabor..."
+          />
+
+          <div className="product-search-results" style={{ marginTop: 10 }}>
+            {assembledAvailableFlavors.map((p) => (
+              <div
+                key={p.id}
+                className="product-search-item"
+                onClick={() => addAssembledFlavor(p)}
+                style={{
+                  cursor: assembledSelectedFlavors.length >= assembledFlavorsTotalNumber ? 'not-allowed' : 'pointer',
+                  opacity: assembledSelectedFlavors.length >= assembledFlavorsTotalNumber ? 0.6 : 1,
+                }}
+              >
+                <div className="product-search-item-name">
+                  {p.code && <span className="product-code">[{p.code}]</span>}
+                  <span>{p.name}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </Modal>
 
       {/* Modal de Cadastro de Cliente */}

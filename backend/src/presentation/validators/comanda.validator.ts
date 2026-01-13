@@ -1,12 +1,14 @@
 import Joi from 'joi';
 
+const uuid = Joi.string().uuid();
+
 export const comandaValidators = {
   openComanda: Joi.object({
     body: Joi.object({
       tableNumber: Joi.string().max(20).optional(),
       customerName: Joi.string().max(255).optional(),
-      customerId: Joi.string().uuid().optional(),
-      cashSessionId: Joi.string().uuid().required(),
+      customerId: uuid.optional(),
+      cashSessionId: uuid.required(),
     }),
     query: Joi.object({}),
     params: Joi.object({}),
@@ -16,7 +18,7 @@ export const comandaValidators = {
     body: Joi.object({}),
     query: Joi.object({}),
     params: Joi.object({
-      id: Joi.string().uuid().required(),
+      id: uuid.required(),
     }),
   }),
 
@@ -24,8 +26,8 @@ export const comandaValidators = {
     body: Joi.object({}),
     query: Joi.object({
       status: Joi.string().valid('open', 'closed', 'cancelled').optional(),
-      cashSessionId: Joi.string().uuid().optional(),
-      customerId: Joi.string().uuid().optional(),
+      cashSessionId: uuid.optional(),
+      customerId: uuid.optional(),
       tableNumber: Joi.string().max(20).optional(),
       startDate: Joi.date().iso().optional(),
       endDate: Joi.date().iso().optional(),
@@ -37,12 +39,18 @@ export const comandaValidators = {
 
   addItem: Joi.object({
     body: Joi.object({
-      productId: Joi.string().uuid().required(),
+      productId: uuid.required(),
       quantity: Joi.number().positive().required(),
+      sizeId: uuid.optional(),
+      flavorsTotal: Joi.number().integer().min(1).max(20).when('sizeId', {
+        is: uuid,
+        then: Joi.required(),
+        otherwise: Joi.optional(),
+      }),
     }),
     query: Joi.object({}),
     params: Joi.object({
-      id: Joi.string().uuid().required(),
+      id: uuid.required(),
     }),
   }),
 
@@ -52,8 +60,8 @@ export const comandaValidators = {
     }),
     query: Joi.object({}),
     params: Joi.object({
-      id: Joi.string().uuid().required(),
-      itemId: Joi.string().uuid().required(),
+      id: uuid.required(),
+      itemId: uuid.required(),
     }),
   }),
 
@@ -63,8 +71,8 @@ export const comandaValidators = {
     }),
     query: Joi.object({}),
     params: Joi.object({
-      id: Joi.string().uuid().required(),
-      itemId: Joi.string().uuid().required(),
+      id: uuid.required(),
+      itemId: uuid.required(),
     }),
   }),
 
@@ -87,7 +95,7 @@ export const comandaValidators = {
     }),
     query: Joi.object({}),
     params: Joi.object({
-      id: Joi.string().uuid().required(),
+      id: uuid.required(),
     }),
   }),
 
@@ -97,7 +105,7 @@ export const comandaValidators = {
     }),
     query: Joi.object({}),
     params: Joi.object({
-      id: Joi.string().uuid().required(),
+      id: uuid.required(),
     }),
   }),
 
@@ -107,7 +115,7 @@ export const comandaValidators = {
     }),
     query: Joi.object({}),
     params: Joi.object({
-      id: Joi.string().uuid().required(),
+      id: uuid.required(),
     }),
   }),
 };

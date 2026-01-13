@@ -5,7 +5,7 @@ import { FinancialTransactionStatus } from '@domain/entities/financial.entity';
 import { FinancialService } from './financial.service';
 
 export interface CreateAccountReceivableDTO {
-  customerId: string;
+  customerId?: string;
   customerName: string;
   description: string;
   saleId?: string;
@@ -53,13 +53,15 @@ export class AccountReceivableService {
   async createAccountReceivable(
     data: CreateAccountReceivableDTO
   ): Promise<AccountReceivable> {
-    // Validar cliente
-    const customer = await this.prismaClient.customer.findUnique({
-      where: { id: data.customerId },
-    });
+    // Validar cliente (quando informado)
+    if (data.customerId) {
+      const customer = await this.prismaClient.customer.findUnique({
+        where: { id: data.customerId },
+      });
 
-    if (!customer) {
-      throw new AppError('Cliente não encontrado', 404);
+      if (!customer) {
+        throw new AppError('Cliente não encontrado', 404);
+      }
     }
 
     // Se houver saleId, validar venda
@@ -83,7 +85,7 @@ export class AccountReceivableService {
 
     const accountReceivable = await this.prismaClient.accountReceivable.create({
       data: {
-        customerId: data.customerId,
+        customerId: data.customerId ?? null,
         customerName: data.customerName,
         description: data.description,
         saleId: data.saleId,
@@ -96,6 +98,34 @@ export class AccountReceivableService {
       include: {
         customer: true,
       },
+    });
+
+    // Criar transação financeira vinculada (pendente/atrasada) para manter status consistente no Financeiro > Transações
+    let revenueCategory = await this.prismaClient.financialCategory.findFirst({
+      where: { name: 'Vendas' },
+    });
+
+    if (!revenueCategory) {
+      revenueCategory = await this.prismaClient.financialCategory.create({
+        data: {
+          name: 'Vendas',
+          categoryType: 'revenue',
+          dreGroup: 'gross_revenue',
+          isActive: true,
+        },
+      });
+    }
+
+    await this.financialService.createTransaction({
+      categoryId: revenueCategory.id,
+      transactionType: 'revenue',
+      amount: Number(accountReceivable.amount),
+      description: `Conta a Receber: ${accountReceivable.customerName} - ${accountReceivable.description}`,
+      referenceNumber: accountReceivable.id,
+      transactionDate: new Date(),
+      dueDate: accountReceivable.dueDate,
+      status: accountReceivable.status as any,
+      createdById: data.createdById,
     });
 
     return accountReceivable as any;
@@ -150,31 +180,51 @@ export class AccountReceivableService {
       });
     }
 
-    // Registrar movimento financeiro de recebimento
-    let revenueCategory = await this.prismaClient.financialCategory.findFirst({
-      where: { name: 'Vendas' },
+    // Sincronizar transação financeira vinculada a esta conta (não deixar como pendente)
+    const txUpdate = await this.prismaClient.financialTransaction.updateMany({
+      where: {
+        referenceNumber: accountReceivableId,
+        status: {
+          not: 'cancelled',
+        },
+      },
+      data: {
+        status: 'paid',
+        paidAt: paymentData.paymentDate,
+        transactionDate: paymentData.paymentDate,
+      },
     });
 
-    if (!revenueCategory) {
-      revenueCategory = await this.prismaClient.financialCategory.create({
-        data: {
-          name: 'Vendas',
-          categoryType: 'revenue',
-          dreGroup: 'gross_revenue',
-          isActive: true,
-        },
+    // Caso não exista transação (dados antigos), cria uma já como paga
+    if (txUpdate.count === 0) {
+      let revenueCategory = await this.prismaClient.financialCategory.findFirst({
+        where: { name: 'Vendas' },
+      });
+
+      if (!revenueCategory) {
+        revenueCategory = await this.prismaClient.financialCategory.create({
+          data: {
+            name: 'Vendas',
+            categoryType: 'revenue',
+            dreGroup: 'gross_revenue',
+            isActive: true,
+          },
+        });
+      }
+
+      await this.financialService.createTransaction({
+        categoryId: revenueCategory.id,
+        transactionType: 'revenue',
+        amount: Number(account.amount),
+        description: `Conta a Receber: ${account.customerName} - ${account.description}`,
+        referenceNumber: accountReceivableId,
+        transactionDate: paymentData.paymentDate,
+        dueDate: account.dueDate,
+        status: 'paid',
+        paidAt: paymentData.paymentDate,
+        createdById: paymentData.userId,
       });
     }
-
-    await this.financialService.createTransaction({
-      categoryId: revenueCategory.id,
-      transactionType: 'revenue',
-      amount: Number(account.amount),
-      description: `Recebimento: ${account.customer?.name || 'Cliente'}`,
-      referenceNumber: `RECEIPT-${accountReceivableId}`,
-      transactionDate: paymentData.paymentDate,
-      createdById: paymentData.userId,
-    });
 
     return updated as any;
   }
@@ -260,13 +310,28 @@ export class AccountReceivableService {
       throw new AppError('Não é possível atualizar conta que já foi recebida', 400);
     }
 
-    return this.prismaClient.accountReceivable.update({
+    const updated = await this.prismaClient.accountReceivable.update({
       where: { id: accountReceivableId },
       data,
       include: {
         customer: true,
       },
     }) as any;
+
+    // Manter transação financeira vinculada sincronizada (vencimento)
+    await this.prismaClient.financialTransaction.updateMany({
+      where: {
+        referenceNumber: accountReceivableId,
+        status: {
+          notIn: ['paid', 'cancelled'],
+        },
+      },
+      data: {
+        ...(data.dueDate ? { dueDate: data.dueDate } : {}),
+      },
+    });
+
+    return updated;
   }
 
   /**
@@ -290,7 +355,7 @@ export class AccountReceivableService {
       throw new AppError('Não é possível cancelar esta conta', 400);
     }
 
-    return this.prismaClient.accountReceivable.update({
+    const updated = await this.prismaClient.accountReceivable.update({
       where: { id: accountReceivableId },
       data: {
         status: 'cancelled',
@@ -300,6 +365,20 @@ export class AccountReceivableService {
         customer: true,
       },
     }) as any;
+
+    await this.prismaClient.financialTransaction.updateMany({
+      where: {
+        referenceNumber: accountReceivableId,
+        status: {
+          not: 'paid',
+        },
+      },
+      data: {
+        status: 'cancelled',
+      },
+    });
+
+    return updated;
   }
 
   /**

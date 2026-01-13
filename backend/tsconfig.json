@@ -17,6 +17,7 @@
     "declarationMap": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
+    "noImplicitAny": false,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "allowSyntheticDefaultImports": true,

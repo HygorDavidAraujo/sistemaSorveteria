@@ -7,12 +7,35 @@ export interface User {
   createdAt?: string;
 }
 
+export type ProductCategoryType = 'common' | 'assembled';
+
+export interface CategorySize {
+  id: string;
+  categoryId: string;
+  name: string;
+  maxFlavors: number;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Category {
   id: string;
   name: string;
   description?: string;
   isActive: boolean;
   displayOrder: number;
+  categoryType?: ProductCategoryType;
+  sizes?: CategorySize[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProductSizePrice {
+  id: string;
+  productId: string;
+  categorySizeId: string;
+  price: number | string;
   createdAt: string;
   updatedAt: string;
 }
@@ -25,6 +48,7 @@ export interface Product {
   costPrice?: number | string;
   categoryId?: string;
   category?: 'sorvete' | 'bebida' | 'sobremesa' | 'outro' | Category;
+  sizePrices?: ProductSizePrice[];
   image?: string;
   isActive?: boolean;
   code?: string;
@@ -239,4 +263,67 @@ export interface ComparativeReport {
 export interface AuthResponse {
   accessToken: string;
   user: User;
+}
+
+// -----------------------------------------------------------------------------
+// Finance module (backend: /financial/*)
+// -----------------------------------------------------------------------------
+
+export type PaymentMethod = 'cash' | 'debit_card' | 'credit_card' | 'pix' | 'other';
+
+export interface FinancialCategory {
+  id: string;
+  name: string;
+  categoryType: 'revenue' | 'cost' | 'expense';
+  dreGroup?: string | null;
+  parentId?: string | null;
+  isActive: boolean;
+  createdAt?: string;
+}
+
+export interface FinancialTransaction {
+  id: string;
+  categoryId: string;
+  transactionType: 'revenue' | 'expense' | 'transfer';
+  amount: number | string;
+  description: string;
+  referenceNumber?: string | null;
+  transactionDate: string;
+  dueDate?: string | null;
+  paidAt?: string | null;
+  status: 'pending' | 'paid' | 'cancelled' | 'overdue';
+  category?: FinancialCategory;
+}
+
+export interface AccountPayable {
+  id: string;
+  supplierName: string;
+  description: string;
+  amount: number | string;
+  dueDate: string;
+  paidAt?: string | null;
+  status: 'pending' | 'paid' | 'cancelled' | 'overdue';
+  notes?: string | null;
+  category?: FinancialCategory;
+}
+
+export interface AccountReceivable {
+  id: string;
+  customerId?: string | null;
+  customerName: string;
+  description: string;
+  amount: number | string;
+  dueDate: string;
+  receivedAt?: string | null;
+  saleId?: string | null;
+  status: 'pending' | 'paid' | 'cancelled' | 'overdue';
+  notes?: string | null;
+}
+
+export interface PaymentMethodConfig {
+  id: string;
+  paymentMethod: PaymentMethod;
+  feePercent: number | string;
+  settlementDays?: number | null;
+  isActive: boolean;
 }

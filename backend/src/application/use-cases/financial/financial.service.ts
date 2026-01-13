@@ -18,6 +18,8 @@ export interface CreateFinancialTransactionDTO {
   referenceNumber?: string;
   transactionDate: Date;
   dueDate?: Date;
+  status?: FinancialTransactionStatus;
+  paidAt?: Date;
   saleId?: string;
   createdById: string;
 }
@@ -54,6 +56,15 @@ export interface UpdateFinancialCategoryDTO {
   parentId?: string;
   isActive?: boolean;
 }
+
+const createdBySafeSelect = {
+  select: {
+    id: true,
+    fullName: true,
+    email: true,
+    role: true,
+  },
+} as const;
 
 /**
  * Financial Service - Núcleo do módulo financeiro
@@ -93,9 +104,9 @@ export class FinancialService {
       throw new AppError('Valor deve ser maior que zero', 400);
     }
 
-    // Se houver dueDate e for futuro, definir status como pending, senão como pending
     // Prisma só tem: pending, paid, cancelled, overdue
-    const status = 'pending' as const;
+    const status: FinancialTransactionStatus = data.status ?? 'pending';
+    const paidAt = status === 'paid' ? (data.paidAt ?? data.transactionDate) : undefined;
 
     const transaction = await this.prismaClient.financialTransaction.create({
       data: {
@@ -106,13 +117,14 @@ export class FinancialService {
         referenceNumber: data.referenceNumber,
         transactionDate: data.transactionDate,
         dueDate: data.dueDate,
+        paidAt,
         saleId: data.saleId,
-        status,
+        status: status as any,
         createdById: data.createdById,
       },
       include: {
         category: true,
-        createdBy: true,
+        createdBy: createdBySafeSelect,
       },
     });
 
@@ -147,7 +159,7 @@ export class FinancialService {
       },
       include: {
         category: true,
-        createdBy: true,
+        createdBy: createdBySafeSelect,
       },
     });
 
@@ -182,7 +194,7 @@ export class FinancialService {
       },
       include: {
         category: true,
-        createdBy: true,
+        createdBy: createdBySafeSelect,
       },
     });
 
@@ -228,7 +240,7 @@ export class FinancialService {
         orderBy: { transactionDate: 'desc' },
         include: {
           category: true,
-          createdBy: true,
+          createdBy: createdBySafeSelect,
         },
       }),
       this.prismaClient.financialTransaction.count({ where }),
@@ -245,7 +257,7 @@ export class FinancialService {
       where: { id: transactionId },
       include: {
         category: true,
-        createdBy: true,
+        createdBy: createdBySafeSelect,
       },
     });
 
@@ -284,7 +296,7 @@ export class FinancialService {
       },
       include: {
         category: true,
-        createdBy: true,
+        createdBy: createdBySafeSelect,
       },
     });
 

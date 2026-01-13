@@ -96,10 +96,9 @@ export const updateFinancialCategorySchema = Joi.object({
  * Accounts Payable Validators
  */
 export const createAccountPayableSchema = Joi.object({
-  supplierId: Joi.string().required().messages({
-    'any.required': 'ID do fornecedor é obrigatório',
+  supplierName: Joi.string().max(255).required().messages({
+    'any.required': 'Nome do fornecedor é obrigatório',
   }),
-  invoiceNumber: Joi.string().max(50).optional(),
   description: Joi.string().max(500).required().messages({
     'string.max': 'Descrição não pode ter mais de 500 caracteres',
     'any.required': 'Descrição é obrigatória',
@@ -112,9 +111,6 @@ export const createAccountPayableSchema = Joi.object({
     'date.iso': 'Data deve estar em formato ISO',
     'any.required': 'Data de vencimento é obrigatória',
   }),
-  paymentMethod: Joi.string().max(50).optional(),
-  installmentNumber: Joi.number().integer().min(1).optional(),
-  totalInstallments: Joi.number().integer().min(1).optional(),
   categoryId: Joi.string().uuid().required().messages({
     'string.guid': 'ID da categoria deve ser um UUID válido',
     'any.required': 'ID da categoria é obrigatório',
@@ -122,17 +118,10 @@ export const createAccountPayableSchema = Joi.object({
   notes: Joi.string().optional(),
 });
 
-export const recordPaymentSchema = Joi.object({
-  paidAmount: Joi.number().positive().required().messages({
-    'number.positive': 'Valor do pagamento deve ser maior que zero',
-    'any.required': 'Valor do pagamento é obrigatório',
-  }),
+export const recordAccountPayablePaymentSchema = Joi.object({
   paymentDate: Joi.date().iso().required().messages({
     'date.iso': 'Data deve estar em formato ISO',
     'any.required': 'Data do pagamento é obrigatória',
-  }),
-  paymentMethod: Joi.string().max(50).required().messages({
-    'any.required': 'Método de pagamento é obrigatório',
   }),
   notes: Joi.string().optional(),
 });
@@ -155,12 +144,17 @@ export const cancelAccountPayableSchema = Joi.object({
  * Accounts Receivable Validators
  */
 export const createAccountReceivableSchema = Joi.object({
-  customerId: Joi.string().uuid().required().messages({
+  customerId: Joi.string().uuid().optional().messages({
     'string.guid': 'ID do cliente deve ser um UUID válido',
-    'any.required': 'ID do cliente é obrigatório',
+  }),
+  customerName: Joi.string().max(255).required().messages({
+    'any.required': 'Nome do cliente é obrigatório',
+  }),
+  description: Joi.string().max(500).required().messages({
+    'string.max': 'Descrição não pode ter mais de 500 caracteres',
+    'any.required': 'Descrição é obrigatória',
   }),
   saleId: Joi.string().uuid().optional(),
-  invoiceNumber: Joi.string().max(50).optional(),
   amount: Joi.number().positive().required().messages({
     'number.positive': 'Valor deve ser maior que zero',
     'any.required': 'Valor é obrigatório',
@@ -169,17 +163,10 @@ export const createAccountReceivableSchema = Joi.object({
     'date.iso': 'Data deve estar em formato ISO',
     'any.required': 'Data de vencimento é obrigatória',
   }),
-  paymentMethod: Joi.string().max(50).optional(),
-  installmentNumber: Joi.number().integer().min(1).optional(),
-  totalInstallments: Joi.number().integer().min(1).optional(),
   notes: Joi.string().optional(),
 });
 
 export const receivePaymentSchema = Joi.object({
-  paidAmount: Joi.number().positive().required().messages({
-    'number.positive': 'Valor do recebimento deve ser maior que zero',
-    'any.required': 'Valor do recebimento é obrigatório',
-  }),
   paymentDate: Joi.date().iso().required().messages({
     'date.iso': 'Data deve estar em formato ISO',
     'any.required': 'Data do recebimento é obrigatória',
@@ -192,7 +179,6 @@ export const receivePaymentSchema = Joi.object({
 
 export const updateAccountReceivableSchema = Joi.object({
   dueDate: Joi.date().iso().optional(),
-  paymentMethod: Joi.string().max(50).optional(),
   notes: Joi.string().optional(),
 });
 
@@ -245,4 +231,20 @@ export const cashFlowSchema = Joi.object({
 
 export const comparativeReportSchema = Joi.object({
   query: reportDateRangeQuerySchema,
+});
+
+/**
+ * Payment Method Config Validators
+ */
+export const upsertPaymentMethodConfigSchema = Joi.object({
+  params: Joi.object({
+    paymentMethod: Joi.string()
+      .valid('cash', 'debit_card', 'credit_card', 'pix', 'other')
+      .required(),
+  }),
+  body: Joi.object({
+    feePercent: Joi.number().min(0).max(100).optional(),
+    settlementDays: Joi.number().integer().min(0).allow(null).optional(),
+    isActive: Joi.boolean().optional(),
+  }).required(),
 });

@@ -1,5 +1,19 @@
 import Joi from 'joi';
 
+const uuid = Joi.string().uuid();
+
+const sizeInput = Joi.object({
+  id: uuid.optional(),
+  name: Joi.string().min(1).max(100).required(),
+  maxFlavors: Joi.number().integer().min(1).max(20).required(),
+  displayOrder: Joi.number().integer().min(0).optional(),
+});
+
+const sizePriceInput = Joi.object({
+  sizeId: uuid.required(),
+  price: Joi.number().positive().precision(2).required(),
+});
+
 export const productValidators = {
   /**
    * Validação para criar produto
@@ -17,7 +31,7 @@ export const productValidators = {
         'any.required': 'Código do produto é obrigatório',
       }),
       description: Joi.string().max(1000).optional().allow(''),
-      categoryId: Joi.string().uuid().optional(),
+      categoryId: uuid.optional(),
       saleType: Joi.string().valid('unit', 'weight').required().messages({
         'any.only': 'Tipo de venda inválido. Valores permitidos: unit, weight',
         'any.required': 'Tipo de venda é obrigatório',
@@ -29,6 +43,7 @@ export const productValidators = {
         'any.required': 'Preço de venda é obrigatório',
       }),
       costPrice: Joi.number().positive().precision(2).optional(),
+      sizePrices: Joi.array().items(sizePriceInput).optional(),
       eligibleForLoyalty: Joi.boolean().optional().default(false),
       loyaltyPointsMultiplier: Joi.number().positive().precision(2).optional().default(1),
       trackStock: Joi.boolean().optional().default(false),
@@ -45,12 +60,13 @@ export const productValidators = {
     body: Joi.object({
       name: Joi.string().min(2).max(255).optional(),
       description: Joi.string().max(1000).optional().allow(''),
-      categoryId: Joi.string().uuid().optional().allow(null),
+      categoryId: uuid.optional().allow(null),
       code: Joi.string().max(50).optional(),
       saleType: Joi.string().valid('unit', 'weight').optional(),
       unit: Joi.string().max(50).optional().allow(''),
       salePrice: Joi.number().positive().precision(2).optional().allow(null),
       costPrice: Joi.number().positive().precision(2).optional().allow(null),
+      sizePrices: Joi.array().items(sizePriceInput).optional().allow(null),
       eligibleForLoyalty: Joi.boolean().optional(),
       loyaltyPointsMultiplier: Joi.number().positive().precision(2).optional(),
       trackStock: Joi.boolean().optional(),
@@ -66,7 +82,7 @@ export const productValidators = {
   searchProducts: Joi.object({
     query: Joi.object({
       search: Joi.string().max(255).optional().allow(''),
-      categoryId: Joi.string().uuid().optional(),
+      categoryId: uuid.optional(),
       isActive: Joi.string().valid('true', 'false').optional(),
       saleType: Joi.string().valid('unit', 'weight').optional(),
       page: Joi.number().integer().min(1).optional().default(1),
@@ -115,6 +131,8 @@ export const productValidators = {
         'any.required': 'Nome da categoria é obrigatório',
       }),
       description: Joi.string().max(1000).optional().allow(''),
+      categoryType: Joi.string().valid('common', 'assembled').optional().default('common'),
+      sizes: Joi.array().items(sizeInput).optional(),
       isActive: Joi.boolean().optional().default(true),
     }),
   }),
@@ -126,6 +144,8 @@ export const productValidators = {
     body: Joi.object({
       name: Joi.string().min(2).max(255).optional(),
       description: Joi.string().max(1000).optional().allow(''),
+      categoryType: Joi.string().valid('common', 'assembled').optional(),
+      sizes: Joi.array().items(sizeInput).optional(),
       isActive: Joi.boolean().optional(),
     }).min(1),
   }),
@@ -135,7 +155,7 @@ export const productValidators = {
    */
   uuidParam: Joi.object({
     params: Joi.object({
-      id: Joi.string().uuid().required().messages({
+      id: uuid.required().messages({
         'string.guid': 'ID inválido',
         'any.required': 'ID é obrigatório',
       }),

@@ -56,6 +56,7 @@ services:
       API_PORT: "3000"
       API_HOST: 0.0.0.0
       LOG_LEVEL: debug
+      RUN_MIGRATIONS: "true"
     ports:
       - "3000:3000"
     depends_on:

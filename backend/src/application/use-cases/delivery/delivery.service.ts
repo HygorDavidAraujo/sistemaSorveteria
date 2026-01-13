@@ -1,4 +1,4 @@
-import { PrismaClient, DeliveryStatus, PaymentMethod } from '@prisma/client';
+import { PrismaClient, DeliveryStatus, PaymentMethod, type LoyaltyConfig, type CashbackConfig } from '@prisma/client';
 import prisma from '@infrastructure/database/prisma-client';
 import { AppError } from '@shared/errors/app-error';
 import { LoyaltyService } from '@application/use-cases/loyalty/loyalty.service';
@@ -12,6 +12,8 @@ export interface CreateDeliveryOrderDTO {
   items: Array<{
     productId: string;
     quantity: number;
+    sizeId?: string;
+    flavorsTotal?: number;
   }>;
   payments?: Array<{
     paymentMethod: PaymentMethod;
@@ -154,6 +156,17 @@ export class DeliveryService {
         id: { in: productIds },
       },
       include: {
+        category: {
+          include: {
+            sizes: { orderBy: { displayOrder: 'asc' } },
+          },
+        },
+        sizePrices: {
+          select: {
+            categorySizeId: true,
+            price: true,
+          },
+        },
         productCosts: {
           where: {
             validFrom: { lte: new Date() },
@@ -190,17 +203,45 @@ export class DeliveryService {
 
     // Calcular valores
     let subtotal = 0;
-    const itemsData = [];
+    const itemsData: Array<{
+      productId: string;
+      productName: string;
+      quantity: number;
+      unitPrice: number;
+      subtotal: number;
+    }> = [];
 
     for (const item of data.items) {
       const product = products.find((p) => p.id === item.productId)!;
-      const unitPrice = Number(product.salePrice);
+      let unitPrice = Number(product.salePrice);
+      let productName = product.name;
+
+      if (item.sizeId) {
+        if (!product.categoryId || product.category?.categoryType !== 'assembled') {
+          throw new AppError('Tamanho/sabores só podem ser usados em produtos de categoria Montado', 400);
+        }
+        const size = product.category.sizes.find((s: any) => s.id === item.sizeId);
+        if (!size) {
+          throw new AppError('Tamanho não pertence à categoria do produto', 400);
+        }
+        const flavorsTotal = Number(item.flavorsTotal);
+        if (!Number.isFinite(flavorsTotal) || flavorsTotal < 1 || flavorsTotal > size.maxFlavors) {
+          throw new AppError(`Quantidade de sabores inválida para o tamanho ${size.name}`, 400);
+        }
+        const sizePrice = product.sizePrices.find((sp: any) => sp.categorySizeId === item.sizeId);
+        if (!sizePrice) {
+          throw new AppError(`Preço não cadastrado para o tamanho ${size.name} do produto ${product.name}`, 400);
+        }
+        unitPrice = Number(sizePrice.price) / flavorsTotal;
+        productName = `${product.name} (${size.name} 1/${flavorsTotal})`;
+      }
+
       const itemSubtotal = unitPrice * item.quantity;
       subtotal += itemSubtotal;
 
       itemsData.push({
         productId: item.productId,
-        productName: product.name,
+        productName,
         quantity: item.quantity,
         unitPrice,
         subtotal: itemSubtotal,
@@ -227,8 +268,8 @@ export class DeliveryService {
 
     let loyaltyPointsEarned = 0;
     let cashbackEarned = 0;
-    let loyaltyConfig = null;
-    let cashbackConfig = null;
+    let loyaltyConfig: LoyaltyConfig | null = null;
+    let cashbackConfig: CashbackConfig | null = null;
 
     if (customer) {
       loyaltyPointsEarned = await this.loyaltyService.calculatePoints(total, productIds);

@@ -1,15 +1,23 @@
 import Joi from 'joi';
 
+const uuid = Joi.string().uuid();
+
 export const deliveryValidators = {
   createOrder: Joi.object({
     body: Joi.object({
-      customerId: Joi.string().uuid().required(),
-      cashSessionId: Joi.string().uuid().required(),
+      customerId: uuid.required(),
+      cashSessionId: uuid.required(),
       items: Joi.array()
         .items(
           Joi.object({
-            productId: Joi.string().uuid().required(),
+            productId: uuid.required(),
             quantity: Joi.number().positive().required(),
+            sizeId: uuid.optional(),
+            flavorsTotal: Joi.number().integer().min(1).max(20).when('sizeId', {
+              is: uuid,
+              then: Joi.required(),
+              otherwise: Joi.optional(),
+            }),
           })
         )
         .min(1)
@@ -39,7 +47,7 @@ export const deliveryValidators = {
     body: Joi.object({}),
     query: Joi.object({}),
     params: Joi.object({
-      id: Joi.string().uuid().required(),
+      id: uuid.required(),
     }),
   }),
 
@@ -49,8 +57,8 @@ export const deliveryValidators = {
       status: Joi.string()
         .valid('received', 'preparing', 'out_for_delivery', 'delivered', 'cancelled')
         .optional(),
-      customerId: Joi.string().uuid().optional(),
-      cashSessionId: Joi.string().uuid().optional(),
+      customerId: uuid.optional(),
+      cashSessionId: uuid.optional(),
       startDate: Joi.date().iso().optional(),
       endDate: Joi.date().iso().optional(),
       page: Joi.number().integer().min(1).default(1),
@@ -80,7 +88,7 @@ export const deliveryValidators = {
       limit: Joi.number().integer().min(1).max(100).default(20),
     }),
     params: Joi.object({
-      customerId: Joi.string().uuid().required(),
+      customerId: uuid.required(),
     }),
   }),
 
@@ -98,7 +106,7 @@ export const deliveryValidators = {
     body: Joi.object({}),
     query: Joi.object({}),
     params: Joi.object({
-      id: Joi.string().uuid().required(),
+      id: uuid.required(),
     }),
   }),
 
@@ -126,7 +134,7 @@ export const deliveryValidators = {
     }),
     query: Joi.object({}),
     params: Joi.object({
-      id: Joi.string().uuid().required(),
+      id: uuid.required(),
     }),
   }),
 
@@ -134,7 +142,7 @@ export const deliveryValidators = {
     body: Joi.object({}),
     query: Joi.object({}),
     params: Joi.object({
-      id: Joi.string().uuid().required(),
+      id: uuid.required(),
     }),
   }),
 

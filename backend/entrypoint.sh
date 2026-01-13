@@ -30,5 +30,10 @@ if [ "$#" -gt 0 ]; then
 	exec "$@"
 fi
 
+if [ "${NODE_ENV:-development}" = "production" ]; then
+	echo "[entrypoint] No command provided; defaulting to production server (npm run start)"
+	exec npm run start
+fi
+
 echo "[entrypoint] No command provided; defaulting to dev server"
 exec npm run dev

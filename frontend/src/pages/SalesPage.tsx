@@ -8,6 +8,7 @@ import { printReceipt, formatCurrency, getPrintStyles } from '@/utils/printer';
 import { clearCartDraft, loadCartDraft, saveCartDraft } from '@/utils/cartDraft';
 import type { Product, Customer } from '@/types';
 import './SalesPage.css';
+import '@/styles/assembledModal.css';
 
 export const SalesPage: React.FC = () => {
   const navigate = useNavigate();
@@ -32,6 +33,14 @@ export const SalesPage: React.FC = () => {
   const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
   const [pendingWeightProduct, setPendingWeightProduct] = useState<Product | null>(null);
   const [tempWeight, setTempWeight] = useState('');
+
+  const [isAssembledModalOpen, setIsAssembledModalOpen] = useState(false);
+  const [assembledCategoryId, setAssembledCategoryId] = useState<string>('');
+  const [assembledSizeId, setAssembledSizeId] = useState<string>('');
+  const [assembledFlavorsTotal, setAssembledFlavorsTotal] = useState<string>('1');
+  const [assembledSelectedFlavors, setAssembledSelectedFlavors] = useState<Product[]>([]);
+  const [assembledSearchTerm, setAssembledSearchTerm] = useState('');
+  const [assembledGroupId, setAssembledGroupId] = useState<string>('');
   const [customerForm, setCustomerForm] = useState({
     name: '',
     email: '',
@@ -63,6 +72,17 @@ export const SalesPage: React.FC = () => {
       return Number.isFinite(parsed) ? parsed : 0;
     }
     return 0;
+  };
+
+  const newGroupId = () => {
+    const cryptoAny: any = (globalThis as any).crypto;
+    if (cryptoAny?.randomUUID) return cryptoAny.randomUUID();
+    return `grp_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  };
+
+  const getProductCategory = (product: Product) => {
+    const cat: any = (product as any)?.category;
+    return typeof cat === 'object' ? cat : null;
   };
 
   useEffect(() => {
@@ -197,11 +217,28 @@ export const SalesPage: React.FC = () => {
 
   const handleAddItem = (product: Product) => {
     const isWeight = product.saleType === 'weight';
+    const category = getProductCategory(product);
+    const isAssembled = category?.categoryType === 'assembled';
     
     if (isWeight) {
       setPendingWeightProduct(product);
       setTempWeight('');
       setIsWeightModalOpen(true);
+    } else if (isAssembled) {
+      const sizes = Array.isArray(category?.sizes) ? category.sizes : [];
+      if (sizes.length === 0) {
+        setError('Categoria Montado sem tamanhos cadastrados');
+        setTimeout(() => setError(null), 3000);
+        return;
+      }
+      const initialSizeId = String(sizes[0].id);
+      setAssembledCategoryId(String(category.id));
+      setAssembledSizeId(initialSizeId);
+      setAssembledFlavorsTotal('1');
+      setAssembledSelectedFlavors([product]);
+      setAssembledSearchTerm('');
+      setAssembledGroupId(newGroupId());
+      setIsAssembledModalOpen(true);
     } else {
       const unitPrice = typeof product.salePrice === 'number' ? product.salePrice : (typeof product.salePrice === 'string' ? parseFloat(product.salePrice) : 0);
       salesStore.addItem({
@@ -216,33 +253,176 @@ export const SalesPage: React.FC = () => {
     }
   };
 
+  const assembledSize = useMemo(() => {
+    const anyProduct = assembledSelectedFlavors[0];
+    const category = anyProduct ? getProductCategory(anyProduct) : null;
+    const sizes = Array.isArray(category?.sizes) ? category.sizes : [];
+    return sizes.find((s: any) => String(s.id) === String(assembledSizeId)) || null;
+  }, [assembledSelectedFlavors, assembledSizeId]);
+
+  const assembledMaxFlavors = assembledSize?.maxFlavors ? Number(assembledSize.maxFlavors) : 1;
+  const assembledFlavorsTotalNumber = Math.max(1, Math.min(assembledMaxFlavors, parseInt(assembledFlavorsTotal || '1', 10) || 1));
+
+  const assembledAvailableFlavors = useMemo(() => {
+    if (!assembledCategoryId) return [];
+    const term = assembledSearchTerm.trim().toLowerCase();
+    return products
+      .filter((p) => {
+        const cat: any = getProductCategory(p);
+        if (!cat) return false;
+        if (String(cat.id) !== String(assembledCategoryId)) return false;
+        if ((p as any).isActive === false) return false;
+        if (!term) return true;
+        return (p.name || '').toLowerCase().includes(term);
+      })
+      .slice(0, 20);
+  }, [products, assembledCategoryId, assembledSearchTerm]);
+
+  const addAssembledFlavor = (product: Product) => {
+    if (assembledSelectedFlavors.length >= assembledFlavorsTotalNumber) return;
+    setAssembledSelectedFlavors((prev) => [...prev, product]);
+  };
+
+  const removeAssembledFlavor = (index: number) => {
+    setAssembledSelectedFlavors((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const confirmAssembled = () => {
+    try {
+      const sizeId = String(assembledSizeId);
+      if (!sizeId) throw new Error('Selecione um tamanho');
+      if (!assembledSize) throw new Error('Tamanho inválido');
+
+      const flavorsTotal = assembledFlavorsTotalNumber;
+      if (assembledSelectedFlavors.length !== flavorsTotal) {
+        throw new Error(`Selecione ${flavorsTotal} sabor(es)`);
+      }
+
+      const sizeLabel = String(assembledSize.name || '').trim();
+
+      assembledSelectedFlavors.forEach((p, idx) => {
+        const sizePrice = Array.isArray((p as any).sizePrices)
+          ? (p as any).sizePrices.find((sp: any) => String(sp.categorySizeId) === sizeId)
+          : null;
+
+        if (!sizePrice) {
+          throw new Error(`Produto ${p.name} sem preço para o tamanho ${sizeLabel}`);
+        }
+
+        const fullPrice = toMoneyNumber(sizePrice.price);
+        const unitPrice = flavorsTotal > 1 ? fullPrice / flavorsTotal : fullPrice;
+
+        salesStore.addItem({
+          id: `${p.id}-${assembledGroupId}-${idx}-${Date.now()}`,
+          productId: p.id,
+          productName: p.name,
+          saleType: p.saleType,
+          quantity: 1,
+          unitPrice,
+          totalPrice: unitPrice,
+          sizeId,
+          flavorsTotal,
+          assembledGroupId,
+          assembledSizeLabel: sizeLabel,
+        });
+      });
+
+      setIsAssembledModalOpen(false);
+      setAssembledSelectedFlavors([]);
+      setAssembledSearchTerm('');
+      setAssembledSizeId('');
+      setAssembledCategoryId('');
+      setAssembledGroupId('');
+    } catch (e: any) {
+      setError(e?.message || 'Erro ao montar item');
+      setTimeout(() => setError(null), 3000);
+    }
+  };
+
+  const groupedCartItems = useMemo(() => {
+    type Group = {
+      kind: 'group';
+      groupId: string;
+      sizeLabel: string;
+      flavorsTotal: number;
+      items: any[];
+      totalPrice: number;
+    };
+
+    type Single = { kind: 'item'; item: any };
+
+    const result: Array<Group | Single> = [];
+    const groups = new Map<string, Group>();
+
+    for (const item of salesStore.items as any[]) {
+      const groupId = item?.assembledGroupId ? String(item.assembledGroupId) : '';
+      const flavorsTotal = Number(item?.flavorsTotal ?? 0);
+      const shouldGroup = Boolean(item?.sizeId) && Boolean(groupId) && flavorsTotal > 1;
+
+      if (!shouldGroup) {
+        result.push({ kind: 'item', item });
+        continue;
+      }
+
+      let g = groups.get(groupId);
+      if (!g) {
+        g = {
+          kind: 'group',
+          groupId,
+          sizeLabel: String(item?.assembledSizeLabel || ''),
+          flavorsTotal,
+          items: [],
+          totalPrice: 0,
+        };
+        groups.set(groupId, g);
+        result.push(g);
+      }
+
+      g.items.push(item);
+      const lineTotal =
+        typeof item?.totalPrice === 'number'
+          ? item.totalPrice
+          : Number(item?.unitPrice || 0) * Number(item?.quantity || 0);
+      g.totalPrice += Number.isFinite(lineTotal) ? lineTotal : 0;
+    }
+
+    return result;
+  }, [salesStore.items]);
+
   const handleConfirmWeight = () => {
     if (!pendingWeightProduct) return;
 
-    const raw = tempWeight.replace(/[^\d,]/g, '').replace(/,(?=.*,)/g, '').replace(',', '.');
+    const raw = tempWeight
+      .replace(/[^\d,]/g, '')
+      .replace(/,(?=.*,)/g, '')
+      .replace(',', '.');
     const weight = parseFloat(raw);
 
     if (isNaN(weight) || weight <= 0) {
-      setError('Digite um peso válido');
+      setError('Peso inválido');
       setTimeout(() => setError(null), 3000);
       return;
     }
 
-    const unitPrice = typeof pendingWeightProduct.salePrice === 'number' 
-      ? pendingWeightProduct.salePrice 
-      : (typeof pendingWeightProduct.salePrice === 'string' 
-        ? parseFloat(pendingWeightProduct.salePrice) 
-        : 0);
+    const unitPrice =
+      typeof pendingWeightProduct.salePrice === 'number'
+        ? pendingWeightProduct.salePrice
+        : parseFloat(pendingWeightProduct.salePrice as any) || 0;
+
+    const totalPrice = unitPrice * weight;
 
     salesStore.addItem({
       id: `${pendingWeightProduct.id}-${Date.now()}`,
       productId: pendingWeightProduct.id,
       productName: pendingWeightProduct.name,
-      saleType: 'weight',
+      saleType: pendingWeightProduct.saleType,
       quantity: weight,
       unitPrice,
-      totalPrice: unitPrice * weight,
+      totalPrice,
     });
+
+    setSuccess(`${pendingWeightProduct.name} adicionado ao carrinho!`);
+    setTimeout(() => setSuccess(null), 2000);
 
     setIsWeightModalOpen(false);
     setPendingWeightProduct(null);
@@ -250,41 +430,37 @@ export const SalesPage: React.FC = () => {
   };
 
   const handleUpdateQuantity = (itemId: string, quantity: number) => {
-    const item = useSalesStore.getState().items.find((i) => i.id === itemId);
-    if (!item) return;
-
-    let newQty = quantity;
-    if (item.saleType === 'weight') {
-      newQty = Math.max(0.001, parseFloat(newQty.toFixed(3)));
-    } else {
-      newQty = Math.max(1, Math.floor(newQty));
+    if (quantity > 0) {
+      salesStore.updateItem(itemId, quantity);
     }
-
-    salesStore.updateItem(itemId, newQty);
   };
 
   const handleRemoveItem = (itemId: string) => {
     salesStore.removeItem(itemId);
   };
 
-  const getCustomerName = () => {
+  const getCustomerName = (): string => {
     if (!selectedCustomer) return 'Consumidor Final';
-    const customer = customers.find(c => c.id === selectedCustomer);
-    return customer ? `${customer.name} (${customer.cpf || customer.phone})` : 'Consumidor Final';
+    const found = customers.find((c: any) => String((c as any)?.id) === String(selectedCustomer));
+    return (found as any)?.name || 'Cliente';
   };
 
   const handleCreateCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await apiClient.post('/customers', customerForm);
-      const newCustomer = response.data.data || response.data;
-      
-      await loadData();
-      setSelectedCustomer(newCustomer.id);
+      const response: any = await apiClient.post('/customers', customerForm);
+      const newCustomer = response?.data || response;
+
+      const customersResponse: any = await apiClient.getCustomers();
+      setCustomers(customersResponse?.data || customersResponse || []);
+
+      if (newCustomer?.id) {
+        setSelectedCustomer(String(newCustomer.id));
+      }
+
       setIsNewCustomerModalOpen(false);
-      setSuccess('Cliente cadastrado e vinculado com sucesso!');
-      setTimeout(() => setSuccess(null), 3000);
-      
+      setCustomerSearchTerm('');
+      setIsCustomerSearchOpen(false);
       setCustomerForm({
         name: '',
         email: '',
@@ -305,9 +481,11 @@ export const SalesPage: React.FC = () => {
         acceptsMarketing: true,
         preferredContactMethod: '',
       });
-      setCustomerSearchTerm('');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Erro ao cadastrar cliente');
+
+      setSuccess('Cliente cadastrado com sucesso!');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError('Erro ao cadastrar cliente');
       setTimeout(() => setError(null), 3000);
     }
   };
@@ -536,6 +714,7 @@ export const SalesPage: React.FC = () => {
           productId: item.productId,
           quantity: item.quantity,
           discount: 0,
+          ...(item.sizeId ? { sizeId: item.sizeId, flavorsTotal: item.flavorsTotal } : {}),
         })),
         payments: payments.map((p) => ({ paymentMethod: p.method, amount: p.amount })),
         discount: totalDiscount,
@@ -658,95 +837,139 @@ export const SalesPage: React.FC = () => {
             {salesStore.items.length === 0 ? (
               <p className="sales-page__cart-empty">Nenhum item selecionado</p>
             ) : (
-              salesStore.items.map((item) => (
-                <div key={item.id} className="sales-page__cart-item">
-                  <div className="sales-page__cart-item-info">
-                    <p className="sales-page__cart-item-name">{item.productName}</p>
-                    <div className="sales-page__cart-item-controls">
-                      {item.saleType === 'weight' ? (
-                        <>
-                          <button
-                            onClick={() => handleUpdateQuantity(item.id, item.quantity - 0.1)}
-                            className="sales-page__cart-item-btn"
-                            title="Diminuir quantidade (peso)"
-                          >
-                            <Minus size={14} />
-                          </button>
-                          <input
-                            type="text"
-                            title="Quantidade em kg (ex: 1,500)"
-                            placeholder="0,000"
-                            value={weightInputs[item.id] !== undefined ? weightInputs[item.id] : item.quantity.toFixed(3).replace('.', ',')}
-                            onChange={(e) => {
-                              setWeightInputs({ ...weightInputs, [item.id]: e.target.value });
-                            }}
-                            onBlur={(e) => {
-                              const val = e.target.value.replace(/[^\d,]/g, '').replace(/,(?=.*,)/g, '');
-                              const raw = val.replace(',', '.');
-                              const parsed = parseFloat(raw);
-                              if (!isNaN(parsed) && parsed > 0) {
-                                handleUpdateQuantity(item.id, parsed);
-                              }
-                              setWeightInputs({ ...weightInputs, [item.id]: undefined });
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                (e.target as HTMLInputElement).blur();
-                              }
-                            }}
-                            className="sales-page__cart-item-quantity"
-                          />
-                          <button
-                            onClick={() => handleUpdateQuantity(item.id, item.quantity + 0.1)}
-                            className="sales-page__cart-item-btn"
-                            title="Aumentar quantidade (peso)"
-                          >
-                            <Plus size={14} />
-                          </button>
-                          <span className="sales-page__cart-item-total">
-                            R$ {(item.unitPrice * item.quantity).toFixed(2)}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
-                            className="sales-page__cart-item-btn"
-                            title="Diminuir quantidade"
-                          >
-                            <Minus size={14} />
-                          </button>
-                          <input
-                            type="number"
-                            title="Quantidade do item"
-                            min="1"
-                            value={item.quantity}
-                            onChange={(e) => handleUpdateQuantity(item.id, parseInt(e.target.value))}
-                            className="sales-page__cart-item-quantity"
-                          />
-                          <button
-                            onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
-                            className="sales-page__cart-item-btn"
-                            title="Aumentar quantidade"
-                          >
-                            <Plus size={14} />
-                          </button>
-                          <span className="sales-page__cart-item-total">
-                            R$ {(item.unitPrice * item.quantity).toFixed(2)}
-                          </span>
-                        </>
-                      )}
+              groupedCartItems.map((entry) => {
+                if (entry.kind === 'group') {
+                  const title = `Montado${entry.sizeLabel ? ` - ${entry.sizeLabel}` : ''} (${entry.flavorsTotal} sabor(es))`;
+                  return (
+                    <div key={`group-${entry.groupId}`} className="sales-page__cart-item">
+                      <div className="sales-page__cart-item-info">
+                        <p className="sales-page__cart-item-name">{title}</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+                          {entry.items.map((it) => (
+                            <div
+                              key={it.id}
+                              style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13 }}
+                            >
+                              <span>
+                                {it.productName}
+                                {it.quantity > 1 ? ` x${it.quantity}` : ''}
+                              </span>
+                              <span style={{ color: 'rgba(0,0,0,0.65)' }}>
+                                R$ {(Number(it.unitPrice || 0) * Number(it.quantity || 0)).toFixed(2)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="sales-page__cart-item-controls" style={{ marginTop: 10 }}>
+                          <span className="sales-page__cart-item-total">R$ {entry.totalPrice.toFixed(2)}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => entry.items.forEach((it) => handleRemoveItem(it.id))}
+                        className="sales-page__cart-item-remove"
+                        title="Remover item montado"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
+                  );
+                }
+
+                const item = entry.item;
+                return (
+                  <div key={item.id} className="sales-page__cart-item">
+                    <div className="sales-page__cart-item-info">
+                      <p className="sales-page__cart-item-name">{item.productName}</p>
+                      <div className="sales-page__cart-item-controls">
+                        {item.saleType === 'weight' ? (
+                          <>
+                            <button
+                              onClick={() => handleUpdateQuantity(item.id, item.quantity - 0.1)}
+                              className="sales-page__cart-item-btn"
+                              title="Diminuir quantidade (peso)"
+                            >
+                              <Minus size={14} />
+                            </button>
+                            <input
+                              type="text"
+                              title="Quantidade em kg (ex: 1,500)"
+                              placeholder="0,000"
+                              value={
+                                weightInputs[item.id] !== undefined
+                                  ? weightInputs[item.id]
+                                  : item.quantity.toFixed(3).replace('.', ',')
+                              }
+                              onChange={(e) => {
+                                setWeightInputs({ ...weightInputs, [item.id]: e.target.value });
+                              }}
+                              onBlur={(e) => {
+                                const val = e.target.value.replace(/[^\d,]/g, '').replace(/,(?=.*,)/g, '');
+                                const raw = val.replace(',', '.');
+                                const parsed = parseFloat(raw);
+                                if (!isNaN(parsed) && parsed > 0) {
+                                  handleUpdateQuantity(item.id, parsed);
+                                }
+                                setWeightInputs({ ...weightInputs, [item.id]: undefined });
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  (e.target as HTMLInputElement).blur();
+                                }
+                              }}
+                              className="sales-page__cart-item-quantity"
+                            />
+                            <button
+                              onClick={() => handleUpdateQuantity(item.id, item.quantity + 0.1)}
+                              className="sales-page__cart-item-btn"
+                              title="Aumentar quantidade (peso)"
+                            >
+                              <Plus size={14} />
+                            </button>
+                            <span className="sales-page__cart-item-total">
+                              R$ {(item.unitPrice * item.quantity).toFixed(2)}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
+                              className="sales-page__cart-item-btn"
+                              title="Diminuir quantidade"
+                            >
+                              <Minus size={14} />
+                            </button>
+                            <input
+                              type="number"
+                              title="Quantidade do item"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => handleUpdateQuantity(item.id, parseInt(e.target.value))}
+                              className="sales-page__cart-item-quantity"
+                            />
+                            <button
+                              onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                              className="sales-page__cart-item-btn"
+                              title="Aumentar quantidade"
+                            >
+                              <Plus size={14} />
+                            </button>
+                            <span className="sales-page__cart-item-total">
+                              R$ {(item.unitPrice * item.quantity).toFixed(2)}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveItem(item.id)}
+                      className="sales-page__cart-item-remove"
+                      title="Remover item do carrinho"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => handleRemoveItem(item.id)}
-                    className="sales-page__cart-item-remove"
-                    title="Remover item do carrinho"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
@@ -1303,7 +1526,110 @@ export const SalesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Weight Modal */}
+      {isAssembledModalOpen && (
+        <div className="assembled-modal-overlay">
+          <div className="assembled-modal assembled-modal--large">
+            <h3>Montar produto</h3>
+
+            <div className="assembled-form-grid">
+              <div>
+                <label className="assembled-label">Tamanho</label>
+                <select
+                  value={assembledSizeId}
+                  onChange={(e) => setAssembledSizeId(e.target.value)}
+                  className="assembled-input"
+                  title="Tamanho"
+                >
+                  {(() => {
+                    const anyProduct = assembledSelectedFlavors[0];
+                    const category = anyProduct ? getProductCategory(anyProduct) : null;
+                    const sizes = Array.isArray(category?.sizes) ? category.sizes : [];
+                    return sizes.map((s: any) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ));
+                  })()}
+                </select>
+              </div>
+
+              <div>
+                <label className="assembled-label">Sabores</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={assembledMaxFlavors}
+                  value={assembledFlavorsTotal}
+                  onChange={(e) => setAssembledFlavorsTotal(e.target.value)}
+                  className="assembled-input"
+                  title="Quantidade de sabores"
+                />
+                <small style={{ color: 'rgba(0,0,0,0.6)' }}>Máx: {assembledMaxFlavors}</small>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <label className="assembled-label">Sabores selecionados</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {assembledSelectedFlavors.map((p, idx) => (
+                  <div key={`${p.id}-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <div>
+                      {p.name}
+                      <span style={{ color: 'rgba(0,0,0,0.6)' }}> #{idx + 1}</span>
+                    </div>
+                    <button type="button" onClick={() => removeAssembledFlavor(idx)} className="assembled-btn-cancel">
+                      Remover
+                    </button>
+                  </div>
+                ))}
+                {assembledSelectedFlavors.length === 0 && (
+                  <div style={{ color: 'rgba(0,0,0,0.6)' }}>Nenhum sabor selecionado</div>
+                )}
+                <div style={{ color: 'rgba(0,0,0,0.6)' }}>
+                  {assembledSelectedFlavors.length}/{assembledFlavorsTotalNumber}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <label className="assembled-label">Adicionar sabor</label>
+              <input
+                type="text"
+                value={assembledSearchTerm}
+                onChange={(e) => setAssembledSearchTerm(e.target.value)}
+                placeholder="Buscar sabor..."
+                className="assembled-input"
+                title="Buscar sabor"
+              />
+              <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
+                {assembledAvailableFlavors.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => addAssembledFlavor(p)}
+                    disabled={assembledSelectedFlavors.length >= assembledFlavorsTotalNumber}
+                    className="assembled-product-card"
+                    style={{ cursor: 'pointer' }}
+                    title="Adicionar sabor"
+                  >
+                    <div className="assembled-product-name">{p.name}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="assembled-modal-actions">
+              <button onClick={() => setIsAssembledModalOpen(false)} className="assembled-btn-cancel">
+                Cancelar
+              </button>
+              <button onClick={confirmAssembled} className="assembled-btn-confirm">
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className={`sales-page__modal ${isWeightModalOpen ? 'sales-page__modal--open' : ''}`}>
         <div className="sales-page__modal-overlay" onClick={() => setIsWeightModalOpen(false)} />
         <div className="sales-page__modal-content sales-page__modal-content--small">

@@ -1,0 +1,125 @@
+/* Accounts Payable Page */
+.accounts-payable-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.accounts-payable-header {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@media (min-width: 768px) {
+  .accounts-payable-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.accounts-payable-header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.accounts-payable-header-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.accounts-payable-filters {
+  padding: 16px;
+}
+
+.accounts-payable-filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.accounts-payable-table-wrapper {
+  overflow-x: auto;
+  background: white;
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.accounts-payable-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.accounts-payable-table thead {
+  background: var(--color-light);
+}
+
+.accounts-payable-table th {
+  padding: 14px 18px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--color-gray-600);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.accounts-payable-table td {
+  padding: 14px 18px;
+  font-size: 14px;
+  color: var(--color-dark);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.accounts-payable-table tbody tr:hover {
+  background: var(--color-bg-secondary);
+}
+
+.accounts-payable-row-highlight {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.accounts-payable-right {
+  text-align: right;
+}
+
+.accounts-payable-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.accounts-payable-name {
+  font-weight: 700;
+}
+
+.accounts-payable-muted {
+  color: var(--color-gray-500);
+}
+
+.accounts-payable-money {
+  font-weight: 700;
+}
+
+.accounts-payable-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.accounts-payable-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.accounts-payable-details {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--color-dark);
+}

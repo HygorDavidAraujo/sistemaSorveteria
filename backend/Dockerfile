@@ -13,6 +13,9 @@ COPY . .
 
 RUN chmod +x ./entrypoint.sh
 
+# Build TypeScript for production runtime (dist/)
+RUN npm run build
+
 EXPOSE 3000
 
 ENTRYPOINT ["./entrypoint.sh"]

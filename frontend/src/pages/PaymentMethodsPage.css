@@ -1,0 +1,80 @@
+/* Payment Methods Page */
+.payment-methods-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.payment-methods-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.payment-methods-hint {
+  margin: 0;
+  color: var(--color-gray-600);
+  font-size: 14px;
+}
+
+.payment-methods-card {
+  padding: 0;
+}
+
+.payment-methods-table-wrapper {
+  overflow-x: auto;
+  background: white;
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.payment-methods-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.payment-methods-table thead {
+  background: var(--color-light);
+}
+
+.payment-methods-table th {
+  padding: 14px 18px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--color-gray-600);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.payment-methods-table td {
+  padding: 14px 18px;
+  font-size: 14px;
+  color: var(--color-dark);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.payment-methods-table tbody tr:hover {
+  background: var(--color-bg-secondary);
+}
+
+.payment-methods-name {
+  font-weight: 700;
+}
+
+.payment-methods-code {
+  font-size: 12px;
+  color: var(--color-gray-500);
+}
+
+.payment-methods-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.payment-methods-right {
+  text-align: right;
+}

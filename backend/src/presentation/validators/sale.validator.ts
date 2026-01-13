@@ -1,17 +1,25 @@
 import Joi from 'joi';
 
+const uuid = Joi.string().uuid();
+
 export const saleValidators = {
   createSale: Joi.object({
     body: Joi.object({
-      cashSessionId: Joi.string().uuid().required(),
-      customerId: Joi.string().uuid().optional(),
+      cashSessionId: uuid.required(),
+      customerId: uuid.optional(),
       saleType: Joi.string().valid('pdv', 'comanda', 'delivery').default('pdv'),
       items: Joi.array()
         .items(
           Joi.object({
-            productId: Joi.string().uuid().required(),
+            productId: uuid.required(),
             quantity: Joi.number().positive().required(),
             discount: Joi.number().min(0).default(0),
+            sizeId: uuid.optional(),
+            flavorsTotal: Joi.number().integer().min(1).max(20).when('sizeId', {
+              is: uuid,
+              then: Joi.required(),
+              otherwise: Joi.optional(),
+            }),
           })
         )
         .min(1)
@@ -46,7 +54,7 @@ export const saleValidators = {
     body: Joi.object({}),
     query: Joi.object({}),
     params: Joi.object({
-      id: Joi.string().uuid().required(),
+      id: uuid.required(),
     }),
   }),
 
@@ -55,8 +63,8 @@ export const saleValidators = {
     query: Joi.object({
       startDate: Joi.date().iso().optional(),
       endDate: Joi.date().iso().optional(),
-      cashSessionId: Joi.string().uuid().optional(),
-      customerId: Joi.string().uuid().optional(),
+      cashSessionId: uuid.optional(),
+      customerId: uuid.optional(),
       saleType: Joi.string().valid('pdv', 'comanda', 'delivery').optional(),
       status: Joi.string().valid('completed', 'cancelled', 'adjusted').optional(),
       page: Joi.number().integer().min(1).default(1),
@@ -71,7 +79,7 @@ export const saleValidators = {
     }),
     query: Joi.object({}),
     params: Joi.object({
-      id: Joi.string().uuid().required(),
+      id: uuid.required(),
     }),
   }),
 
@@ -81,7 +89,7 @@ export const saleValidators = {
     }),
     query: Joi.object({}),
     params: Joi.object({
-      id: Joi.string().uuid().required(),
+      id: uuid.required(),
     }),
   }),
 };

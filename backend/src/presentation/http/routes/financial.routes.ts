@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import {
   FinancialController,
+  PaymentMethodConfigController,
   AccountPayableController,
   AccountReceivableController,
   DREController,
@@ -16,7 +17,7 @@ import {
   createFinancialCategorySchema,
   updateFinancialCategorySchema,
   createAccountPayableSchema,
-  recordPaymentSchema,
+  recordAccountPayablePaymentSchema,
   updateAccountPayableSchema,
   cancelAccountPayableSchema,
   createAccountReceivableSchema,
@@ -26,12 +27,14 @@ import {
   dreReportSchema,
   cashFlowSchema,
   comparativeReportSchema,
+  upsertPaymentMethodConfigSchema,
 } from '@presentation/validators/financial.validator';
 
 const router = Router();
 
 // Instantiate controllers
 const financialController = new FinancialController();
+const paymentMethodConfigController = new PaymentMethodConfigController();
 const accountPayableController = new AccountPayableController();
 const accountReceivableController = new AccountReceivableController();
 const dreController = new DREController();
@@ -120,6 +123,29 @@ router.get(
 // ============================================================================
 // FINANCIAL CATEGORIES
 // ============================================================================
+
+// ============================================================================
+// PAYMENT METHODS CONFIG
+// ============================================================================
+
+/**
+ * GET /financial/payment-methods - Listar configurações
+ */
+router.get(
+  '/payment-methods',
+  authorize(['admin', 'manager']),
+  paymentMethodConfigController.list
+);
+
+/**
+ * PUT /financial/payment-methods/:paymentMethod - Atualizar/Inserir configuração
+ */
+router.put(
+  '/payment-methods/:paymentMethod',
+  authorize(['admin']),
+  validate(upsertPaymentMethodConfigSchema),
+  paymentMethodConfigController.upsert
+);
 
 /**
  * GET /financial/categories - Listar categorias
@@ -234,7 +260,7 @@ router.put(
 router.post(
   '/accounts-payable/:id/payment',
   authorize(['admin', 'manager']),
-  validate(recordPaymentSchema),
+  validate(recordAccountPayablePaymentSchema),
   accountPayableController.recordPayment
 );
 

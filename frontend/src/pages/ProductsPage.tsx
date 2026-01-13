@@ -29,6 +29,7 @@ export const ProductsPage: React.FC = () => {
     costPrice: '',
     code: '',
     category: '',
+    sizePrices: {} as Record<string, string>,
     available: true,
     saleType: 'unit' as 'unit' | 'weight',
     eligibleForLoyalty: false,
@@ -36,6 +37,9 @@ export const ProductsPage: React.FC = () => {
     earnsCashback: false,
     cashbackPercentage: null as number | null,
   });
+
+  const selectedCategory = categories.find((c) => c.id === form.category);
+  const isAssembledCategory = selectedCategory?.categoryType === 'assembled';
 
   useEffect(() => {
     loadProducts();
@@ -89,9 +93,37 @@ export const ProductsPage: React.FC = () => {
         return;
       }
 
-      if (!editingId && (Number.isNaN(priceValue) || priceValue <= 0)) {
-        setError('Preço deve ser maior que zero');
-        return;
+      const assembled = selectedCategory?.categoryType === 'assembled';
+
+      let sizePricesPayload: Array<{ sizeId: string; price: number }> | undefined;
+      let effectiveSalePrice = priceValue;
+
+      if (assembled) {
+        const sizes = selectedCategory?.sizes || [];
+        if (sizes.length === 0) {
+          setError('Categoria Montado não possui tamanhos cadastrados');
+          return;
+        }
+
+        sizePricesPayload = sizes
+          .map((s) => ({
+            sizeId: s.id,
+            price: parseFloat(form.sizePrices[s.id] || ''),
+          }))
+          .filter((sp) => Number.isFinite(sp.price) && sp.price > 0);
+
+        if (!sizePricesPayload.length || sizePricesPayload.length !== sizes.length) {
+          setError('Informe o preço para todos os tamanhos da categoria Montado');
+          return;
+        }
+
+        // Backend ainda exige salePrice no create; usamos o menor preço como "preço base".
+        effectiveSalePrice = Math.min(...sizePricesPayload.map((sp) => sp.price));
+      } else {
+        if (!editingId && (Number.isNaN(priceValue) || priceValue <= 0)) {
+          setError('Preço deve ser maior que zero');
+          return;
+        }
       }
 
       if (form.costPrice.trim() && (Number.isNaN(costPriceValue) || costPriceValue <= 0)) {
@@ -114,7 +146,7 @@ export const ProductsPage: React.FC = () => {
       }
 
       if (!editingId || normalizedCode) productData.code = normalizedCode;
-      if (!Number.isNaN(priceValue) && priceValue > 0) productData.salePrice = priceValue;
+      if (!Number.isNaN(effectiveSalePrice) && effectiveSalePrice > 0) productData.salePrice = effectiveSalePrice;
       if (!Number.isNaN(costPriceValue) && costPriceValue > 0) {
         productData.costPrice = costPriceValue;
       } else if (editingId && !form.costPrice.trim()) {
@@ -122,6 +154,7 @@ export const ProductsPage: React.FC = () => {
         productData.costPrice = null;
       }
       if (categoryId) productData.categoryId = categoryId;
+      if (assembled && sizePricesPayload) productData.sizePrices = sizePricesPayload;
 
       if (editingId) {
         await apiClient.updateProduct(editingId, productData);
@@ -141,6 +174,7 @@ export const ProductsPage: React.FC = () => {
         costPrice: '',
         code: '', 
         category: '', 
+        sizePrices: {},
         available: true, 
         saleType: 'unit',
         eligibleForLoyalty: false,
@@ -164,6 +198,12 @@ export const ProductsPage: React.FC = () => {
       costPrice: product.costPrice !== undefined && product.costPrice !== null ? String(product.costPrice) : '',
       code: product.code || '',
       category: categoryValue || '',
+      sizePrices: Array.isArray((product as any).sizePrices)
+        ? (product as any).sizePrices.reduce((acc: any, sp: any) => {
+            acc[sp.categorySizeId] = String(sp.price);
+            return acc;
+          }, {})
+        : {},
       available: product.isActive !== undefined ? product.isActive : true,
       saleType: (product.saleType || 'unit') as 'unit' | 'weight',
       eligibleForLoyalty: product.eligibleForLoyalty || false,
@@ -212,6 +252,7 @@ export const ProductsPage: React.FC = () => {
               costPrice: '',
               code: '', 
               category: '', 
+              sizePrices: {},
               available: true, 
               saleType: 'unit',
               eligibleForLoyalty: false,
@@ -360,8 +401,14 @@ export const ProductsPage: React.FC = () => {
                 onChange={(e) => setForm({ ...form, price: e.target.value })}
                 className="products-page__form-input"
                 title="Preço do produto"
-                required
+                required={!isAssembledCategory}
+                disabled={isAssembledCategory}
               />
+              {isAssembledCategory && (
+                <small className="products-page__form-hint">
+                  Para categoria Montado, o preço é por tamanho.
+                </small>
+              )}
             </div>
 
             <div className="products-page__form-group">
@@ -393,7 +440,21 @@ export const ProductsPage: React.FC = () => {
               <label className="products-page__form-label">Categoria</label>
               <select
                 value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
+                onChange={(e) => {
+                  const nextCategoryId = e.target.value;
+                  const nextCategory = categories.find((c) => c.id === nextCategoryId);
+                  const assembled = nextCategory?.categoryType === 'assembled';
+                  const sizes = nextCategory?.sizes || [];
+                  setForm((prev) => {
+                    const nextMap: Record<string, string> = assembled ? { ...prev.sizePrices } : {};
+                    if (assembled) {
+                      for (const s of sizes) {
+                        if (nextMap[s.id] === undefined) nextMap[s.id] = '';
+                      }
+                    }
+                    return { ...prev, category: nextCategoryId, sizePrices: nextMap };
+                  });
+                }}
                 className="products-page__form-select"
                 title="Selecione a categoria"
               >
@@ -405,6 +466,34 @@ export const ProductsPage: React.FC = () => {
                 ))}
               </select>
             </div>
+
+            {isAssembledCategory && (
+              <div className="products-page__form-section">
+                <h3 className="products-page__form-section-title">📏 Preços por tamanho</h3>
+                {(selectedCategory?.sizes || []).map((size) => (
+                  <div key={size.id} className="products-page__form-group">
+                    <label className="products-page__form-label">
+                      {size.name} (máx. sabores: {size.maxFlavors})
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={form.sizePrices[size.id] || ''}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          sizePrices: { ...p.sizePrices, [size.id]: e.target.value },
+                        }))
+                      }
+                      className="products-page__form-input"
+                      placeholder="0,00"
+                      required
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="products-page__form-group">
               <label className="products-page__form-label">Tipo de Produto</label>

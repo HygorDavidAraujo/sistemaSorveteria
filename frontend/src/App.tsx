@@ -15,6 +15,12 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { ComandasPage } from '@/pages/ComandasPage';
 import { CouponsPage } from '@/pages/CouponsPage';
 import { DeliveryPage } from '@/pages/DeliveryPage';
+import { FinancialTransactionsPage } from '@/pages/FinancialTransactionsPage';
+import { FinancialCategoriesPage } from '@/pages/FinancialCategoriesPage';
+import { ProductCategoriesPage } from '@/pages/ProductCategoriesPage';
+import { AccountsPayablePage } from '@/pages/AccountsPayablePage';
+import { AccountsReceivablePage } from '@/pages/AccountsReceivablePage';
+import { PaymentMethodsPage } from '@/pages/PaymentMethodsPage';
 
 // Components
 import { PrivateRoute } from '@/components/PrivateRoute';
@@ -66,6 +72,14 @@ function App() {
                     }
                   />
                   <Route
+                    path="/product-categories"
+                    element={
+                      <PrivateRoute requiredRole={['admin', 'manager', 'operator']}>
+                        <ProductCategoriesPage />
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
                     path="/customers"
                     element={
                       <PrivateRoute requiredRole={['admin', 'manager', 'operator']}>
@@ -94,6 +108,46 @@ function App() {
                     element={
                       <PrivateRoute requiredRole={['admin', 'manager']}>
                         <ReportsPage />
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/financial/transactions"
+                    element={
+                      <PrivateRoute requiredRole={['admin', 'manager']}>
+                        <FinancialTransactionsPage />
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/financial/categories"
+                    element={
+                      <PrivateRoute requiredRole={['admin', 'manager']}>
+                        <FinancialCategoriesPage />
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/financial/accounts-payable"
+                    element={
+                      <PrivateRoute requiredRole={['admin', 'manager']}>
+                        <AccountsPayablePage />
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/financial/accounts-receivable"
+                    element={
+                      <PrivateRoute requiredRole={['admin', 'manager']}>
+                        <AccountsReceivablePage />
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/financial/payment-methods"
+                    element={
+                      <PrivateRoute requiredRole={['admin', 'manager']}>
+                        <PaymentMethodsPage />
                       </PrivateRoute>
                     }
                   />

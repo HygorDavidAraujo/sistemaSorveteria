@@ -4,6 +4,15 @@ import { AppError } from '@shared/errors/app-error';
 import { FinancialTransactionStatus } from '@domain/entities/financial.entity';
 import { FinancialService } from './financial.service';
 
+const createdBySafeSelect = {
+  select: {
+    id: true,
+    fullName: true,
+    email: true,
+    role: true,
+  },
+} as const;
+
 export interface CreateAccountPayableDTO {
   supplierName: string; // Alterado de supplierId para supplierName
   description: string;
@@ -93,7 +102,7 @@ export class AccountPayableService {
       },
       include: {
         category: true,
-        createdBy: true,
+        createdBy: createdBySafeSelect,
       },
     });
 
@@ -145,20 +154,40 @@ export class AccountPayableService {
       },
       include: {
         category: true,
-        createdBy: true,
+        createdBy: createdBySafeSelect,
       },
     });
 
-    // Registrar movimento financeiro de pagamento
-    await this.financialService.createTransaction({
-      categoryId: account.categoryId,
-      transactionType: 'expense',
-      amount: Number(account.amount),
-      description: `Pagamento: ${account.description}`,
-      referenceNumber: `PAYMENT-${accountPayableId}`,
-      transactionDate: paymentData.paymentDate,
-      createdById: paymentData.userId,
+    // Sincronizar status da transação financeira vinculada a esta conta (não deixar como pendente)
+    const txUpdate = await this.prismaClient.financialTransaction.updateMany({
+      where: {
+        referenceNumber: accountPayableId,
+        status: {
+          not: 'cancelled',
+        },
+      },
+      data: {
+        status: 'paid',
+        paidAt: paymentData.paymentDate,
+        transactionDate: paymentData.paymentDate,
+      },
     });
+
+    // Caso não exista transação (dados antigos), cria uma já como paga
+    if (txUpdate.count === 0) {
+      await this.financialService.createTransaction({
+        categoryId: account.categoryId,
+        transactionType: 'expense',
+        amount: Number(account.amount),
+        description: `Conta a Pagar: ${account.description}`,
+        referenceNumber: accountPayableId,
+        transactionDate: paymentData.paymentDate,
+        dueDate: account.dueDate,
+        status: 'paid',
+        paidAt: paymentData.paymentDate,
+        createdById: paymentData.userId,
+      });
+    }
 
     return updated as any;
   }
@@ -199,7 +228,7 @@ export class AccountPayableService {
         orderBy: { dueDate: 'asc' },
         include: {
           category: true,
-          createdBy: true,
+          createdBy: createdBySafeSelect,
         },
       }),
       this.prismaClient.accountPayable.count({ where }),
@@ -216,7 +245,7 @@ export class AccountPayableService {
       where: { id: accountPayableId },
       include: {
         category: true,
-        createdBy: true,
+        createdBy: createdBySafeSelect,
       },
     });
 
@@ -246,14 +275,30 @@ export class AccountPayableService {
       throw new AppError('Não é possível atualizar conta que já foi paga', 400);
     }
 
-    return this.prismaClient.accountPayable.update({
+    const updated = await this.prismaClient.accountPayable.update({
       where: { id: accountPayableId },
       data,
       include: {
         category: true,
-        createdBy: true,
+        createdBy: createdBySafeSelect,
       },
     }) as any;
+
+    // Manter transação financeira vinculada sincronizada (descrição/vencimento)
+    await this.prismaClient.financialTransaction.updateMany({
+      where: {
+        referenceNumber: accountPayableId,
+        status: {
+          notIn: ['paid', 'cancelled'],
+        },
+      },
+      data: {
+        ...(data.description ? { description: `Conta a Pagar: ${data.description}` } : {}),
+        ...(data.dueDate ? { dueDate: data.dueDate } : {}),
+      },
+    });
+
+    return updated;
   }
 
   /**
@@ -276,7 +321,7 @@ export class AccountPayableService {
       throw new AppError('Não é possível cancelar esta conta', 400);
     }
 
-    return this.prismaClient.accountPayable.update({
+    const updated = await this.prismaClient.accountPayable.update({
       where: { id: accountPayableId },
       data: {
         status: 'cancelled',
@@ -284,9 +329,24 @@ export class AccountPayableService {
       },
       include: {
         category: true,
-        createdBy: true,
+        createdBy: createdBySafeSelect,
       },
     }) as any;
+
+    // Sincronizar transação financeira vinculada
+    await this.prismaClient.financialTransaction.updateMany({
+      where: {
+        referenceNumber: accountPayableId,
+        status: {
+          not: 'paid',
+        },
+      },
+      data: {
+        status: 'cancelled',
+      },
+    });
+
+    return updated;
   }
 
   /**
@@ -307,7 +367,7 @@ export class AccountPayableService {
       orderBy: { dueDate: 'asc' },
       include: {
         category: true,
-        createdBy: true,
+        createdBy: createdBySafeSelect,
       },
     }) as any;
   }
@@ -330,7 +390,7 @@ export class AccountPayableService {
       orderBy: { dueDate: 'asc' },
       include: {
         category: true,
-        createdBy: true,
+        createdBy: createdBySafeSelect,
       },
     }) as any;
   }

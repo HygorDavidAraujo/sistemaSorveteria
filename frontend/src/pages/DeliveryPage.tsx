@@ -7,6 +7,7 @@ import { printReceipt, formatCurrency, getPrintStyles } from '@/utils/printer';
 import { clearCartDraft, loadCartDraft, saveCartDraft } from '@/utils/cartDraft';
 import type { Product, Customer } from '@/types';
 import './DeliveryPage.css';
+import '@/styles/assembledModal.css';
 
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
@@ -30,6 +31,15 @@ export const DeliveryPage: React.FC = () => {
   const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
   const [weightQuantity, setWeightQuantity] = useState('');
   const [selectedWeightProduct, setSelectedWeightProduct] = useState<Product | null>(null);
+
+  // Montado
+  const [isAssembledModalOpen, setIsAssembledModalOpen] = useState(false);
+  const [assembledCategoryId, setAssembledCategoryId] = useState<string>('');
+  const [assembledSizeId, setAssembledSizeId] = useState<string>('');
+  const [assembledFlavorsTotal, setAssembledFlavorsTotal] = useState<string>('1');
+  const [assembledSelectedFlavors, setAssembledSelectedFlavors] = useState<Product[]>([]);
+  const [assembledSearchTerm, setAssembledSearchTerm] = useState('');
+  const [assembledGroupId, setAssembledGroupId] = useState<string>('');
   
   // Modal de novo cliente
   const [isNewCustomerModalOpen, setIsNewCustomerModalOpen] = useState(false);
@@ -66,6 +76,17 @@ export const DeliveryPage: React.FC = () => {
       return Number.isFinite(parsed) ? parsed : 0;
     }
     return 0;
+  };
+
+  const newGroupId = () => {
+    const cryptoAny: any = (globalThis as any).crypto;
+    if (cryptoAny?.randomUUID) return cryptoAny.randomUUID();
+    return `grp_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  };
+
+  const getProductCategory = (product: Product) => {
+    const cat: any = (product as any)?.category;
+    return typeof cat === 'object' ? cat : null;
   };
   
   // Pedidos
@@ -392,6 +413,26 @@ export const DeliveryPage: React.FC = () => {
       return;
     }
 
+    const category = getProductCategory(product);
+    const isAssembled = category?.categoryType === 'assembled';
+    if (isAssembled) {
+      const sizes = Array.isArray(category?.sizes) ? category.sizes : [];
+      if (sizes.length === 0) {
+        setError('Categoria Montado sem tamanhos cadastrados');
+        setTimeout(() => setError(null), 3000);
+        return;
+      }
+
+      setAssembledCategoryId(String(category.id));
+      setAssembledSizeId(String(sizes[0].id));
+      setAssembledFlavorsTotal('1');
+      setAssembledSelectedFlavors([product]);
+      setAssembledSearchTerm('');
+      setAssembledGroupId(newGroupId());
+      setIsAssembledModalOpen(true);
+      return;
+    }
+
     const price = typeof product.salePrice === 'number' 
       ? product.salePrice 
       : parseFloat(product.salePrice as string) || 0;
@@ -406,6 +447,142 @@ export const DeliveryPage: React.FC = () => {
       saleType: product.saleType,
     });
   };
+
+  const assembledSize = useMemo(() => {
+    const anyProduct = assembledSelectedFlavors[0];
+    const category = anyProduct ? getProductCategory(anyProduct) : null;
+    const sizes = Array.isArray(category?.sizes) ? category.sizes : [];
+    return sizes.find((s: any) => String(s.id) === String(assembledSizeId)) || null;
+  }, [assembledSelectedFlavors, assembledSizeId]);
+
+  const assembledMaxFlavors = assembledSize?.maxFlavors ? Number(assembledSize.maxFlavors) : 1;
+  const assembledFlavorsTotalNumber = Math.max(1, Math.min(assembledMaxFlavors, parseInt(assembledFlavorsTotal || '1', 10) || 1));
+
+  const assembledAvailableFlavors = useMemo(() => {
+    if (!assembledCategoryId) return [];
+    const term = assembledSearchTerm.trim().toLowerCase();
+    return products
+      .filter((p) => {
+        const cat: any = getProductCategory(p);
+        if (!cat) return false;
+        if (String(cat.id) !== String(assembledCategoryId)) return false;
+        if ((p as any).isActive === false) return false;
+        if (!term) return true;
+        return (p.name || '').toLowerCase().includes(term);
+      })
+      .slice(0, 20);
+  }, [products, assembledCategoryId, assembledSearchTerm]);
+
+  const addAssembledFlavor = (product: Product) => {
+    if (assembledSelectedFlavors.length >= assembledFlavorsTotalNumber) return;
+    setAssembledSelectedFlavors((prev) => [...prev, product]);
+  };
+
+  const removeAssembledFlavor = (index: number) => {
+    setAssembledSelectedFlavors((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const confirmAssembled = () => {
+    try {
+      const sizeId = String(assembledSizeId);
+      if (!sizeId) throw new Error('Selecione um tamanho');
+      if (!assembledSize) throw new Error('Tamanho inválido');
+
+      const flavorsTotal = assembledFlavorsTotalNumber;
+      if (assembledSelectedFlavors.length !== flavorsTotal) {
+        throw new Error(`Selecione ${flavorsTotal} sabor(es)`);
+      }
+
+      const sizeLabel = String(assembledSize.name || '').trim();
+
+      assembledSelectedFlavors.forEach((p, idx) => {
+        const sizePrice = Array.isArray((p as any).sizePrices)
+          ? (p as any).sizePrices.find((sp: any) => String(sp.categorySizeId) === sizeId)
+          : null;
+
+        if (!sizePrice) {
+          throw new Error(`Produto ${p.name} sem preço para o tamanho ${sizeLabel}`);
+        }
+
+        const fullPrice = toMoneyNumber(sizePrice.price);
+        const unitPrice = flavorsTotal > 1 ? fullPrice / flavorsTotal : fullPrice;
+
+        deliveryStore.addItem({
+          id: `${p.id}-${assembledGroupId}-${idx}-${Date.now()}`,
+          productId: p.id,
+          productName: p.name,
+          quantity: 1,
+          unitPrice,
+          totalPrice: unitPrice,
+          saleType: p.saleType,
+          sizeId,
+          flavorsTotal,
+          assembledGroupId,
+          assembledSizeLabel: sizeLabel,
+        });
+      });
+
+      setIsAssembledModalOpen(false);
+      setAssembledSelectedFlavors([]);
+      setAssembledSearchTerm('');
+      setAssembledSizeId('');
+      setAssembledCategoryId('');
+      setAssembledGroupId('');
+    } catch (e: any) {
+      setError(e?.message || 'Erro ao montar item');
+      setTimeout(() => setError(null), 3000);
+    }
+  };
+
+  const groupedCartItems = useMemo(() => {
+    type Group = {
+      kind: 'group';
+      groupId: string;
+      sizeLabel: string;
+      flavorsTotal: number;
+      items: any[];
+      totalPrice: number;
+    };
+
+    type Single = { kind: 'item'; item: any };
+
+    const result: Array<Group | Single> = [];
+    const groups = new Map<string, Group>();
+
+    for (const item of deliveryStore.items as any[]) {
+      const groupId = item?.assembledGroupId ? String(item.assembledGroupId) : '';
+      const flavorsTotal = Number(item?.flavorsTotal ?? 0);
+      const shouldGroup = Boolean(item?.sizeId) && Boolean(groupId) && flavorsTotal > 1;
+
+      if (!shouldGroup) {
+        result.push({ kind: 'item', item });
+        continue;
+      }
+
+      let g = groups.get(groupId);
+      if (!g) {
+        g = {
+          kind: 'group',
+          groupId,
+          sizeLabel: String(item?.assembledSizeLabel || ''),
+          flavorsTotal,
+          items: [],
+          totalPrice: 0,
+        };
+        groups.set(groupId, g);
+        result.push(g);
+      }
+
+      g.items.push(item);
+      const lineTotal =
+        typeof item?.totalPrice === 'number'
+          ? item.totalPrice
+          : Number(item?.unitPrice || 0) * Number(item?.quantity || 0);
+      g.totalPrice += Number.isFinite(lineTotal) ? lineTotal : 0;
+    }
+
+    return result;
+  }, [deliveryStore.items]);
 
   const handleConfirmWeight = () => {
     if (!selectedWeightProduct) return;
@@ -563,6 +740,7 @@ export const DeliveryPage: React.FC = () => {
         items: deliveryStore.items.map(item => ({
           productId: item.productId,
           quantity: item.quantity,
+          ...(item.sizeId ? { sizeId: item.sizeId, flavorsTotal: item.flavorsTotal } : {}),
         })),
         payments: payments.map(p => ({ paymentMethod: p.method as any, amount: p.amount })),
         deliveryFee,
@@ -856,45 +1034,84 @@ ${addressText}
           ) : (
             <>
               <div className="delivery-page__cart-items">
-                {deliveryStore.items.map((item) => (
-                  <div key={item.id} className="delivery-page__cart-item">
-                    <div className="delivery-page__cart-item-info">
-                      <span className="delivery-page__cart-item-name">{item.productName}</span>
-                      <span className="delivery-page__cart-item-price">
-                        R$ {item.unitPrice.toFixed(2)}{item.saleType === 'weight' ? '/kg' : ''}
-                      </span>
+                {groupedCartItems.map((entry) => {
+                  if (entry.kind === 'group') {
+                    const title = `Montado${entry.sizeLabel ? ` - ${entry.sizeLabel}` : ''} (${entry.flavorsTotal} sabor(es))`;
+                    return (
+                      <div key={`group-${entry.groupId}`} className="delivery-page__cart-item">
+                        <div className="delivery-page__cart-item-info" style={{ alignItems: 'flex-start' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+                            <span className="delivery-page__cart-item-name">{title}</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              {entry.items.map((it) => (
+                                <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13 }}>
+                                  <span>
+                                    {it.productName}
+                                    {it.quantity > 1 ? ` x${it.quantity}` : ''}
+                                  </span>
+                                  <span style={{ color: 'rgba(0,0,0,0.65)' }}>
+                                    R$ {(Number(it.unitPrice || 0) * Number(it.quantity || 0)).toFixed(2)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="delivery-page__cart-item-actions">
+                          <button
+                            onClick={() => entry.items.forEach((it) => handleRemoveItem(it.id))}
+                            className="delivery-page__cart-item-btn delivery-page__cart-item-btn--remove"
+                            title="Remover item montado"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+
+                        <div className="delivery-page__cart-item-total">R$ {entry.totalPrice.toFixed(2)}</div>
+                      </div>
+                    );
+                  }
+
+                  const item = entry.item;
+                  return (
+                    <div key={item.id} className="delivery-page__cart-item">
+                      <div className="delivery-page__cart-item-info">
+                        <span className="delivery-page__cart-item-name">{item.productName}</span>
+                        <span className="delivery-page__cart-item-price">
+                          R$ {item.unitPrice.toFixed(2)}{item.saleType === 'weight' ? '/kg' : ''}
+                        </span>
+                      </div>
+                      <div className="delivery-page__cart-item-actions">
+                        <button
+                          onClick={() => handleUpdateQuantity(item.id, item.quantity - (item.saleType === 'weight' ? 0.1 : 1))}
+                          className="delivery-page__cart-item-btn"
+                          title="Diminuir quantidade"
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span className="delivery-page__cart-item-qty">
+                          {item.saleType === 'weight' ? item.quantity.toFixed(3) : item.quantity}
+                        </span>
+                        <button
+                          onClick={() => handleUpdateQuantity(item.id, item.quantity + (item.saleType === 'weight' ? 0.1 : 1))}
+                          className="delivery-page__cart-item-btn"
+                          title="Aumentar quantidade"
+                        >
+                          <Plus size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleRemoveItem(item.id)}
+                          className="delivery-page__cart-item-btn delivery-page__cart-item-btn--remove"
+                          title="Remover item"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      <div className="delivery-page__cart-item-total">R$ {item.totalPrice.toFixed(2)}</div>
                     </div>
-                    <div className="delivery-page__cart-item-actions">
-                      <button
-                        onClick={() => handleUpdateQuantity(item.id, item.quantity - (item.saleType === 'weight' ? 0.1 : 1))}
-                        className="delivery-page__cart-item-btn"
-                        title="Diminuir quantidade"
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <span className="delivery-page__cart-item-qty">
-                        {item.saleType === 'weight' ? item.quantity.toFixed(3) : item.quantity}
-                      </span>
-                      <button
-                        onClick={() => handleUpdateQuantity(item.id, item.quantity + (item.saleType === 'weight' ? 0.1 : 1))}
-                        className="delivery-page__cart-item-btn"
-                        title="Aumentar quantidade"
-                      >
-                        <Plus size={14} />
-                      </button>
-                      <button
-                        onClick={() => handleRemoveItem(item.id)}
-                        className="delivery-page__cart-item-btn delivery-page__cart-item-btn--remove"
-                        title="Remover item"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                    <div className="delivery-page__cart-item-total">
-                      R$ {item.totalPrice.toFixed(2)}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="delivery-page__cart-customer">
@@ -1104,6 +1321,111 @@ ${addressText}
       </div>
 
       {/* Modal de Peso */}
+      {isAssembledModalOpen && (
+        <div className="assembled-modal-overlay">
+          <div className="assembled-modal assembled-modal--large">
+            <h3>Montar produto</h3>
+
+            <div className="assembled-form-grid">
+              <div>
+                <label className="assembled-label">Tamanho</label>
+                <select
+                  value={assembledSizeId}
+                  onChange={(e) => setAssembledSizeId(e.target.value)}
+                  className="assembled-input"
+                  title="Tamanho"
+                >
+                  {(() => {
+                    const anyProduct = assembledSelectedFlavors[0];
+                    const category = anyProduct ? getProductCategory(anyProduct) : null;
+                    const sizes = Array.isArray(category?.sizes) ? category.sizes : [];
+                    return sizes.map((s: any) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ));
+                  })()}
+                </select>
+              </div>
+
+              <div>
+                <label className="assembled-label">Sabores</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={assembledMaxFlavors}
+                  value={assembledFlavorsTotal}
+                  onChange={(e) => setAssembledFlavorsTotal(e.target.value)}
+                  className="assembled-input"
+                  title="Quantidade de sabores"
+                />
+                <small style={{ color: 'rgba(0,0,0,0.6)' }}>Máx: {assembledMaxFlavors}</small>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <label className="assembled-label">Sabores selecionados</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {assembledSelectedFlavors.map((p, idx) => (
+                  <div key={`${p.id}-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <div>
+                      {p.name}
+                      <span style={{ color: 'rgba(0,0,0,0.6)' }}> #{idx + 1}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeAssembledFlavor(idx)}
+                      className="assembled-btn-cancel"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ))}
+                <div style={{ color: 'rgba(0,0,0,0.6)' }}>
+                  {assembledSelectedFlavors.length}/{assembledFlavorsTotalNumber}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <label className="assembled-label">Adicionar sabor</label>
+              <input
+                type="text"
+                value={assembledSearchTerm}
+                onChange={(e) => setAssembledSearchTerm(e.target.value)}
+                placeholder="Buscar sabor..."
+                className="assembled-input"
+                title="Buscar sabor"
+              />
+              <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
+                {assembledAvailableFlavors.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => addAssembledFlavor(p)}
+                    disabled={assembledSelectedFlavors.length >= assembledFlavorsTotalNumber}
+                    className="assembled-product-card"
+                    style={{ cursor: 'pointer' }}
+                    title="Adicionar sabor"
+                  >
+                    <div className="assembled-product-name">{p.name}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="assembled-modal-actions">
+              <button onClick={() => setIsAssembledModalOpen(false)} className="assembled-btn-cancel">
+                Cancelar
+              </button>
+              <button onClick={confirmAssembled} className="assembled-btn-confirm">
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isWeightModalOpen && (
         <div className="delivery-page__modal-overlay">
           <div className="delivery-page__modal">

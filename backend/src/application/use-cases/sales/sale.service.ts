@@ -1,4 +1,4 @@
-import { PrismaClient, TransactionType, SaleStatus, PaymentMethod } from '@prisma/client';
+import { PrismaClient, TransactionType, SaleStatus, PaymentMethod, type LoyaltyConfig, type CashbackConfig } from '@prisma/client';
 import prisma from '@infrastructure/database/prisma-client';
 import { AppError } from '@shared/errors/app-error';
 import { LoyaltyService } from '@application/use-cases/loyalty/loyalty.service';
@@ -9,6 +9,8 @@ export interface SaleItemInput {
   productId: string;
   quantity: number;
   discount?: number;
+  sizeId?: string;
+  flavorsTotal?: number;
 }
 
 export interface PaymentInput {
@@ -134,6 +136,17 @@ export class SaleService {
         isActive: true,
       },
       include: {
+        category: {
+          include: {
+            sizes: { orderBy: { displayOrder: 'asc' } },
+          },
+        },
+        sizePrices: {
+          select: {
+            categorySizeId: true,
+            price: true,
+          },
+        },
         productCosts: {
           where: {
             validFrom: { lte: new Date() },
@@ -187,6 +200,7 @@ export class SaleService {
 
     // Calcular itens e totais
     let subtotal = 0;
+    let itemsDiscountTotal = 0;
     const saleItems: any[] = [];
     let eligibleLoyaltyTotal = 0;
     let eligibleCashbackTotal = 0;
@@ -194,12 +208,63 @@ export class SaleService {
     for (const item of data.items) {
       const product = products.find((p) => p.id === item.productId)!;
 
+      const isAssembled = !!item.sizeId;
+      if (isAssembled) {
+        if (!product.categoryId || product.category?.categoryType !== 'assembled') {
+          throw new AppError('Tamanho/sabores só podem ser usados em produtos de categoria Montado', 400);
+        }
+        const size = product.category.sizes.find((s: any) => s.id === item.sizeId);
+        if (!size) {
+          throw new AppError('Tamanho não pertence à categoria do produto', 400);
+        }
+        const flavorsTotal = Number(item.flavorsTotal);
+        if (!Number.isFinite(flavorsTotal) || flavorsTotal < 1 || flavorsTotal > size.maxFlavors) {
+          throw new AppError(`Quantidade de sabores inválida para o tamanho ${size.name}`, 400);
+        }
+        const sizePrice = product.sizePrices.find((sp: any) => sp.categorySizeId === item.sizeId);
+        if (!sizePrice) {
+          throw new AppError(`Preço não cadastrado para o tamanho ${size.name} do produto ${product.name}`, 400);
+        }
+
+        const unitPrice = Number(sizePrice.price) / flavorsTotal;
+        const itemDiscount = item.discount || 0;
+        const itemSubtotal = unitPrice * item.quantity;
+        const itemTotal = itemSubtotal - itemDiscount;
+
+        subtotal += itemSubtotal;
+        itemsDiscountTotal += itemDiscount;
+
+        if (product.eligibleForLoyalty) {
+          eligibleLoyaltyTotal += itemTotal;
+        }
+
+        if (product.earnsCashback) {
+          eligibleCashbackTotal += itemTotal;
+        }
+
+        const currentCost = product.productCosts[0]?.costPrice || product.costPrice || 0;
+
+        saleItems.push({
+          productId: product.id,
+          productName: `${product.name} (${size.name} 1/${flavorsTotal})`,
+          quantity: item.quantity,
+          unitPrice,
+          costPrice: Number(currentCost),
+          subtotal: itemSubtotal,
+          discount: itemDiscount,
+          total: itemTotal,
+          loyaltyPointsEarned: 0,
+        });
+        continue;
+      }
+
       const unitPrice = Number(product.salePrice);
       const itemDiscount = item.discount || 0;
       const itemSubtotal = unitPrice * item.quantity;
       const itemTotal = itemSubtotal - itemDiscount;
 
       subtotal += itemSubtotal;
+      itemsDiscountTotal += itemDiscount;
 
       if (product.eligibleForLoyalty) {
         eligibleLoyaltyTotal += itemTotal;
@@ -225,7 +290,7 @@ export class SaleService {
     }
 
     const saleDiscount = data.discount || 0;
-    const baseForCoupon = Math.max(subtotal - saleDiscount, 0);
+    const baseForCoupon = Math.max(subtotal - itemsDiscountTotal - saleDiscount, 0);
 
     // Validar cupom
     let couponDiscount = 0;
@@ -242,7 +307,7 @@ export class SaleService {
     // Converter pontos em desconto usando config
     const loyaltyPointsUsed = data.loyaltyPointsUsed || 0;
     let loyaltyDiscount = 0;
-    let loyaltyConfig = null;
+    let loyaltyConfig: LoyaltyConfig | null = null;
     if (customer) {
       loyaltyConfig = await this.loyaltyService.getLoyaltyConfig();
     }
@@ -271,8 +336,9 @@ export class SaleService {
 
     const deliveryFee = data.deliveryFee || 0;
     const additionalFee = data.additionalFee || 0;
+    const itemsNet = subtotal - itemsDiscountTotal;
     const grossTotal =
-      subtotal - saleDiscount - couponDiscount - loyaltyDiscount + deliveryFee + additionalFee;
+      itemsNet - saleDiscount - couponDiscount - loyaltyDiscount + deliveryFee + additionalFee;
 
     if (grossTotal < 0) {
       throw new AppError('Total da venda não pode ser negativo', 400);
@@ -293,7 +359,7 @@ export class SaleService {
     // Calcular pontos e cashback (base = total líquido)
     let loyaltyPointsEarned = 0;
     let cashbackEarned = 0;
-    let cashbackConfig = null;
+    let cashbackConfig: CashbackConfig | null = null;
 
     if (customer) {
       const baseForRewards = total;
@@ -336,7 +402,7 @@ export class SaleService {
           customerId: data.customerId,
           saleType: data.saleType || 'pdv',
           subtotal,
-          discount: saleDiscount + couponDiscount + loyaltyDiscount,
+          discount: itemsDiscountTotal + saleDiscount + couponDiscount + loyaltyDiscount,
           deliveryFee,
           additionalFee,
           total,

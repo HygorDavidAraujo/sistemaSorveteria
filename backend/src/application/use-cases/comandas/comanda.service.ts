@@ -1,4 +1,4 @@
-import { PrismaClient, ComandaStatus, PaymentMethod } from '@prisma/client';
+import { PrismaClient, ComandaStatus, PaymentMethod, type LoyaltyConfig, type CashbackConfig } from '@prisma/client';
 import prisma from '@infrastructure/database/prisma-client';
 import { AppError } from '@shared/errors/app-error';
 import { LoyaltyService } from '@application/use-cases/loyalty/loyalty.service';
@@ -16,6 +16,8 @@ export interface CreateComandaDTO {
 export interface AddItemDTO {
   productId: string;
   quantity: number;
+  sizeId?: string;
+  flavorsTotal?: number;
   addedById: string;
 }
 
@@ -260,6 +262,17 @@ export class ComandaService {
     const product = await this.prismaClient.product.findUnique({
       where: { id: data.productId },
       include: {
+        category: {
+          include: {
+            sizes: { orderBy: { displayOrder: 'asc' } },
+          },
+        },
+        sizePrices: {
+          select: {
+            categorySizeId: true,
+            price: true,
+          },
+        },
         productCosts: {
           where: {
             validFrom: { lte: new Date() },
@@ -281,7 +294,29 @@ export class ComandaService {
     }
 
     // Calcular valores
-    const unitPrice = Number(product.salePrice);
+    let unitPrice = Number(product.salePrice);
+    let productName = product.name;
+
+    if (data.sizeId) {
+      if (!product.categoryId || product.category?.categoryType !== 'assembled') {
+        throw new AppError('Tamanho/sabores só podem ser usados em produtos de categoria Montado', 400);
+      }
+      const size = product.category.sizes.find((s: any) => s.id === data.sizeId);
+      if (!size) {
+        throw new AppError('Tamanho não pertence à categoria do produto', 400);
+      }
+      const flavorsTotal = Number(data.flavorsTotal);
+      if (!Number.isFinite(flavorsTotal) || flavorsTotal < 1 || flavorsTotal > size.maxFlavors) {
+        throw new AppError(`Quantidade de sabores inválida para o tamanho ${size.name}`, 400);
+      }
+      const sizePrice = product.sizePrices.find((sp: any) => sp.categorySizeId === data.sizeId);
+      if (!sizePrice) {
+        throw new AppError(`Preço não cadastrado para o tamanho ${size.name} do produto ${product.name}`, 400);
+      }
+      unitPrice = Number(sizePrice.price) / flavorsTotal;
+      productName = `${product.name} (${size.name} 1/${flavorsTotal})`;
+    }
+
     const subtotal = unitPrice * data.quantity;
     const currentCost = product.productCosts[0]?.costPrice || product.costPrice || 0;
 
@@ -291,7 +326,7 @@ export class ComandaService {
         data: {
           comandaId,
           productId: data.productId,
-          productName: product.name,
+          productName,
           quantity: data.quantity,
           unitPrice,
           costPrice: Number(currentCost),
@@ -606,8 +641,8 @@ export class ComandaService {
     // Pontos e cashback
     let loyaltyPointsEarned = 0;
     let cashbackEarned = 0;
-    let loyaltyConfig = null;
-    let cashbackConfig = null;
+    let loyaltyConfig: LoyaltyConfig | null = null;
+    let cashbackConfig: CashbackConfig | null = null;
 
     if (customer) {
       loyaltyPointsEarned = await this.loyaltyService.calculatePoints(total, productIds);

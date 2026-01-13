@@ -1,7 +1,15 @@
 import axios from 'axios';
 import type { AxiosInstance, AxiosError } from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+const normalizeApiBaseUrl = (raw: string | undefined) => {
+  const base = (raw || 'http://localhost:3000').replace(/\/+$/, '');
+  if (base.endsWith('/api/v1')) return base;
+  // If user provided an explicit API prefix (e.g. /api/v2), respect it.
+  if (/\/api\/v\d+$/.test(base)) return base;
+  return `${base}/api/v1`;
+};
+
+const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
 
 export class ApiClient {
   private client: AxiosInstance;
@@ -243,6 +251,148 @@ export class ApiClient {
     const startDate = start.toISOString().slice(0, 10);
     const endDate = end.toISOString().slice(0, 10);
     return this.getTransactionsSummary(startDate, endDate);
+  }
+
+  // Financial - Categories
+  async getFinancialCategories(isActive?: boolean) {
+    const response = await this.client.get('/financial/categories', {
+      params: isActive === undefined ? undefined : { isActive },
+    });
+    return response.data;
+  }
+
+  async getFinancialCategoriesByType(categoryType: 'revenue' | 'cost' | 'expense') {
+    const response = await this.client.get(`/financial/categories/type/${categoryType}`);
+    return response.data;
+  }
+
+  async createFinancialCategory(data: any) {
+    const response = await this.client.post('/financial/categories', data);
+    return response.data;
+  }
+
+  async updateFinancialCategory(id: string, data: any) {
+    const response = await this.client.put(`/financial/categories/${id}`, data);
+    return response.data;
+  }
+
+  // Financial - Payment Methods Config
+  async getPaymentMethodConfigs() {
+    const response = await this.client.get('/financial/payment-methods');
+    return response.data;
+  }
+
+  async upsertPaymentMethodConfig(paymentMethod: string, data: any) {
+    const response = await this.client.put(`/financial/payment-methods/${paymentMethod}`, data);
+    return response.data;
+  }
+
+  // Financial - Transactions
+  async searchFinancialTransactions(params: any) {
+    const response = await this.client.get('/financial/transactions', { params });
+    return response.data;
+  }
+
+  async createFinancialTransaction(data: any) {
+    const response = await this.client.post('/financial/transactions', data);
+    return response.data;
+  }
+
+  async updateFinancialTransaction(id: string, data: any) {
+    const response = await this.client.put(`/financial/transactions/${id}`, data);
+    return response.data;
+  }
+
+  async markFinancialTransactionPaid(id: string) {
+    const response = await this.client.patch(`/financial/transactions/${id}/mark-paid`, {});
+    return response.data;
+  }
+
+  async cancelFinancialTransaction(id: string, reason: string) {
+    const response = await this.client.post(`/financial/transactions/${id}/cancel`, { reason });
+    return response.data;
+  }
+
+  // Financial - Accounts Payable
+  async searchAccountsPayable(params: any) {
+    const response = await this.client.get('/financial/accounts-payable', { params });
+    return response.data;
+  }
+
+  async createAccountPayable(data: any) {
+    const response = await this.client.post('/financial/accounts-payable', data);
+    return response.data;
+  }
+
+  async updateAccountPayable(id: string, data: any) {
+    const response = await this.client.put(`/financial/accounts-payable/${id}`, data);
+    return response.data;
+  }
+
+  async payAccountPayable(id: string, data: any) {
+    const response = await this.client.post(`/financial/accounts-payable/${id}/payment`, data);
+    return response.data;
+  }
+
+  async cancelAccountPayable(id: string, reason: string) {
+    const response = await this.client.post(`/financial/accounts-payable/${id}/cancel`, { reason });
+    return response.data;
+  }
+
+  async getAccountsPayableSummary() {
+    const response = await this.client.get('/financial/accounts-payable/summary');
+    return response.data;
+  }
+
+  async getAccountsPayableUpcoming(days: number = 7) {
+    const response = await this.client.get('/financial/accounts-payable/upcoming', { params: { days } });
+    return response.data;
+  }
+
+  async getAccountsPayableOverdue() {
+    const response = await this.client.get('/financial/accounts-payable/overdue');
+    return response.data;
+  }
+
+  // Financial - Accounts Receivable
+  async searchAccountsReceivable(params: any) {
+    const response = await this.client.get('/financial/accounts-receivable', { params });
+    return response.data;
+  }
+
+  async createAccountReceivable(data: any) {
+    const response = await this.client.post('/financial/accounts-receivable', data);
+    return response.data;
+  }
+
+  async receiveAccountReceivable(id: string, data: any) {
+    const response = await this.client.post(`/financial/accounts-receivable/${id}/payment`, data);
+    return response.data;
+  }
+
+  async cancelAccountReceivable(id: string, reason: string) {
+    const response = await this.client.post(`/financial/accounts-receivable/${id}/cancel`, { reason });
+    return response.data;
+  }
+
+  async getAccountsReceivableSummary() {
+    const response = await this.client.get('/financial/accounts-receivable/summary');
+    return response.data;
+  }
+
+  async getAccountsReceivableUpcoming(days: number = 7) {
+    const response = await this.client.get('/financial/accounts-receivable/upcoming', { params: { days } });
+    return response.data;
+  }
+
+  async getAccountsReceivableOverdue() {
+    const response = await this.client.get('/financial/accounts-receivable/overdue');
+    return response.data;
+  }
+
+  async getAccountsReceivableDSO() {
+    const response = await this.client.get('/financial/accounts-receivable/analytics/dso');
+    return response.data;
   }
 
   // Generic HTTP Methods

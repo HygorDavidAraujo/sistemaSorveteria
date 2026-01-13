@@ -1,0 +1,92 @@
+/* Financial Categories Page */
+.financial-categories-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.financial-categories-header {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (min-width: 640px) {
+  .financial-categories-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.financial-categories-header button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.financial-categories-card {
+  padding: 0;
+}
+
+.financial-categories-table-wrapper {
+  overflow-x: auto;
+  background: white;
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.financial-categories-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.financial-categories-table thead {
+  background: var(--color-light);
+}
+
+.financial-categories-table th {
+  padding: 16px 24px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--color-gray-600);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.financial-categories-table td {
+  padding: 16px 24px;
+  font-size: 14px;
+  color: var(--color-dark);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.financial-categories-table tbody tr:hover {
+  background: var(--color-bg-secondary);
+}
+
+.financial-categories-right {
+  text-align: right;
+}
+
+.financial-categories-name {
+  font-weight: 700;
+}
+
+.financial-categories-muted {
+  color: var(--color-gray-500);
+}
+
+.financial-categories-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.financial-categories-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}

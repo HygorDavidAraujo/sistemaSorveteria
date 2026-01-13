@@ -102,6 +102,41 @@ export const useSalesStore = create<SalesStore>((set) => ({
       if (item.saleType === 'weight') {
         return { items: [...state.items, item] };
       }
+
+      // Itens Montado (com sizeId) não devem ser agrupados por productId apenas.
+      // Para manter pedidos separados, use assembledGroupId (gerado no frontend).
+      if (item.sizeId) {
+        const groupId = item.assembledGroupId ? String(item.assembledGroupId) : null;
+        if (!groupId) {
+          return { items: [...state.items, item] };
+        }
+
+        const key = `${String(item.productId)}|${String(item.sizeId)}|${String(item.flavorsTotal ?? '')}|${groupId}`;
+        const existingItem = state.items.find((i) => {
+          if (!i.sizeId || !i.assembledGroupId) return false;
+          const otherKey = `${String(i.productId)}|${String(i.sizeId)}|${String(i.flavorsTotal ?? '')}|${String(i.assembledGroupId)}`;
+          return otherKey === key;
+        });
+
+        if (existingItem) {
+          return {
+            items: state.items.map((i) => {
+              if (!i.sizeId || !i.assembledGroupId) return i;
+              const otherKey = `${String(i.productId)}|${String(i.sizeId)}|${String(i.flavorsTotal ?? '')}|${String(i.assembledGroupId)}`;
+              return otherKey === key
+                ? {
+                    ...i,
+                    id: existingItem.id,
+                    quantity: i.quantity + item.quantity,
+                    totalPrice: (i.quantity + item.quantity) * i.unitPrice,
+                  }
+                : i;
+            }),
+          };
+        }
+
+        return { items: [...state.items, item] };
+      }
       
       // Produtos normais são agrupados por productId (convertendo para string para comparação consistente)
       const productIdStr = String(item.productId);
@@ -174,6 +209,40 @@ export const useDeliveryStore = create<DeliveryStore>((set) => ({
       if (item.saleType === 'weight') {
         return { items: [...state.items, item] };
       }
+
+      if (item.sizeId) {
+        const groupId = item.assembledGroupId ? String(item.assembledGroupId) : null;
+        if (!groupId) {
+          return { items: [...state.items, item] };
+        }
+
+        const key = `${String(item.productId)}|${String(item.sizeId)}|${String(item.flavorsTotal ?? '')}|${groupId}`;
+        const existingItem = state.items.find((i) => {
+          if (!i.sizeId || !i.assembledGroupId) return false;
+          const otherKey = `${String(i.productId)}|${String(i.sizeId)}|${String(i.flavorsTotal ?? '')}|${String(i.assembledGroupId)}`;
+          return otherKey === key;
+        });
+
+        if (existingItem) {
+          return {
+            items: state.items.map((i) => {
+              if (!i.sizeId || !i.assembledGroupId) return i;
+              const otherKey = `${String(i.productId)}|${String(i.sizeId)}|${String(i.flavorsTotal ?? '')}|${String(i.assembledGroupId)}`;
+              return otherKey === key
+                ? {
+                    ...i,
+                    id: existingItem.id,
+                    quantity: i.quantity + item.quantity,
+                    totalPrice: (i.quantity + item.quantity) * i.unitPrice,
+                  }
+                : i;
+            }),
+          };
+        }
+
+        return { items: [...state.items, item] };
+      }
+
       const productIdStr = String(item.productId);
       const existingItem = state.items.find((i) => String(i.productId) === productIdStr);
       if (existingItem) {

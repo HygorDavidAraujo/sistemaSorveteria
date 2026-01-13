@@ -10,6 +10,7 @@ export interface CreateProductDTO {
   salePrice: number;
   costPrice?: number;
   saleType: 'unit' | 'weight';
+  sizePrices?: Array<{ sizeId: string; price: number }>;
   unit?: string;
   eligibleForLoyalty?: boolean;
   loyaltyPointsMultiplier?: number;
@@ -28,6 +29,7 @@ export interface UpdateProductDTO {
   salePrice?: number;
   costPrice?: number;
   saleType?: 'unit' | 'weight';
+  sizePrices?: Array<{ sizeId: string; price: number }>;
   unit?: string;
   eligibleForLoyalty?: boolean;
   loyaltyPointsMultiplier?: number;
@@ -53,13 +55,34 @@ export class ProductService {
    * Criar um novo produto
    */
   async createProduct(data: CreateProductDTO): Promise<Product> {
+    let category: any = null;
     if (data.categoryId) {
-      const category = await this.prismaClient.category.findUnique({
+      category = await this.prismaClient.category.findUnique({
         where: { id: data.categoryId },
+        include: {
+          sizes: { orderBy: { displayOrder: 'asc' } },
+        },
       });
 
       if (!category) {
         throw new AppError('Categoria não encontrada', 404);
+      }
+
+      if (category.categoryType === 'assembled') {
+        const sizePrices = Array.isArray(data.sizePrices) ? data.sizePrices : [];
+        if (sizePrices.length === 0) {
+          throw new AppError('Categoria do tipo Montado exige preços por tamanho', 400);
+        }
+
+        const sizeIdSet = new Set(category.sizes.map((s: any) => s.id));
+        for (const sp of sizePrices) {
+          if (!sizeIdSet.has(sp.sizeId)) {
+            throw new AppError('Tamanho informado não pertence à categoria', 400);
+          }
+          if (!Number.isFinite(sp.price) || sp.price <= 0) {
+            throw new AppError('Preço por tamanho deve ser maior que zero', 400);
+          }
+        }
       }
     }
 
@@ -71,27 +94,50 @@ export class ProductService {
       throw new AppError('Código do produto já está em uso', 400);
     }
 
-    const product = await this.prismaClient.product.create({
-      data: {
-        name: data.name,
-        code: data.code,
-        description: data.description,
-        categoryId: data.categoryId,
-        salePrice: data.salePrice,
-        costPrice: data.costPrice,
-        saleType: data.saleType,
-        unit: data.unit,
-        eligibleForLoyalty: data.eligibleForLoyalty ?? false,
-        loyaltyPointsMultiplier: data.loyaltyPointsMultiplier ?? 1,
-        trackStock: data.trackStock ?? false,
-        currentStock: data.currentStock ?? 0,
-        minStock: data.minStock ?? 0,
-        isActive: data.isActive ?? true,
-        createdById: data.createdById,
-      },
-      include: {
-        category: true,
-      },
+    const product = await this.prismaClient.$transaction(async (tx) => {
+      const created = await tx.product.create({
+        data: {
+          name: data.name,
+          code: data.code,
+          description: data.description,
+          categoryId: data.categoryId,
+          salePrice: data.salePrice,
+          costPrice: data.costPrice,
+          saleType: data.saleType,
+          unit: data.unit,
+          eligibleForLoyalty: data.eligibleForLoyalty ?? false,
+          loyaltyPointsMultiplier: data.loyaltyPointsMultiplier ?? 1,
+          trackStock: data.trackStock ?? false,
+          currentStock: data.currentStock ?? 0,
+          minStock: data.minStock ?? 0,
+          isActive: data.isActive ?? true,
+          createdById: data.createdById,
+        },
+        include: {
+          category: {
+            include: { sizes: { orderBy: { displayOrder: 'asc' } } },
+          },
+          sizePrices: true,
+        },
+      });
+
+      if (category?.categoryType === 'assembled' && Array.isArray(data.sizePrices)) {
+        await tx.productSizePrice.createMany({
+          data: data.sizePrices.map((sp) => ({
+            productId: created.id,
+            categorySizeId: sp.sizeId,
+            price: sp.price,
+          })),
+        });
+      }
+
+      return tx.product.findUniqueOrThrow({
+        where: { id: created.id },
+        include: {
+          category: { include: { sizes: { orderBy: { displayOrder: 'asc' } } } },
+          sizePrices: true,
+        },
+      });
     });
 
     if (data.costPrice !== undefined) {
@@ -141,7 +187,17 @@ export class ProductService {
       this.prismaClient.product.findMany({
         where,
         include: {
-          category: true,
+          category: {
+            include: {
+              sizes: { orderBy: { displayOrder: 'asc' } },
+            },
+          },
+          sizePrices: {
+            select: {
+              categorySizeId: true,
+              price: true,
+            },
+          },
           productCosts: {
             orderBy: { validFrom: 'desc' },
             take: 1,
@@ -172,7 +228,17 @@ export class ProductService {
     const product = await this.prismaClient.product.findUnique({
       where: { id },
       include: {
-        category: true,
+        category: {
+          include: {
+            sizes: { orderBy: { displayOrder: 'asc' } },
+          },
+        },
+        sizePrices: {
+          select: {
+            categorySizeId: true,
+            price: true,
+          },
+        },
         productCosts: {
           orderBy: { validFrom: 'desc' },
           take: 3,
@@ -207,13 +273,34 @@ export class ProductService {
       throw new AppError('Produto não encontrado', 404);
     }
 
-    if (data.categoryId) {
-      const category = await this.prismaClient.category.findUnique({
-        where: { id: data.categoryId },
+    let nextCategory: any = null;
+    const categoryIdToValidate = data.categoryId ?? existingProduct.categoryId;
+    if (categoryIdToValidate) {
+      nextCategory = await this.prismaClient.category.findUnique({
+        where: { id: categoryIdToValidate },
+        include: { sizes: { orderBy: { displayOrder: 'asc' } } },
       });
 
-      if (!category) {
+      if (!nextCategory) {
         throw new AppError('Categoria não encontrada', 404);
+      }
+    }
+
+    if (data.sizePrices) {
+      if (!nextCategory || nextCategory.categoryType !== 'assembled') {
+        throw new AppError('Preços por tamanho só podem ser usados em categorias do tipo Montado', 400);
+      }
+      if (!Array.isArray(data.sizePrices) || data.sizePrices.length === 0) {
+        throw new AppError('Informe ao menos um preço por tamanho', 400);
+      }
+      const sizeIdSet = new Set(nextCategory.sizes.map((s: any) => s.id));
+      for (const sp of data.sizePrices) {
+        if (!sizeIdSet.has(sp.sizeId)) {
+          throw new AppError('Tamanho informado não pertence à categoria', 400);
+        }
+        if (!Number.isFinite(sp.price) || sp.price <= 0) {
+          throw new AppError('Preço por tamanho deve ser maior que zero', 400);
+        }
       }
     }
 
@@ -227,12 +314,37 @@ export class ProductService {
       }
     }
 
-    const updatedProduct = await this.prismaClient.product.update({
-      where: { id },
-      data,
-      include: {
-        category: true,
-      },
+    const updatedProduct = await this.prismaClient.$transaction(async (tx) => {
+      const { sizePrices: _ignoredSizePrices, ...productData } = data as any;
+
+      const updated = await tx.product.update({
+        where: { id },
+        data: productData,
+      });
+
+      if (data.sizePrices) {
+        await tx.productSizePrice.deleteMany({ where: { productId: id } });
+        await tx.productSizePrice.createMany({
+          data: data.sizePrices.map((sp) => ({
+            productId: id,
+            categorySizeId: sp.sizeId,
+            price: sp.price,
+          })),
+        });
+      }
+
+      // Se mudou para categoria comum, removemos preços por tamanho (não usados)
+      if (nextCategory && nextCategory.categoryType !== 'assembled') {
+        await tx.productSizePrice.deleteMany({ where: { productId: id } });
+      }
+
+      return tx.product.findUniqueOrThrow({
+        where: { id: updated.id },
+        include: {
+          category: { include: { sizes: { orderBy: { displayOrder: 'asc' } } } },
+          sizePrices: { select: { categorySizeId: true, price: true } },
+        },
+      });
     });
 
     return updatedProduct;

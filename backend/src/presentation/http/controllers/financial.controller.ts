@@ -4,6 +4,8 @@ import { FinancialService } from '@application/use-cases/financial/financial.ser
 import { AccountPayableService } from '@application/use-cases/financial/accounts-payable.service';
 import { AccountReceivableService } from '@application/use-cases/financial/accounts-receivable.service';
 import { DREService } from '@application/use-cases/financial/dre.service';
+import { PaymentMethod } from '@prisma/client';
+import { PaymentMethodConfigService } from '@application/use-cases/financial/payment-method-config.service';
 import { FinancialTransactionType, FinancialTransactionStatus } from '@domain/entities/financial.entity';
 
 declare global {
@@ -288,6 +290,52 @@ export class FinancialController {
       success: true,
       data: category,
       message: 'Categoria atualizada com sucesso',
+    });
+  });
+}
+
+/**
+ * Payment Methods Config Controller
+ * Gerencia taxas (%) e prazo de liberação por forma de pagamento
+ */
+export class PaymentMethodConfigController {
+  private paymentMethodConfigService: PaymentMethodConfigService;
+
+  constructor() {
+    this.paymentMethodConfigService = new PaymentMethodConfigService();
+  }
+
+  /**
+   * Listar configurações
+   * GET /financial/payment-methods
+   */
+  list = asyncHandler(async (_req: Request, res: Response) => {
+    const configs = await this.paymentMethodConfigService.list();
+
+    res.json({
+      success: true,
+      data: configs,
+    });
+  });
+
+  /**
+   * Atualizar/Inserir configuração
+   * PUT /financial/payment-methods/:paymentMethod
+   */
+  upsert = asyncHandler(async (req: Request, res: Response) => {
+    const { paymentMethod } = req.params;
+    const { feePercent, settlementDays, isActive } = req.body;
+
+    const updated = await this.paymentMethodConfigService.upsert(paymentMethod as PaymentMethod, {
+      feePercent,
+      settlementDays,
+      isActive,
+    });
+
+    res.json({
+      success: true,
+      data: updated,
+      message: 'Configuração de forma de pagamento atualizada com sucesso',
     });
   });
 }

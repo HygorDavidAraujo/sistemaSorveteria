@@ -38,31 +38,57 @@ export class DREService {
     }
 
     // 1. RECEITA BRUTA (Gross Revenue)
+    // Observação: no modelo de vendas, `total` já é líquido (após descontos).
+    // Para Receita Bruta, usamos `subtotal + taxas`.
     const sales = await this.prismaClient.sale.findMany({
       where: {
         saleDate: {
           gte: startDate,
           lte: endDate,
         },
+        status: {
+          in: ['completed', 'adjusted'],
+        },
       },
       include: {
-        items: true,
+        items: {
+          include: {
+            product: {
+              select: {
+                costPrice: true,
+              },
+            },
+          },
+        },
       },
     });
 
-    const grossRevenue = sales.reduce((sum, sale) => sum + Number(sale.total), 0);
+    const grossRevenue = sales.reduce(
+      (sum, sale) =>
+        sum +
+        Number(sale.subtotal || 0) +
+        Number(sale.deliveryFee || 0) +
+        Number(sale.additionalFee || 0),
+      0
+    );
 
-    // 2. DESCONTOS
-    const discounts = sales.reduce((sum, sale) => sum + Number(sale.discount), 0);
+    // 2. RECEITA LÍQUIDA (valor efetivamente cobrado)
+    const netRevenue = sales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
 
-    // 3. RECEITA LÍQUIDA
-    const netRevenue = grossRevenue - discounts;
+    // 3. DESCONTOS (derivado para manter consistência bruta - descontos = líquida)
+    const discounts = Math.max(0, grossRevenue - netRevenue);
 
     // 4. CUSTO DOS PRODUTOS VENDIDOS (COGS)
     const saleItems = sales.flatMap((sale) => sale.items);
     const cogs = saleItems.reduce((sum, item) => {
-      const cost = item.costPrice ? Number(item.costPrice) * Number(item.quantity) : 0;
-      return sum + cost;
+      const unitCost =
+        item.costPrice !== null && item.costPrice !== undefined
+          ? Number(item.costPrice)
+          : Number(item.product?.costPrice || 0);
+
+      const quantity = Number(item.quantity || 0);
+      if (!unitCost || !quantity) return sum;
+      return sum + unitCost * quantity;
     }, 0);
 
     // 5. LUCRO BRUTO (Gross Profit)
@@ -152,6 +178,9 @@ export class DREService {
         saleDate: {
           gte: startDate,
           lte: endDate,
+        },
+        status: {
+          in: ['completed', 'adjusted'],
         },
       },
     });
@@ -315,6 +344,9 @@ export class DREService {
       where: {
         saleDate: {
           gte: thirtyDaysAgo,
+        },
+        status: {
+          in: ['completed', 'adjusted'],
         },
       },
     });
@@ -492,16 +524,33 @@ export class DREService {
           gte: startDate,
           lte: endDate,
         },
+        status: {
+          in: ['completed', 'adjusted'],
+        },
       },
       include: {
-        items: true,
+        items: {
+          include: {
+            product: {
+              select: {
+                costPrice: true,
+              },
+            },
+          },
+        },
       },
     });
 
     const saleItems = sales.flatMap((sale) => sale.items);
     return saleItems.reduce((sum, item) => {
-      const cost = item.costPrice ? Number(item.costPrice) * Number(item.quantity) : 0;
-      return sum + cost;
+      const unitCost =
+        item.costPrice !== null && item.costPrice !== undefined
+          ? Number(item.costPrice)
+          : Number(item.product?.costPrice || 0);
+
+      const quantity = Number(item.quantity || 0);
+      if (!unitCost || !quantity) return sum;
+      return sum + unitCost * quantity;
     }, 0);
   }
 }
