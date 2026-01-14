@@ -37,11 +37,8 @@ export const productValidators = {
         'any.required': 'Tipo de venda é obrigatório',
       }),
       unit: Joi.string().max(50).optional().allow(''),
-      salePrice: Joi.number().positive().precision(2).required().messages({
-        'number.base': 'Preço de venda deve ser um número',
-        'number.positive': 'Preço de venda deve ser positivo',
-        'any.required': 'Preço de venda é obrigatório',
-      }),
+      // Para Montado, o backend define salePrice automaticamente (menor preço por tamanho).
+      salePrice: Joi.number().positive().precision(2).optional(),
       costPrice: Joi.number().positive().precision(2).optional(),
       sizePrices: Joi.array().items(sizePriceInput).optional(),
       eligibleForLoyalty: Joi.boolean().optional().default(false),
@@ -50,7 +47,7 @@ export const productValidators = {
       currentStock: Joi.number().min(0).optional().default(0),
       minStock: Joi.number().min(0).optional().default(0),
       isActive: Joi.boolean().optional().default(true),
-    }),
+    }).or('salePrice', 'sizePrices'),
   }),
 
   /**
@@ -64,6 +61,7 @@ export const productValidators = {
       code: Joi.string().max(50).optional(),
       saleType: Joi.string().valid('unit', 'weight').optional(),
       unit: Joi.string().max(50).optional().allow(''),
+      // Para Montado, salePrice é calculado (menor preço por tamanho) e pode ser ignorado.
       salePrice: Joi.number().positive().precision(2).optional().allow(null),
       costPrice: Joi.number().positive().precision(2).optional().allow(null),
       sizePrices: Joi.array().items(sizePriceInput).optional().allow(null),

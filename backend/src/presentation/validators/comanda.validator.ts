@@ -42,11 +42,8 @@ export const comandaValidators = {
       productId: uuid.required(),
       quantity: Joi.number().positive().required(),
       sizeId: uuid.optional(),
-      flavorsTotal: Joi.number().integer().min(1).max(20).when('sizeId', {
-        is: uuid,
-        then: Joi.required(),
-        otherwise: Joi.optional(),
-      }),
+      // Optional here; if sizeId is provided for Montado, ComandaService enforces flavorsTotal rules.
+      flavorsTotal: Joi.number().integer().min(1).max(20).optional(),
     }),
     query: Joi.object({}),
     params: Joi.object({

@@ -288,6 +288,11 @@ export class ComandaService {
       throw new AppError('Produto não encontrado ou inativo', 404);
     }
 
+    // Regra Montado: se o produto é Montado, tamanho é obrigatório.
+    if (product.category?.categoryType === 'assembled' && !data.sizeId) {
+      throw new AppError(`Produto Montado exige tamanho: ${product.name}`, 400);
+    }
+
     // Validar estoque
     if (product.trackStock && Number(product.currentStock) < data.quantity) {
       throw new AppError(`Estoque insuficiente para o produto ${product.name}`, 400);

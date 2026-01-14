@@ -238,6 +238,37 @@ export class ApiClient {
     return response.data;
   }
 
+  // Product Reports
+  async getProductTimeSeriesReport(
+    startDate: string,
+    endDate: string,
+    granularity: 'day' | 'month' | 'year' = 'day'
+  ) {
+    const response = await this.client.get('/reports/products/timeseries', {
+      params: { startDate, endDate, granularity },
+    });
+    return response.data;
+  }
+
+  async getProductRankingReport(
+    startDate: string,
+    endDate: string,
+    metric: 'revenue' | 'quantity' = 'revenue',
+    limit: number = 20
+  ) {
+    const response = await this.client.get('/reports/products/ranking', {
+      params: { startDate, endDate, metric, limit },
+    });
+    return response.data;
+  }
+
+  async getProductABCCurveReport(startDate: string, endDate: string) {
+    const response = await this.client.get('/reports/products/abc', {
+      params: { startDate, endDate },
+    });
+    return response.data;
+  }
+
   async getDailyReport(date: string) {
     const response = await this.client.get('/financial/daily', {
       params: { date },

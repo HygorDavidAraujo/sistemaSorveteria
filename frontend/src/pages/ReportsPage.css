@@ -88,6 +88,37 @@
   margin-top: 12px;
 }
 
+.reports-table-wrapper {
+  margin-top: 12px;
+  overflow: auto;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 10px;
+}
+
+.reports-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  background: white;
+}
+
+.reports-table th,
+.reports-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.reports-table thead th {
+  background: rgba(148, 163, 184, 0.12);
+  font-weight: 700;
+}
+
+.reports-table tbody tr:hover td {
+  background: rgba(129, 93, 209, 0.05);
+}
+
 .reports-detail-item {
   display: flex;
   align-items: center;

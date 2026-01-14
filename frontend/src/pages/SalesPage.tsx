@@ -13,6 +13,7 @@ import '@/styles/assembledModal.css';
 export const SalesPage: React.FC = () => {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
+  const [productSearchTerm, setProductSearchTerm] = useState('');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +34,7 @@ export const SalesPage: React.FC = () => {
   const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
   const [pendingWeightProduct, setPendingWeightProduct] = useState<Product | null>(null);
   const [tempWeight, setTempWeight] = useState('');
+  const [isReadingScale, setIsReadingScale] = useState(false);
 
   const [isAssembledModalOpen, setIsAssembledModalOpen] = useState(false);
   const [assembledCategoryId, setAssembledCategoryId] = useState<string>('');
@@ -83,6 +85,17 @@ export const SalesPage: React.FC = () => {
   const getProductCategory = (product: Product) => {
     const cat: any = (product as any)?.category;
     return typeof cat === 'object' ? cat : null;
+  };
+
+  const normalizeSearch = (value: unknown) => {
+    const s = String(value ?? '').trim().toLowerCase();
+    try {
+      // Use RegExp constructor so older engines don't fail parsing on \p{}
+      return s.normalize('NFD').replace(new RegExp('\\p{Diacritic}', 'gu'), '');
+    } catch {
+      // Fallback for environments without Unicode property escapes
+      return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
   };
 
   useEffect(() => {
@@ -215,6 +228,17 @@ export const SalesPage: React.FC = () => {
     ).slice(0, 8);
   }, [customers, customerSearchTerm]);
 
+  const filteredProducts = useMemo(() => {
+    const term = normalizeSearch(productSearchTerm);
+    if (!term) return products;
+
+    return products.filter((p) => {
+      const name = normalizeSearch(p.name);
+      const code = normalizeSearch(p.code);
+      return name.includes(term) || (!!code && code.includes(term));
+    });
+  }, [products, productSearchTerm]);
+
   const handleAddItem = (product: Product) => {
     const isWeight = product.saleType === 'weight';
     const category = getProductCategory(product);
@@ -262,6 +286,12 @@ export const SalesPage: React.FC = () => {
 
   const assembledMaxFlavors = assembledSize?.maxFlavors ? Number(assembledSize.maxFlavors) : 1;
   const assembledFlavorsTotalNumber = Math.max(1, Math.min(assembledMaxFlavors, parseInt(assembledFlavorsTotal || '1', 10) || 1));
+
+  useEffect(() => {
+    if (!isAssembledModalOpen) return;
+    const next = String(assembledFlavorsTotalNumber);
+    if (next !== assembledFlavorsTotal) setAssembledFlavorsTotal(next);
+  }, [isAssembledModalOpen, assembledFlavorsTotalNumber, assembledFlavorsTotal]);
 
   const assembledAvailableFlavors = useMemo(() => {
     if (!assembledCategoryId) return [];
@@ -427,6 +457,24 @@ export const SalesPage: React.FC = () => {
     setIsWeightModalOpen(false);
     setPendingWeightProduct(null);
     setTempWeight('');
+  };
+
+  const readWeightFromScale = async () => {
+    if (isReadingScale) return;
+    setIsReadingScale(true);
+    try {
+      const data = await apiClient.get('/scale/weight');
+      const weightKg = Number((data as any)?.weightKg);
+      if (!Number.isFinite(weightKg) || weightKg <= 0) {
+        throw new Error('Peso inválido retornado pela balança');
+      }
+      setTempWeight(weightKg.toFixed(3));
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Erro ao ler peso da balança');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setIsReadingScale(false);
+    }
   };
 
   const handleUpdateQuantity = (itemId: string, quantity: number) => {
@@ -714,7 +762,9 @@ export const SalesPage: React.FC = () => {
           productId: item.productId,
           quantity: item.quantity,
           discount: 0,
-          ...(item.sizeId ? { sizeId: item.sizeId, flavorsTotal: item.flavorsTotal } : {}),
+          ...(item.sizeId
+            ? { sizeId: item.sizeId, flavorsTotal: item.flavorsTotal ?? 1 }
+            : { unitPrice: item.unitPrice }),
         })),
         payments: payments.map((p) => ({ paymentMethod: p.method, amount: p.amount })),
         discount: totalDiscount,
@@ -770,10 +820,23 @@ export const SalesPage: React.FC = () => {
         <div className="sales-page__products">
           <div className="sales-page__products-header">
             <h2 className="sales-page__products-title">Produtos</h2>
+            <input
+              className="sales-page__product-search"
+              value={productSearchTerm}
+              onChange={(e) => setProductSearchTerm(e.target.value)}
+              placeholder="Buscar produto (nome ou código)…"
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return;
+                const first = filteredProducts[0];
+                if (!first) return;
+                handleAddItem(first);
+                setProductSearchTerm('');
+              }}
+            />
             <span className="sales-page__products-hint">Clique para adicionar ao carrinho</span>
           </div>
           <div className="sales-page__products-grid">
-            {products.map((product) => (
+            {filteredProducts.map((product) => (
               <div
                 key={product.id}
                 className="sales-page__product-card"
@@ -1555,15 +1618,23 @@ export const SalesPage: React.FC = () => {
 
               <div>
                 <label className="assembled-label">Sabores</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={assembledMaxFlavors}
-                  value={assembledFlavorsTotal}
-                  onChange={(e) => setAssembledFlavorsTotal(e.target.value)}
-                  className="assembled-input"
-                  title="Quantidade de sabores"
-                />
+                <div className="assembled-radio-group" role="radiogroup" aria-label="Quantidade de sabores">
+                  {Array.from({ length: Math.max(1, assembledMaxFlavors) }, (_, i) => i + 1).map((n) => (
+                    <label
+                      key={n}
+                      className={`assembled-radio-option ${assembledFlavorsTotalNumber === n ? 'assembled-radio-option--checked' : ''}`}
+                    >
+                      <input
+                        type="radio"
+                        name="assembledFlavorsTotal"
+                        value={n}
+                        checked={assembledFlavorsTotalNumber === n}
+                        onChange={() => setAssembledFlavorsTotal(String(n))}
+                      />
+                      <span>{n} sabor{n > 1 ? 'es' : ''}</span>
+                    </label>
+                  ))}
+                </div>
                 <small style={{ color: 'rgba(0,0,0,0.6)' }}>Máx: {assembledMaxFlavors}</small>
               </div>
             </div>
@@ -1662,13 +1733,12 @@ export const SalesPage: React.FC = () => {
 
               <div className="sales-page__weight-actions">
                 <button
-                  onClick={() => {
-                    setError('Integração com balança Toledo Prix 3 Fit ainda em desenvolvimento');
-                    setTimeout(() => setError(null), 3000);
-                  }}
+                  type="button"
+                  onClick={readWeightFromScale}
+                  disabled={isReadingScale}
                   className="sales-page__weight-button sales-page__weight-button--scale"
                 >
-                  📊 Ler da Balança
+                  {isReadingScale ? 'Lendo...' : '📊 Ler da Balança'}
                 </button>
               </div>
             </div>

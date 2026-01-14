@@ -10,6 +10,11 @@ import type {
   ProfitabilityReport,
   FinancialIndicatorsReport,
   ComparativeReport,
+  ProductTimeSeriesReport,
+  ProductRankingReport,
+  ProductABCCurveReport,
+  ProductReportGranularity,
+  ProductRankingMetric,
 } from '@/types';
 import './ReportsPage.css';
 
@@ -19,12 +24,18 @@ type ReportKind =
   | 'cash-flow'
   | 'profitability'
   | 'comparative'
-  | 'indicators';
+  | 'indicators'
+  | 'products-timeseries'
+  | 'products-ranking'
+  | 'products-abc';
 
 export const ReportsPage: React.FC = () => {
   const [reportKind, setReportKind] = useState<ReportKind>('dre');
   const [startDate, setStartDate] = useState(format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [productGranularity, setProductGranularity] = useState<ProductReportGranularity>('day');
+  const [productMetric, setProductMetric] = useState<ProductRankingMetric>('revenue');
+  const [productLimit, setProductLimit] = useState<number>(20);
   const [report, setReport] = useState<
     | TransactionsSummaryReport
     | DREReport
@@ -32,6 +43,9 @@ export const ReportsPage: React.FC = () => {
     | ProfitabilityReport
     | FinancialIndicatorsReport
     | ComparativeReport
+    | ProductTimeSeriesReport
+    | ProductRankingReport
+    | ProductABCCurveReport
     | null
   >(null);
   const [loading, setLoading] = useState(false);
@@ -87,6 +101,15 @@ export const ReportsPage: React.FC = () => {
           break;
         case 'indicators':
           data = unwrap(await apiClient.getIndicatorsReport());
+          break;
+        case 'products-timeseries':
+          data = unwrap(await apiClient.getProductTimeSeriesReport(startDate, endDate, productGranularity));
+          break;
+        case 'products-ranking':
+          data = unwrap(await apiClient.getProductRankingReport(startDate, endDate, productMetric, productLimit));
+          break;
+        case 'products-abc':
+          data = unwrap(await apiClient.getProductABCCurveReport(startDate, endDate));
           break;
         default:
           data = null;
@@ -223,6 +246,43 @@ export const ReportsPage: React.FC = () => {
       rows.push(['ROE', String(r.returnOnEquity ?? '')]);
       rows.push(['Giro de Estoque', String(r.inventoryTurnover ?? '')]);
       rows.push(['Giro de Recebíveis', String(r.receivablesTurnover ?? '')]);
+    } else if (reportKind === 'products-timeseries') {
+      const r = report as ProductTimeSeriesReport;
+      rows.push(['RELATÓRIO DE PRODUTOS - EVOLUÇÃO']);
+      rows.push(['Granularidade', String(r.granularity)]);
+      rows.push(['Total (Qtd)', String(r.totals?.quantity ?? 0)]);
+      rows.push(['Total (Receita)', money(r.totals?.revenue ?? 0)]);
+      rows.push(['']);
+      rows.push(['Período', 'Quantidade', 'Receita']);
+      r.series?.forEach((p) => {
+        rows.push([p.bucket, String(p.quantity ?? 0), money(p.revenue ?? 0)]);
+      });
+    } else if (reportKind === 'products-ranking') {
+      const r = report as ProductRankingReport;
+      rows.push(['RELATÓRIO DE PRODUTOS - RANKING']);
+      rows.push(['Métrica', String(r.metric)]);
+      rows.push(['Limite', String(r.limit)]);
+      rows.push(['']);
+      rows.push(['Produto', 'Quantidade', 'Receita']);
+      r.items?.forEach((p) => {
+        rows.push([p.productName, String(p.quantity ?? 0), money(p.revenue ?? 0)]);
+      });
+    } else if (reportKind === 'products-abc') {
+      const r = report as ProductABCCurveReport;
+      rows.push(['RELATÓRIO DE PRODUTOS - CURVA ABC']);
+      rows.push(['Receita Total', money(r.totalRevenue ?? 0)]);
+      rows.push(['']);
+      rows.push(['Classe', 'Produto', 'Quantidade', 'Receita', 'Participação (%)', 'Acumulado (%)']);
+      r.items?.forEach((p) => {
+        rows.push([
+          p.abcClass,
+          p.productName,
+          String(p.quantity ?? 0),
+          money(p.revenue ?? 0),
+          String(((p.share ?? 0) * 100).toFixed(2)),
+          String(((p.cumulativeShare ?? 0) * 100).toFixed(2)),
+        ]);
+      });
     }
 
     const csv = rows.map((row) => row.join(',')).join('\n');
@@ -268,6 +328,9 @@ export const ReportsPage: React.FC = () => {
               <option value="comparative">Comparativo</option>
               <option value="indicators">Indicadores</option>
               <option value="summary">Resumo de Transações</option>
+              <option value="products-timeseries">Produtos - Evolução no período</option>
+              <option value="products-ranking">Produtos - Ranking</option>
+              <option value="products-abc">Produtos - Curva ABC</option>
             </select>
           </div>
 
@@ -291,6 +354,51 @@ export const ReportsPage: React.FC = () => {
                   title="Selecione a data final"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
+                  className="reports-input"
+                />
+              </div>
+            </>
+          )}
+
+          {reportKind === 'products-timeseries' && (
+            <div>
+              <label className="reports-label">Granularidade</label>
+              <select
+                title="Selecione a granularidade"
+                value={productGranularity}
+                onChange={(e) => setProductGranularity(e.target.value as ProductReportGranularity)}
+                className="reports-select"
+              >
+                <option value="day">Dia</option>
+                <option value="month">Mês</option>
+                <option value="year">Ano</option>
+              </select>
+            </div>
+          )}
+
+          {reportKind === 'products-ranking' && (
+            <>
+              <div>
+                <label className="reports-label">Métrica</label>
+                <select
+                  title="Selecione a métrica"
+                  value={productMetric}
+                  onChange={(e) => setProductMetric(e.target.value as ProductRankingMetric)}
+                  className="reports-select"
+                >
+                  <option value="revenue">Receita</option>
+                  <option value="quantity">Quantidade</option>
+                </select>
+              </div>
+              <div>
+                <label className="reports-label">Limite</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  title="Quantidade de produtos no ranking"
+                  value={productLimit}
+                  onChange={(e) => setProductLimit(Number(e.target.value || 20))}
                   className="reports-input"
                 />
               </div>
@@ -378,6 +486,38 @@ export const ReportsPage: React.FC = () => {
                   </div>
                 </Card>
               </>
+            )}
+
+            {(reportKind === 'products-timeseries' || reportKind === 'products-ranking') && (
+              <>
+                <Card>
+                  <div className="reports-metric-card reports-metric-sales">
+                    <p className="reports-metric-label">Quantidade (Total)</p>
+                    <p className="reports-metric-value reports-metric-value-large">
+                      {Number((report as any)?.totals?.quantity || 0).toFixed(0)}
+                    </p>
+                  </div>
+                </Card>
+                <Card>
+                  <div className="reports-metric-card reports-metric-revenue">
+                    <p className="reports-metric-label">Receita (Total)</p>
+                    <p className="reports-metric-value reports-metric-value-large">
+                      R$ {Number((report as any)?.totals?.revenue || 0).toFixed(2)}
+                    </p>
+                  </div>
+                </Card>
+              </>
+            )}
+
+            {reportKind === 'products-abc' && (
+              <Card>
+                <div className="reports-metric-card reports-metric-revenue">
+                  <p className="reports-metric-label">Receita Total (ABC)</p>
+                  <p className="reports-metric-value reports-metric-value-large">
+                    R$ {Number((report as ProductABCCurveReport).totalRevenue || 0).toFixed(2)}
+                  </p>
+                </div>
+              </Card>
             )}
           </div>
 
@@ -595,6 +735,81 @@ export const ReportsPage: React.FC = () => {
                   <span className="reports-detail-label">Vencidas</span>
                   <span className="reports-detail-value">{Number((report as TransactionsSummaryReport).overdue || 0)}</span>
                 </div>
+              </div>
+            )}
+
+            {reportKind === 'products-timeseries' && (
+              <div className="reports-table-wrapper">
+                <table className="reports-table">
+                  <thead>
+                    <tr>
+                      <th>Período</th>
+                      <th>Quantidade</th>
+                      <th>Receita</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(report as ProductTimeSeriesReport).series?.map((p) => (
+                      <tr key={p.bucket}>
+                        <td>{p.bucket}</td>
+                        <td>{Number(p.quantity || 0).toFixed(0)}</td>
+                        <td>R$ {Number(p.revenue || 0).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {reportKind === 'products-ranking' && (
+              <div className="reports-table-wrapper">
+                <table className="reports-table">
+                  <thead>
+                    <tr>
+                      <th>Produto</th>
+                      <th>Quantidade</th>
+                      <th>Receita</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(report as ProductRankingReport).items?.map((p) => (
+                      <tr key={p.productId}>
+                        <td>{p.productName}</td>
+                        <td>{Number(p.quantity || 0).toFixed(0)}</td>
+                        <td>R$ {Number(p.revenue || 0).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {reportKind === 'products-abc' && (
+              <div className="reports-table-wrapper">
+                <table className="reports-table">
+                  <thead>
+                    <tr>
+                      <th>Classe</th>
+                      <th>Produto</th>
+                      <th>Quantidade</th>
+                      <th>Receita</th>
+                      <th>Participação</th>
+                      <th>Acumulado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(report as ProductABCCurveReport).items?.map((p) => (
+                      <tr key={p.productId}>
+                        <td>{p.abcClass}</td>
+                        <td>{p.productName}</td>
+                        <td>{Number(p.quantity || 0).toFixed(0)}</td>
+                        <td>R$ {Number(p.revenue || 0).toFixed(2)}</td>
+                        <td>{((p.share || 0) * 100).toFixed(2)}%</td>
+                        <td>{((p.cumulativeShare || 0) * 100).toFixed(2)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </Card>

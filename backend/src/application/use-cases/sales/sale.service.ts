@@ -8,6 +8,7 @@ import { CouponService } from '@application/use-cases/coupons/coupon.service';
 export interface SaleItemInput {
   productId: string;
   quantity: number;
+  unitPrice?: number;
   discount?: number;
   sizeId?: string;
   flavorsTotal?: number;
@@ -208,6 +209,11 @@ export class SaleService {
     for (const item of data.items) {
       const product = products.find((p) => p.id === item.productId)!;
 
+      // Regra Montado: se o produto é Montado, tamanho é obrigatório.
+      if (product.category?.categoryType === 'assembled' && !item.sizeId) {
+        throw new AppError(`Produto Montado exige tamanho: ${product.name}`, 400);
+      }
+
       const isAssembled = !!item.sizeId;
       if (isAssembled) {
         if (!product.categoryId || product.category?.categoryType !== 'assembled') {
@@ -217,7 +223,7 @@ export class SaleService {
         if (!size) {
           throw new AppError('Tamanho não pertence à categoria do produto', 400);
         }
-        const flavorsTotal = Number(item.flavorsTotal);
+        const flavorsTotal = Number(item.flavorsTotal ?? 1);
         if (!Number.isFinite(flavorsTotal) || flavorsTotal < 1 || flavorsTotal > size.maxFlavors) {
           throw new AppError(`Quantidade de sabores inválida para o tamanho ${size.name}`, 400);
         }
@@ -258,7 +264,11 @@ export class SaleService {
         continue;
       }
 
-      const unitPrice = Number(product.salePrice);
+      const providedUnitPrice = item.unitPrice !== undefined ? Number(item.unitPrice) : NaN;
+      const unitPrice = Number.isFinite(providedUnitPrice) ? providedUnitPrice : Number(product.salePrice);
+      if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+        throw new AppError(`Preço inválido para o produto ${product.name}`, 400);
+      }
       const itemDiscount = item.discount || 0;
       const itemSubtotal = unitPrice * item.quantity;
       const itemTotal = itemSubtotal - itemDiscount;

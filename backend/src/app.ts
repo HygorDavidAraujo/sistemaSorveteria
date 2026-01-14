@@ -20,6 +20,8 @@ import loyaltyRoutes from '@presentation/http/routes/loyalty.routes';
 import cashbackRoutes from '@presentation/http/routes/cashback.routes';
 import financialRoutes from '@presentation/http/routes/financial.routes';
 import settingsRoutes from '@presentation/http/routes/settings.routes';
+import scaleRoutes from '@presentation/http/routes/scale.routes';
+import reportsRoutes from '@presentation/http/routes/reports.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -94,7 +96,9 @@ export function createApp(): Application {
   app.use(`${apiPrefix}/loyalty`, loyaltyRoutes);
   app.use(`${apiPrefix}/cashback`, cashbackRoutes);
   app.use(`${apiPrefix}/financial`, financialRoutes);
+  app.use(`${apiPrefix}/reports`, reportsRoutes);
   app.use(`${apiPrefix}/settings`, settingsRoutes);
+  app.use(`${apiPrefix}/scale`, scaleRoutes);
 
   // 404 handler
   app.use((req: Request, res: Response) => {

@@ -75,6 +75,7 @@ export class DeliveryService {
 
   private includeOrderRelations() {
     return {
+      items: true,
       customer: {
         select: {
           id: true,
@@ -208,6 +209,7 @@ export class DeliveryService {
       productName: string;
       quantity: number;
       unitPrice: number;
+      costPrice: number;
       subtotal: number;
     }> = [];
 
@@ -215,6 +217,11 @@ export class DeliveryService {
       const product = products.find((p) => p.id === item.productId)!;
       let unitPrice = Number(product.salePrice);
       let productName = product.name;
+
+      // Regra Montado: se o produto é Montado, tamanho é obrigatório.
+      if (product.category?.categoryType === 'assembled' && !item.sizeId) {
+        throw new AppError(`Produto Montado exige tamanho: ${product.name}`, 400);
+      }
 
       if (item.sizeId) {
         if (!product.categoryId || product.category?.categoryType !== 'assembled') {
@@ -224,7 +231,7 @@ export class DeliveryService {
         if (!size) {
           throw new AppError('Tamanho não pertence à categoria do produto', 400);
         }
-        const flavorsTotal = Number(item.flavorsTotal);
+        const flavorsTotal = Number(item.flavorsTotal ?? 1);
         if (!Number.isFinite(flavorsTotal) || flavorsTotal < 1 || flavorsTotal > size.maxFlavors) {
           throw new AppError(`Quantidade de sabores inválida para o tamanho ${size.name}`, 400);
         }
@@ -239,11 +246,14 @@ export class DeliveryService {
       const itemSubtotal = unitPrice * item.quantity;
       subtotal += itemSubtotal;
 
+      const currentCost = product.productCosts[0]?.costPrice || product.costPrice || 0;
+
       itemsData.push({
         productId: item.productId,
         productName,
         quantity: item.quantity,
         unitPrice,
+        costPrice: Number(currentCost),
         subtotal: itemSubtotal,
       });
     }
@@ -294,6 +304,27 @@ export class DeliveryService {
           internalNotes: data.internalNotes,
           createdById: data.createdById,
         },
+        include: this.includeOrderRelations(),
+      });
+
+      // Persistir itens do pedido (para relatórios/COGS)
+      if (itemsData.length > 0) {
+        await tx.deliveryOrderItem.createMany({
+          data: itemsData.map((it) => ({
+            deliveryOrderId: order.id,
+            productId: it.productId,
+            productName: it.productName,
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+            costPrice: it.costPrice,
+            subtotal: it.subtotal,
+          })),
+        });
+      }
+
+      // Recarregar com itens incluídos (createMany não retorna rows)
+      const orderWithItems = await tx.deliveryOrder.findUnique({
+        where: { id: order.id },
         include: this.includeOrderRelations(),
       });
 
@@ -409,7 +440,7 @@ export class DeliveryService {
         });
       }
 
-      return order;
+      return orderWithItems;
     });
   }
 

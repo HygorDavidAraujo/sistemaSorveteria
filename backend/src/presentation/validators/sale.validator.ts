@@ -13,13 +13,11 @@ export const saleValidators = {
           Joi.object({
             productId: uuid.required(),
             quantity: Joi.number().positive().required(),
+            unitPrice: Joi.number().positive().optional(),
             discount: Joi.number().min(0).default(0),
             sizeId: uuid.optional(),
-            flavorsTotal: Joi.number().integer().min(1).max(20).when('sizeId', {
-              is: uuid,
-              then: Joi.required(),
-              otherwise: Joi.optional(),
-            }),
+            // Optional: if sizeId is provided for Montado items, SaleService enforces flavorsTotal rules.
+            flavorsTotal: Joi.number().integer().min(1).max(20).optional(),
           })
         )
         .min(1)

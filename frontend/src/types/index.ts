@@ -239,6 +239,49 @@ export interface ProfitabilityReport {
   contributionMargin: number;
 }
 
+export type ProductReportGranularity = 'day' | 'month' | 'year';
+export type ProductRankingMetric = 'revenue' | 'quantity';
+
+export interface ProductTimeSeriesPoint {
+  bucket: string;
+  quantity: number;
+  revenue: number;
+}
+
+export interface ProductTimeSeriesReport {
+  period: { startDate: string; endDate: string };
+  granularity: ProductReportGranularity;
+  totals: { quantity: number; revenue: number };
+  series: ProductTimeSeriesPoint[];
+}
+
+export interface ProductRankingItem {
+  productId: string;
+  productName: string;
+  quantity: number;
+  revenue: number;
+}
+
+export interface ProductRankingReport {
+  period: { startDate: string; endDate: string };
+  metric: ProductRankingMetric;
+  limit: number;
+  totals: { quantity: number; revenue: number };
+  items: ProductRankingItem[];
+}
+
+export interface ProductABCCurveItem extends ProductRankingItem {
+  share: number;
+  cumulativeShare: number;
+  abcClass: 'A' | 'B' | 'C';
+}
+
+export interface ProductABCCurveReport {
+  period: { startDate: string; endDate: string };
+  totalRevenue: number;
+  items: ProductABCCurveItem[];
+}
+
 export interface FinancialIndicatorsReport {
   currentRatio: number;
   quickRatio: number;

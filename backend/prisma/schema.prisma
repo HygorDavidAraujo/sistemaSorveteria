@@ -185,6 +185,7 @@ model Product {
   updatedAt               DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdById             String?         @map("created_by") @db.Uuid
   comandaItems            ComandaItem[]
+  deliveryOrderItems      DeliveryOrderItem[]
   loyaltyRewards          LoyaltyReward[]
   productCosts            ProductCost[]
   sizePrices              ProductSizePrice[]
@@ -450,6 +451,7 @@ model DeliveryOrder {
   outForDeliveryAt  DateTime?       @map("out_for_delivery_at") @db.Timestamptz(6)
   deliveredAt       DateTime?       @map("delivered_at") @db.Timestamptz(6)
   createdById       String          @map("created_by") @db.Uuid
+  items             DeliveryOrderItem[]
   cashSession       CashSession     @relation(fields: [cashSessionId], references: [id])
   createdBy         User            @relation(fields: [createdById], references: [id])
   customer          Customer        @relation(fields: [customerId], references: [id])
@@ -458,6 +460,24 @@ model DeliveryOrder {
   @@index([deliveryStatus])
   @@index([orderedAt])
   @@map("delivery_orders")
+}
+
+model DeliveryOrderItem {
+  id            String        @id @default(uuid()) @db.Uuid
+  deliveryOrderId String      @map("delivery_order_id") @db.Uuid
+  productId     String        @map("product_id") @db.Uuid
+  productName   String        @map("product_name") @db.VarChar(255)
+  quantity      Decimal       @db.Decimal(10, 3)
+  unitPrice     Decimal       @map("unit_price") @db.Decimal(10, 2)
+  costPrice     Decimal?      @map("cost_price") @db.Decimal(10, 2)
+  subtotal      Decimal       @db.Decimal(10, 2)
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  deliveryOrder DeliveryOrder @relation(fields: [deliveryOrderId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id])
+
+  @@index([deliveryOrderId])
+  @@index([productId])
+  @@map("delivery_order_items")
 }
 
 model DeliveryFee {

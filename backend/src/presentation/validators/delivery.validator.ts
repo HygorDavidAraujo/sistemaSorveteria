@@ -13,11 +13,8 @@ export const deliveryValidators = {
             productId: uuid.required(),
             quantity: Joi.number().positive().required(),
             sizeId: uuid.optional(),
-            flavorsTotal: Joi.number().integer().min(1).max(20).when('sizeId', {
-              is: uuid,
-              then: Joi.required(),
-              otherwise: Joi.optional(),
-            }),
+            // Optional: DeliveryService enforces flavorsTotal rules for Montado when sizeId is provided.
+            flavorsTotal: Joi.number().integer().min(1).max(20).optional(),
           })
         )
         .min(1)

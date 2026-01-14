@@ -25,22 +25,13 @@ export interface CashFlowFiltersDTO {
 export class DREService {
   constructor(private prismaClient: PrismaClient = prisma) {}
 
-  /**
-   * Gerar DRE (Income Statement)
-   * Demonstração de Resultado do Exercício
-   */
-  async generateDREReport(filters: DREFiltersDTO): Promise<DREReportEntity> {
-    const { startDate, endDate } = filters;
+  private buildExcludeDescriptionPrefixes(prefixes: string[] | undefined) {
+    if (!prefixes || prefixes.length === 0) return undefined;
+    return prefixes.map((prefix) => ({ NOT: { description: { startsWith: prefix } } }));
+  }
 
-    // Validar datas
-    if (startDate > endDate) {
-      throw new AppError('Data inicial não pode ser maior que a data final', 400);
-    }
-
-    // 1. RECEITA BRUTA (Gross Revenue)
-    // Observação: no modelo de vendas, `total` já é líquido (após descontos).
-    // Para Receita Bruta, usamos `subtotal + taxas`.
-    const sales = await this.prismaClient.sale.findMany({
+  private async getSalesWithItems(startDate: Date, endDate: Date) {
+    return this.prismaClient.sale.findMany({
       where: {
         saleDate: {
           gte: startDate,
@@ -62,8 +53,84 @@ export class DREService {
         },
       },
     });
+  }
 
-    const grossRevenue = sales.reduce(
+  private async getClosedComandasWithItems(startDate: Date, endDate: Date) {
+    return this.prismaClient.comanda.findMany({
+      where: {
+        closedAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+        status: 'closed',
+      },
+      include: {
+        items: {
+          where: {
+            isCancelled: false,
+          },
+          include: {
+            product: {
+              select: {
+                costPrice: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  private async getDeliveredDeliveryOrders(startDate: Date, endDate: Date) {
+    return this.prismaClient.deliveryOrder.findMany({
+      where: {
+        deliveryStatus: 'delivered',
+        OR: [
+          {
+            deliveredAt: {
+              gte: startDate,
+              lte: endDate,
+            },
+          },
+          {
+            // Safety fallback if deliveredAt isn't set for legacy rows.
+            deliveredAt: null,
+            orderedAt: {
+              gte: startDate,
+              lte: endDate,
+            },
+          },
+        ],
+      },
+      include: {
+        items: true,
+      },
+    });
+  }
+
+  /**
+   * Gerar DRE (Income Statement)
+   * Demonstração de Resultado do Exercício
+   */
+  async generateDREReport(filters: DREFiltersDTO): Promise<DREReportEntity> {
+    const { startDate, endDate } = filters;
+
+    // Validar datas
+    if (startDate > endDate) {
+      throw new AppError('Data inicial não pode ser maior que a data final', 400);
+    }
+
+    // 1. RECEITA BRUTA (Gross Revenue)
+    // Observação: `total` já é líquido (após descontos).
+    // Para Receita Bruta, usamos `subtotal + taxas`.
+    // Importante: a operação pode registrar vendas em múltiplos fluxos (PDV = Sale, Comandas).
+    const [sales, comandas, deliveries] = await Promise.all([
+      this.getSalesWithItems(startDate, endDate),
+      this.getClosedComandasWithItems(startDate, endDate),
+      this.getDeliveredDeliveryOrders(startDate, endDate),
+    ]);
+
+    const grossRevenueFromSales = sales.reduce(
       (sum, sale) =>
         sum +
         Number(sale.subtotal || 0) +
@@ -72,15 +139,43 @@ export class DREService {
       0
     );
 
+    const grossRevenueFromComandas = comandas.reduce(
+      (sum, comanda) => sum + Number(comanda.subtotal || 0) + Number(comanda.additionalFee || 0),
+      0
+    );
+
+    const grossRevenueFromDeliveries = deliveries.reduce(
+      (sum, order) =>
+        sum +
+        Number(order.subtotal || 0) +
+        Number(order.deliveryFee || 0) +
+        Number(order.additionalFee || 0),
+      0
+    );
+
+    const grossRevenue = grossRevenueFromSales + grossRevenueFromComandas + grossRevenueFromDeliveries;
+
     // 2. RECEITA LÍQUIDA (valor efetivamente cobrado)
-    const netRevenue = sales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+    const netRevenueFromSales = sales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+    const netRevenueFromComandas = comandas.reduce(
+      (sum, comanda) => sum + Number(comanda.total || 0),
+      0
+    );
+    const netRevenueFromDeliveries = deliveries.reduce(
+      (sum, order) => sum + Number(order.total || 0),
+      0
+    );
+    const netRevenue = netRevenueFromSales + netRevenueFromComandas + netRevenueFromDeliveries;
 
     // 3. DESCONTOS (derivado para manter consistência bruta - descontos = líquida)
     const discounts = Math.max(0, grossRevenue - netRevenue);
 
     // 4. CUSTO DOS PRODUTOS VENDIDOS (COGS)
     const saleItems = sales.flatMap((sale) => sale.items);
-    const cogs = saleItems.reduce((sum, item) => {
+    const comandaItems = comandas.flatMap((comanda) => comanda.items);
+    const deliveryItems = deliveries.flatMap((order) => order.items ?? []);
+
+    const cogsFromSaleItems = saleItems.reduce((sum, item) => {
       const unitCost =
         item.costPrice !== null && item.costPrice !== undefined
           ? Number(item.costPrice)
@@ -90,6 +185,26 @@ export class DREService {
       if (!unitCost || !quantity) return sum;
       return sum + unitCost * quantity;
     }, 0);
+
+    const cogsFromComandaItems = comandaItems.reduce((sum, item) => {
+      const unitCost =
+        item.costPrice !== null && item.costPrice !== undefined
+          ? Number(item.costPrice)
+          : Number(item.product?.costPrice || 0);
+
+      const quantity = Number(item.quantity || 0);
+      if (!unitCost || !quantity) return sum;
+      return sum + unitCost * quantity;
+    }, 0);
+
+    const cogsFromDeliveryItems = deliveryItems.reduce((sum, item) => {
+      const unitCost = item.costPrice !== null && item.costPrice !== undefined ? Number(item.costPrice) : 0;
+      const quantity = Number(item.quantity || 0);
+      if (!unitCost || !quantity) return sum;
+      return sum + unitCost * quantity;
+    }, 0);
+
+    const cogs = cogsFromSaleItems + cogsFromComandaItems + cogsFromDeliveryItems;
 
     // 5. LUCRO BRUTO (Gross Profit)
     const grossProfit = netRevenue - cogs;
@@ -173,19 +288,34 @@ export class DREService {
     });
 
     // ENTRADAS (Inflows)
-    const sales = await this.prismaClient.sale.findMany({
-      where: {
-        saleDate: {
-          gte: startDate,
-          lte: endDate,
+    const [sales, comandas, deliveries] = await Promise.all([
+      this.prismaClient.sale.findMany({
+        where: {
+          saleDate: {
+            gte: startDate,
+            lte: endDate,
+          },
+          status: {
+            in: ['completed', 'adjusted'],
+          },
         },
-        status: {
-          in: ['completed', 'adjusted'],
+      }),
+      this.prismaClient.comanda.findMany({
+        where: {
+          closedAt: {
+            gte: startDate,
+            lte: endDate,
+          },
+          status: 'closed',
         },
-      },
-    });
+      }),
+      this.getDeliveredDeliveryOrders(startDate, endDate),
+    ]);
 
-    const salesInflow = sales.reduce((sum, sale) => sum + Number(sale.total), 0);
+    const salesInflow =
+      sales.reduce((sum, sale) => sum + Number(sale.total), 0) +
+      comandas.reduce((sum, comanda) => sum + Number(comanda.total), 0) +
+      deliveries.reduce((sum, order) => sum + Number(order.total), 0);
 
     const accountReceivablePaid = await this.prismaClient.accountReceivable.findMany({
       where: {
@@ -207,6 +337,13 @@ export class DREService {
         },
         transactionType: 'revenue',
         status: 'paid',
+        // Evitar dupla-contagem:
+        // - Fechamentos de caixa são apenas consolidação para listagem/auditoria.
+        // - Contas a receber pagas já entram em `receivableInflow`.
+        AND: [
+          { NOT: { referenceNumber: { startsWith: 'CASHSESSION-' } } },
+          { NOT: { description: { startsWith: 'Conta a Receber:' } } },
+        ],
       },
     });
 
@@ -217,7 +354,12 @@ export class DREService {
     // SAÍDAS (Outflows)
     const cogs = await this.calculateCOGS(startDate, endDate);
 
-    const operatingExpenses = await this.getOperatingExpenses(startDate, endDate);
+    // Evitar dupla-contagem: Contas a pagar pagas entram em `accountsPayable` via tabela accountPayable.
+    // As transações financeiras vinculadas às contas a pagar (descrição "Conta a Pagar:") não devem entrar aqui.
+    const operatingExpenses = await this.getOperatingExpensesInternal(startDate, endDate, {
+      includeCategoryTypes: ['expense', 'cost'],
+      excludeDescriptionPrefixes: ['Conta a Pagar:'],
+    });
 
     const accountPayablePaid = await this.prismaClient.accountPayable.findMany({
       where: {
@@ -231,7 +373,9 @@ export class DREService {
 
     const payableOutflow = accountPayablePaid.reduce((sum, acc) => sum + Number(acc.amount), 0);
 
-    const taxes = await this.getTaxes(startDate, endDate);
+    const taxes = await this.getTaxes(startDate, endDate, {
+      excludeDescriptionPrefixes: ['Conta a Pagar:'],
+    });
 
     const investmentTransactions = await this.prismaClient.financialTransaction.findMany({
       where: {
@@ -244,6 +388,7 @@ export class DREService {
         },
         transactionType: 'expense',
         status: 'paid',
+        AND: this.buildExcludeDescriptionPrefixes(['Conta a Pagar:']),
       },
     });
 
@@ -257,6 +402,7 @@ export class DREService {
         },
         transactionType: 'expense',
         status: 'paid',
+        AND: this.buildExcludeDescriptionPrefixes(['Conta a Pagar:']),
       },
     });
 
@@ -340,19 +486,42 @@ export class DREService {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const recentSales = await this.prismaClient.sale.findMany({
-      where: {
-        saleDate: {
-          gte: thirtyDaysAgo,
+    const [recentSales, recentComandas, recentDeliveries] = await Promise.all([
+      this.prismaClient.sale.findMany({
+        where: {
+          saleDate: {
+            gte: thirtyDaysAgo,
+          },
+          status: {
+            in: ['completed', 'adjusted'],
+          },
         },
-        status: {
-          in: ['completed', 'adjusted'],
+      }),
+      this.prismaClient.comanda.findMany({
+        where: {
+          closedAt: {
+            gte: thirtyDaysAgo,
+          },
+          status: 'closed',
         },
-      },
-    });
+      }),
+      this.prismaClient.deliveryOrder.findMany({
+        where: {
+          deliveryStatus: 'delivered',
+          OR: [
+            { deliveredAt: { gte: thirtyDaysAgo } },
+            { deliveredAt: null, orderedAt: { gte: thirtyDaysAgo } },
+          ],
+        },
+      }),
+    ]);
 
-    const salesSum = recentSales.reduce((sum, sale) => sum + Number(sale.total), 0);
-    const receivablesTurnover = salesSum > 0 ? (salesSum / Math.max(receivablesSum, 1)) * 30 : 0;
+    const revenueSum =
+      recentSales.reduce((sum, sale) => sum + Number(sale.total), 0) +
+      recentComandas.reduce((sum, comanda) => sum + Number(comanda.total), 0) +
+      recentDeliveries.reduce((sum, order) => sum + Number(order.total), 0);
+    const receivablesTurnover =
+      revenueSum > 0 ? (revenueSum / Math.max(receivablesSum, 1)) * 30 : 0;
 
     return {
       currentRatio: receivablesSum > 0 ? receivablesSum / Math.max(payablesSum, 1) : 0,
@@ -409,6 +578,24 @@ export class DREService {
    */
 
   private async getOperatingExpenses(startDate: Date, endDate: Date): Promise<number> {
+    // No DRE, consideramos despesas pagas classificadas como "expense" e também "cost"
+    // (ex.: CPV lançado via conta a pagar), para não sumirem do relatório.
+    return this.getOperatingExpensesInternal(startDate, endDate, {
+      includeCategoryTypes: ['expense', 'cost'],
+    });
+  }
+
+  private async getOperatingExpensesInternal(
+    startDate: Date,
+    endDate: Date,
+    options?: {
+      includeCategoryTypes?: Array<'expense' | 'cost'>;
+      excludeDescriptionPrefixes?: string[];
+    }
+  ): Promise<number> {
+    const includeCategoryTypes = options?.includeCategoryTypes ?? ['expense'];
+    const excludeDescriptionPrefixes = options?.excludeDescriptionPrefixes;
+
     const expenses = await this.prismaClient.financialTransaction.findMany({
       where: {
         transactionDate: {
@@ -418,8 +605,11 @@ export class DREService {
         transactionType: 'expense',
         status: 'paid',
         category: {
-          categoryType: 'expense',
+          categoryType: {
+            in: includeCategoryTypes,
+          },
         },
+        AND: this.buildExcludeDescriptionPrefixes(excludeDescriptionPrefixes),
       },
       include: { category: true },
     });
@@ -497,7 +687,13 @@ export class DREService {
     return { otherIncome, otherExpenses };
   }
 
-  private async getTaxes(startDate: Date, endDate: Date): Promise<number> {
+  private async getTaxes(
+    startDate: Date,
+    endDate: Date,
+    options?: {
+      excludeDescriptionPrefixes?: string[];
+    }
+  ): Promise<number> {
     const taxes = await this.prismaClient.financialTransaction.findMany({
       where: {
         transactionDate: {
@@ -511,6 +707,7 @@ export class DREService {
             contains: 'Imposto',
           },
         },
+        AND: this.buildExcludeDescriptionPrefixes(options?.excludeDescriptionPrefixes),
       },
     });
 
@@ -518,31 +715,17 @@ export class DREService {
   }
 
   private async calculateCOGS(startDate: Date, endDate: Date): Promise<number> {
-    const sales = await this.prismaClient.sale.findMany({
-      where: {
-        saleDate: {
-          gte: startDate,
-          lte: endDate,
-        },
-        status: {
-          in: ['completed', 'adjusted'],
-        },
-      },
-      include: {
-        items: {
-          include: {
-            product: {
-              select: {
-                costPrice: true,
-              },
-            },
-          },
-        },
-      },
-    });
+    const [sales, comandas, deliveries] = await Promise.all([
+      this.getSalesWithItems(startDate, endDate),
+      this.getClosedComandasWithItems(startDate, endDate),
+      this.getDeliveredDeliveryOrders(startDate, endDate),
+    ]);
 
     const saleItems = sales.flatMap((sale) => sale.items);
-    return saleItems.reduce((sum, item) => {
+    const comandaItems = comandas.flatMap((comanda) => comanda.items);
+    const deliveryItems = deliveries.flatMap((order) => order.items ?? []);
+
+    const cogsFromSales = saleItems.reduce((sum, item) => {
       const unitCost =
         item.costPrice !== null && item.costPrice !== undefined
           ? Number(item.costPrice)
@@ -552,5 +735,25 @@ export class DREService {
       if (!unitCost || !quantity) return sum;
       return sum + unitCost * quantity;
     }, 0);
+
+    const cogsFromComandas = comandaItems.reduce((sum, item) => {
+      const unitCost =
+        item.costPrice !== null && item.costPrice !== undefined
+          ? Number(item.costPrice)
+          : Number(item.product?.costPrice || 0);
+
+      const quantity = Number(item.quantity || 0);
+      if (!unitCost || !quantity) return sum;
+      return sum + unitCost * quantity;
+    }, 0);
+
+    const cogsFromDeliveries = deliveryItems.reduce((sum, item) => {
+      const unitCost = item.costPrice !== null && item.costPrice !== undefined ? Number(item.costPrice) : 0;
+      const quantity = Number(item.quantity || 0);
+      if (!unitCost || !quantity) return sum;
+      return sum + unitCost * quantity;
+    }, 0);
+
+    return cogsFromSales + cogsFromComandas + cogsFromDeliveries;
   }
 }

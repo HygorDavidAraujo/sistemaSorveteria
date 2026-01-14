@@ -135,7 +135,7 @@ export class CashSessionService {
         }
       }
 
-      return tx.cashSession.update({
+      const updatedSession = await tx.cashSession.update({
         where: { id },
         data: {
           cashierClosedAt: new Date(),
@@ -147,6 +147,57 @@ export class CashSessionService {
         },
         include: this.includeRelations(),
       });
+
+      // Criar uma transação financeira de consolidação do fechamento (para aparecer em Financeiro > Transações)
+      // Importante: o DRE/Fluxo de Caixa já consideram vendas/comandas/delivery diretamente.
+      // Esta transação é apenas uma “cópia” do fechamento para auditoria/listagem.
+      const referenceNumber = `CASHSESSION-${id}`;
+
+      const existing = await tx.financialTransaction.findFirst({
+        where: { referenceNumber },
+        select: { id: true },
+      });
+
+      if (!existing && Number(updatedSession.totalSales) > 0) {
+        let revenueCategory = await tx.financialCategory.findFirst({
+          where: { name: 'Vendas' },
+          select: { id: true, isActive: true, categoryType: true },
+        });
+
+        if (!revenueCategory) {
+          revenueCategory = await tx.financialCategory.create({
+            data: {
+              name: 'Vendas',
+              categoryType: 'revenue',
+              dreGroup: 'gross_revenue',
+              isActive: true,
+            },
+            select: { id: true, isActive: true, categoryType: true },
+          });
+        }
+
+        // Se a categoria existir mas estiver inativa ou de outro tipo, não tenta criar para não quebrar o fechamento
+        if (revenueCategory.isActive && revenueCategory.categoryType === 'revenue') {
+          const closedAt = updatedSession.cashierClosedAt ?? new Date();
+          await tx.financialTransaction.create({
+            data: {
+              categoryId: revenueCategory.id,
+              transactionType: 'revenue',
+              amount: Number(updatedSession.totalSales),
+              description: `Fechamento de Caixa #${updatedSession.sessionNumber} (${updatedSession.terminalId || 'Terminal'})`,
+              referenceNumber,
+              transactionDate: closedAt,
+              dueDate: closedAt,
+              paidAt: closedAt,
+              status: 'paid',
+              createdById: userId,
+              tags: ['cash_session_close'],
+            },
+          });
+        }
+      }
+
+      return updatedSession;
     });
   }
 

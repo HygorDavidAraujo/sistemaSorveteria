@@ -7,6 +7,8 @@ import { useCashSessionStore, useCustomersStore } from '@/store';
 import { printReceipt, formatCurrency, getPrintStyles } from '@/utils/printer';
 import { clearCartDraft, loadCartDraft, saveCartDraft, type CartDraft, type CartDraftItem } from '@/utils/cartDraft';
 import './ComandasPage.css';
+import '@/styles/assembledModal.css';
+import '@/styles/weightModal.css';
 
 interface ComandaItem {
   id: string;
@@ -18,6 +20,7 @@ interface ComandaItem {
   observation?: string;
   sizeId?: string;
   flavorsTotal?: number;
+  isCancelled?: boolean;
   status: 'PENDING' | 'READY' | 'SERVED';
 }
 
@@ -49,7 +52,7 @@ interface Product {
 }
 
 const normalizeProduct = (product: any): Product => ({
-  id: product?.id || '',
+  id: String(product?.id ?? ''),
   name: product?.name || '',
   code: product?.code || undefined,
   description: product?.description || undefined,
@@ -75,6 +78,7 @@ const normalizeComandaItem = (item: any): ComandaItem => ({
   observation: item?.observation || undefined,
   sizeId: item?.sizeId ? String(item.sizeId) : undefined,
   flavorsTotal: item?.flavorsTotal !== undefined && item?.flavorsTotal !== null ? Number(item.flavorsTotal) : undefined,
+  isCancelled: Boolean(item?.isCancelled ?? item?.is_cancelled ?? false),
   status: item?.status || 'PENDING',
 });
 
@@ -114,12 +118,11 @@ export const ComandasPage: React.FC = () => {
 
   // Modals
   const [isOpenComandaModalOpen, setIsOpenComandaModalOpen] = useState(false);
-  const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
+  // Add item is now inline in the cart header (no modal)
 
   // Form states
   const [tableNumber, setTableNumber] = useState('');
   const [customerName, setCustomerName] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState('');
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [quantity, setQuantity] = useState('1');
   const [observation, setObservation] = useState('');
@@ -166,6 +169,13 @@ export const ComandasPage: React.FC = () => {
   const [assembledSelectedFlavors, setAssembledSelectedFlavors] = useState<Product[]>([]);
   const [assembledSearchTerm, setAssembledSearchTerm] = useState('');
 
+  // Peso
+  const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
+  const [pendingWeightProduct, setPendingWeightProduct] = useState<Product | null>(null);
+  const [tempWeight, setTempWeight] = useState('');
+  const [isReadingScale, setIsReadingScale] = useState(false);
+  const [isAddingInlineItem, setIsAddingInlineItem] = useState(false);
+
   const toMoneyNumber = (value: unknown): number => {
     if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
     if (typeof value === 'string') {
@@ -189,6 +199,12 @@ export const ComandasPage: React.FC = () => {
 
   const assembledMaxFlavors = assembledSize?.maxFlavors ? Number(assembledSize.maxFlavors) : 1;
   const assembledFlavorsTotalNumber = Math.max(1, Math.min(assembledMaxFlavors, parseInt(assembledFlavorsTotal || '1', 10) || 1));
+
+  useEffect(() => {
+    if (!isAssembledModalOpen) return;
+    const next = String(assembledFlavorsTotalNumber);
+    if (next !== assembledFlavorsTotal) setAssembledFlavorsTotal(next);
+  }, [isAssembledModalOpen, assembledFlavorsTotalNumber, assembledFlavorsTotal]);
 
   const assembledAvailableFlavors = useMemo(() => {
     if (!assembledCategoryId) return [];
@@ -249,7 +265,6 @@ export const ComandasPage: React.FC = () => {
       setAssembledSelectedFlavors([]);
       setAssembledSearchTerm('');
 
-      setSelectedProduct('');
       setProductSearchTerm('');
       setQuantity('1');
       setObservation('');
@@ -540,7 +555,9 @@ export const ComandasPage: React.FC = () => {
 
       for (const item of itemsToRemove) {
         try {
-          await apiClient.delete(`/comandas/${comandaId}/items/${item.id}`);
+          await apiClient.delete(`/comandas/${comandaId}/items/${item.id}`, {
+            data: { reason: 'Remoção de item durante cancelamento da comanda' },
+          });
         } catch {
           // Best-effort deletion; continue.
         }
@@ -578,67 +595,180 @@ export const ComandasPage: React.FC = () => {
     }
   };
 
-  const handleAddItem = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedComanda || !selectedProduct) {
-      setError('Selecione um produto');
+  const addProductFromSearchClick = async (product: Product) => {
+    if (!selectedComanda) {
+      setError('Selecione uma comanda');
+      setTimeout(() => setError(null), 2500);
+      return;
+    }
+    if (isAddingInlineItem) return;
+
+    const category = getProductCategory(product);
+    const isAssembled = category?.categoryType === 'assembled';
+    if (isAssembled) {
+      const sizes = Array.isArray(category?.sizes) ? category.sizes : [];
+      if (sizes.length === 0) {
+        setError('Categoria Montado sem tamanhos cadastrados');
+        setTimeout(() => setError(null), 3000);
+        return;
+      }
+
+      // Fecha a lista de resultados, mas mantém qty/obs para usar na confirmação do montado
+      setProductSearchTerm('');
+      setAssembledCategoryId(String(category.id));
+      setAssembledSizeId(String(sizes[0].id));
+      setAssembledFlavorsTotal('1');
+      setAssembledSelectedFlavors([product]);
+      setAssembledSearchTerm('');
+      setIsAssembledModalOpen(true);
       return;
     }
 
-    const selected = products.find((p) => p.id === selectedProduct);
-    if (selected) {
-      const category = getProductCategory(selected);
-      const isAssembled = category?.categoryType === 'assembled';
-      if (isAssembled) {
-        const sizes = Array.isArray(category?.sizes) ? category.sizes : [];
-        if (sizes.length === 0) {
-          setError('Categoria Montado sem tamanhos cadastrados');
-          setTimeout(() => setError(null), 3000);
-          return;
-        }
-
-        setIsAddItemModalOpen(false);
-        setAssembledCategoryId(String(category.id));
-        setAssembledSizeId(String(sizes[0].id));
-        setAssembledFlavorsTotal('1');
-        setAssembledSelectedFlavors([selected]);
-        setAssembledSearchTerm('');
-        setIsAssembledModalOpen(true);
-        return;
-      }
+    const isWeight = String((product as any)?.saleType || '').toLowerCase() === 'weight';
+    if (isWeight) {
+      // Fecha a lista de resultados, peso será informado/lido no modal
+      setProductSearchTerm('');
+      setPendingWeightProduct(product);
+      setTempWeight('');
+      setIsWeightModalOpen(true);
+      return;
     }
 
     const qty = parseFloat(quantity);
     if (!qty || qty <= 0) {
       setError('Quantidade deve ser maior que zero');
+      setTimeout(() => setError(null), 2500);
       return;
     }
 
+    setIsAddingInlineItem(true);
     try {
       await apiClient.post(`/comandas/${selectedComanda.id}/items`, {
-        productId: selectedProduct,
+        productId: product.id,
         quantity: qty,
         observation: observation || undefined,
       });
 
       await refreshSelectedComanda(selectedComanda.id);
-
       setSuccess('Item adicionado com sucesso!');
-      setIsAddItemModalOpen(false);
-      setSelectedProduct('');
+      setTimeout(() => setSuccess(null), 2000);
+
+      setProductSearchTerm('');
       setQuantity('1');
       setObservation('');
-      setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Erro ao adicionar item');
+      setError(err?.response?.data?.message || 'Erro ao adicionar item');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setIsAddingInlineItem(false);
     }
+  };
+
+  const handleConfirmWeightComanda = async () => {
+    if (!selectedComanda || !pendingWeightProduct) return;
+
+    const productId = String((pendingWeightProduct as any)?.id ?? '').trim();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(productId);
+    if (!isUuid) {
+      setError('Produto inválido para item por peso');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    const raw = tempWeight
+      .trim()
+      .replace(/\s+/g, '')
+      .replace(',', '.');
+
+    const weight = parseFloat(raw);
+    if (isNaN(weight) || weight <= 0) {
+      setError('Informe um peso válido (kg)');
+      setTimeout(() => setError(null), 2500);
+      return;
+    }
+
+    const weightRounded = Number(weight.toFixed(3));
+    if (!Number.isFinite(weightRounded) || weightRounded <= 0) {
+      setError('Informe um peso válido (kg)');
+      setTimeout(() => setError(null), 2500);
+      return;
+    }
+
+    try {
+      await apiClient.post(`/comandas/${selectedComanda.id}/items`, {
+        productId,
+        quantity: weightRounded,
+        observation: observation || undefined,
+      });
+
+      await refreshSelectedComanda(selectedComanda.id);
+
+      setSuccess('Item por peso adicionado com sucesso!');
+      setTimeout(() => setSuccess(null), 2500);
+
+      setIsWeightModalOpen(false);
+      setPendingWeightProduct(null);
+      setTempWeight('');
+
+      // Clear inline add UI
+      setProductSearchTerm('');
+      setQuantity('1');
+      setObservation('');
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const respData = err?.response?.data;
+      const backendMessage = respData?.message;
+      const fallback = err?.message || 'Erro ao adicionar item por peso';
+
+      // Helpful diagnostics for 422s
+      // eslint-disable-next-line no-console
+      console.error('Comandas weight add failed', {
+        status,
+        respData,
+        payload: {
+          productId,
+          quantity: weightRounded,
+          observation: observation || undefined,
+        },
+      });
+
+      const details = respData && !backendMessage ? JSON.stringify(respData) : '';
+      setError(backendMessage || (details ? `${fallback}: ${details}` : fallback));
+      setTimeout(() => setError(null), 3000);
+    }
+  };
+
+  const readWeightFromScale = async () => {
+    if (isReadingScale) return;
+    setIsReadingScale(true);
+    try {
+      const data = await apiClient.get('/scale/weight');
+      const weightKg = Number((data as any)?.weightKg);
+      if (!Number.isFinite(weightKg) || weightKg <= 0) {
+        throw new Error('Peso inválido retornado pela balança');
+      }
+      setTempWeight(weightKg.toFixed(3));
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Erro ao ler peso da balança');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setIsReadingScale(false);
+    }
+  };
+
+  const clearInlineAdd = () => {
+    setProductSearchTerm('');
+    setQuantity('1');
+    setObservation('');
   };
 
   const handleRemoveItem = async (itemId: string) => {
     if (!selectedComanda) return;
 
     try {
-      await apiClient.delete(`/comandas/${selectedComanda.id}/items/${itemId}`);
+      await apiClient.delete(`/comandas/${selectedComanda.id}/items/${itemId}`, {
+        data: { reason: 'Removido pelo usuário' },
+      });
       await refreshSelectedComanda(selectedComanda.id);
 
       setSuccess('Item removido com sucesso!');
@@ -696,14 +826,30 @@ export const ComandasPage: React.FC = () => {
     };
     type ItemEntry = { kind: 'item'; item: ComandaItem };
 
-    const items = selectedComanda?.items || [];
+    const parseAssembledMeta = (name: string) => {
+      // Backend montado naming: "Sabor (Tamanho 1/N)".
+      // Example: "Chocolate (P 1/2)"
+      const m = String(name || '').match(/\((.+)\s+1\/(\d+)\)\s*$/);
+      if (!m) return null;
+      const sizeLabel = String(m[1] || '').trim();
+      const flavorsTotal = Number(m[2]);
+      if (!sizeLabel || !Number.isFinite(flavorsTotal) || flavorsTotal < 1) return null;
+      const suffix = ` (${sizeLabel} 1/${flavorsTotal})`;
+      const flavorName = String(name || '').endsWith(suffix)
+        ? String(name || '').slice(0, -suffix.length).trim()
+        : String(name || '').trim();
+      return { sizeLabel, flavorsTotal, flavorName };
+    };
+
+    const items = (selectedComanda?.items || []).filter((it) => !it?.isCancelled);
     const result: Array<GroupEntry | ItemEntry> = [];
 
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
-      const sizeId = it?.sizeId ? String(it.sizeId) : '';
-      const flavorsTotal = Number(it?.flavorsTotal ?? 0);
-      const shouldGroup = Boolean(sizeId) && flavorsTotal > 1;
+      const meta = parseAssembledMeta(it?.productName || '');
+      const sizeLabel = meta?.sizeLabel || '';
+      const flavorsTotal = Number(meta?.flavorsTotal ?? 0);
+      const shouldGroup = Boolean(sizeLabel) && flavorsTotal > 1;
 
       if (!shouldGroup) {
         result.push({ kind: 'item', item: it });
@@ -714,10 +860,11 @@ export const ComandasPage: React.FC = () => {
       const sameGroup =
         take.length === flavorsTotal &&
         take.every((x) => {
-          const xSizeId = x?.sizeId ? String(x.sizeId) : '';
-          const xFlavors = Number(x?.flavorsTotal ?? 0);
+          const xm = parseAssembledMeta(x?.productName || '');
+          const xSizeLabel = xm?.sizeLabel || '';
+          const xFlavors = Number(xm?.flavorsTotal ?? 0);
           return (
-            xSizeId === sizeId &&
+            xSizeLabel === sizeLabel &&
             xFlavors === flavorsTotal &&
             Number(x.quantity) === Number(it.quantity) &&
             String(x.observation || '') === String(it.observation || '')
@@ -737,7 +884,7 @@ export const ComandasPage: React.FC = () => {
       result.push({
         kind: 'group',
         groupKey: `grp_${it.id}`,
-        sizeLabel: getComandaItemSizeLabel(it),
+        sizeLabel,
         flavorsTotal,
         items: take,
         total,
@@ -749,12 +896,18 @@ export const ComandasPage: React.FC = () => {
     }
 
     return result;
-  }, [selectedComanda?.items, products]);
+  }, [selectedComanda?.items]);
 
   const handleRemoveGroupItems = async (items: ComandaItem[]) => {
     if (!selectedComanda) return;
     try {
-      await Promise.all(items.map((it) => apiClient.delete(`/comandas/${selectedComanda.id}/items/${it.id}`)));
+      await Promise.all(
+        items.map((it) =>
+          apiClient.delete(`/comandas/${selectedComanda.id}/items/${it.id}`, {
+            data: { reason: 'Removido pelo usuário (montado)' },
+          })
+        )
+      );
       await refreshSelectedComanda(selectedComanda.id);
       setSuccess('Item montado removido com sucesso!');
       setTimeout(() => setSuccess(null), 3000);
@@ -1190,24 +1343,94 @@ export const ComandasPage: React.FC = () => {
                     </div>
                   </div>
                   {selectedComanda.status === 'OPEN' && (
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      onClick={() => setIsAddItemModalOpen(true)}
-                    >
-                      <Plus size={16} />
-                      Adicionar Item
-                    </Button>
+                    <div className="comanda-inline-add" aria-label="Adicionar item na comanda">
+                      <div className="comanda-inline-add__row">
+                        <input
+                          type="text"
+                          value={productSearchTerm}
+                          onChange={(e) => setProductSearchTerm(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key !== 'Enter') return;
+                            e.preventDefault();
+                            const first = filteredProducts?.[0];
+                            if (first) addProductFromSearchClick(first);
+                          }}
+                          placeholder="Buscar produto (nome/código/descrição)"
+                          className="comanda-inline-add__search"
+                          title="Buscar produto"
+                        />
+                        <button
+                          type="button"
+                          onClick={clearInlineAdd}
+                          className="comanda-inline-add__clear"
+                          title="Limpar busca"
+                          disabled={!productSearchTerm && quantity === '1' && !observation}
+                        >
+                          Limpar
+                        </button>
+                      </div>
+
+                      {productSearchTerm && (
+                        <div className="comanda-inline-add__results">
+                          {filteredProducts.length > 0 ? (
+                            filteredProducts.slice(0, 15).map((p) => (
+                              <button
+                                type="button"
+                                key={p.id}
+                                className="comanda-inline-add__result"
+                                onClick={() => addProductFromSearchClick(p)}
+                                title="Selecionar produto"
+                                disabled={isAddingInlineItem}
+                              >
+                                <span className="comanda-inline-add__result-name">
+                                  {p.code ? `[${p.code}] ` : ''}{p.name}
+                                </span>
+                                <span className="comanda-inline-add__result-price">
+                                  R$ {Number(p.salePrice || 0).toFixed(2)}
+                                </span>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="comanda-inline-add__empty">Nenhum produto encontrado</div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="comanda-inline-add__row comanda-inline-add__row--details">
+                        <input
+                          type="number"
+                          value={quantity}
+                          onChange={(e) => setQuantity(e.target.value)}
+                          min={1}
+                          className="comanda-inline-add__qty"
+                          title="Quantidade"
+                        />
+                        <input
+                          type="text"
+                          value={observation}
+                          onChange={(e) => setObservation(e.target.value)}
+                          className="comanda-inline-add__obs"
+                          placeholder="Observação (opcional)"
+                          title="Observação"
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
 
                 <div className="comanda-cart-items">
-                  {selectedComanda.items.length === 0 ? (
+                  {groupedComandaItems.length === 0 ? (
                     <p className="comanda-cart-empty">Nenhum item selecionado</p>
                   ) : (
                     groupedComandaItems.map((entry) => {
                       if (entry.kind === 'group') {
                         const title = `Montado${entry.sizeLabel ? ` - ${entry.sizeLabel}` : ''} (${entry.flavorsTotal} sabor(es))`;
+                        const stripSuffix = (name: string) => {
+                          const suffix = ` (${entry.sizeLabel} 1/${entry.flavorsTotal})`;
+                          return String(name || '').endsWith(suffix)
+                            ? String(name || '').slice(0, -suffix.length).trim()
+                            : String(name || '').trim();
+                        };
                         return (
                           <div key={entry.groupKey} className="comanda-cart-item">
                             <div className="comanda-cart-item-info">
@@ -1223,7 +1446,7 @@ export const ComandasPage: React.FC = () => {
                                     style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13 }}
                                   >
                                     <span>
-                                      {it.productName}
+                                      {stripSuffix(it.productName)}
                                       {it.quantity > 1 ? ` x${it.quantity}` : ''}
                                     </span>
                                     <span style={{ color: 'rgba(0,0,0,0.65)' }}>
@@ -1729,201 +1952,183 @@ export const ComandasPage: React.FC = () => {
         </div>
       </Modal>
 
-      {/* Add Item Modal */}
-      <Modal
-        isOpen={isAddItemModalOpen}
-        title="Adicionar Item"
-        onClose={() => {
-          setIsAddItemModalOpen(false);
-          setProductSearchTerm('');
-          setSelectedProduct('');
-        }}
-        footer={
-          <div className="modal-footer">
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setIsAddItemModalOpen(false);
-                setProductSearchTerm('');
-                setSelectedProduct('');
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button variant="primary" onClick={handleAddItem}>
-              Adicionar
-            </Button>
-          </div>
-        }
-      >
-        <form onSubmit={handleAddItem}>
-          <div className="form-group">
-            <label htmlFor="productSearch">Buscar Produto (nome, código ou descrição)</label>
-            <Input
-              id="productSearch"
-              type="text"
-              value={productSearchTerm}
-              onChange={(e) => setProductSearchTerm(e.target.value)}
-              placeholder="Digite para buscar..."
-              required
-            />
-          </div>
+      {isAssembledModalOpen && (
+        <div className="assembled-modal-overlay">
+          <div className="assembled-modal assembled-modal--large">
+            <h3>Montar produto</h3>
 
-          {productSearchTerm && (
-            <div className="product-search-results">
-              {filteredProducts.length > 0 ? (
-                filteredProducts.map((p) => (
-                  <div
-                    key={p.id}
-                    className={`product-search-item ${selectedProduct === p.id ? 'selected' : ''}`}
-                    onClick={() => {
-                      setSelectedProduct(p.id);
-                      setProductSearchTerm(p.name);
-                    }}
-                  >
-                    <div className="product-search-item-name">
-                      {p.code && <span className="product-code">[{p.code}]</span>}
-                      <span>{p.name}</span>
-                    </div>
-                    <div className="product-search-item-price">
-                      R$ {Number(p.salePrice || 0).toFixed(2)}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="product-search-empty">
-                  Nenhum produto encontrado
-                </div>
-              )}
-            </div>
-          )}
-
-          {selectedProduct && !productSearchTerm && (
-            <div className="selected-product-info">
-              <p>Produto selecionado: <strong>{products.find(p => p.id === selectedProduct)?.name}</strong></p>
-            </div>
-          )}
-
-          <div className="form-group">
-            <label htmlFor="quantity">Quantidade</label>
-            <Input
-              id="quantity"
-              type="number"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              min="1"
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="observation">Observação (opcional)</label>
-            <Input
-              id="observation"
-              value={observation}
-              onChange={(e) => setObservation(e.target.value)}
-              placeholder="Ex: Sem chocolate, coberto"
-            />
-          </div>
-        </form>
-      </Modal>
-
-      <Modal
-        isOpen={isAssembledModalOpen}
-        title="Montar produto"
-        onClose={() => setIsAssembledModalOpen(false)}
-        footer={
-          <div className="modal-footer">
-            <Button variant="secondary" onClick={() => setIsAssembledModalOpen(false)}>
-              Cancelar
-            </Button>
-            <Button variant="primary" onClick={confirmAssembledComanda as any}>
-              Confirmar
-            </Button>
-          </div>
-        }
-      >
-        <div className="form-group">
-          <label>Tamanho</label>
-          <select
-            value={assembledSizeId}
-            onChange={(e) => setAssembledSizeId(e.target.value)}
-            className="products-page__form-select"
-          >
-            {(() => {
-              const anyProduct = assembledSelectedFlavors[0];
-              const category = anyProduct ? getProductCategory(anyProduct) : null;
-              const sizes = Array.isArray(category?.sizes) ? category.sizes : [];
-              return sizes.map((s: any) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ));
-            })()}
-          </select>
-        </div>
-
-        <div className="form-group">
-          <label>Sabores</label>
-          <Input
-            type="number"
-            min={1}
-            max={assembledMaxFlavors}
-            value={assembledFlavorsTotal}
-            onChange={(e) => setAssembledFlavorsTotal(e.target.value)}
-          />
-          <small style={{ color: 'rgba(0,0,0,0.6)' }}>Máx: {assembledMaxFlavors}</small>
-        </div>
-
-        <div className="form-group">
-          <label>Sabores selecionados</label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {assembledSelectedFlavors.map((p, idx) => (
-              <div key={`${p.id}-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                <div>
-                  {p.name}
-                  <span style={{ color: 'rgba(0,0,0,0.6)' }}> #{idx + 1}</span>
-                </div>
-                <Button variant="secondary" size="sm" onClick={() => removeAssembledFlavor(idx)}>
-                  Remover
-                </Button>
+            <div className="assembled-form-grid">
+              <div>
+                <label className="assembled-label">Tamanho</label>
+                <select
+                  value={assembledSizeId}
+                  onChange={(e) => setAssembledSizeId(e.target.value)}
+                  className="assembled-input"
+                  title="Tamanho"
+                >
+                  {(() => {
+                    const anyProduct = assembledSelectedFlavors[0];
+                    const category = anyProduct ? getProductCategory(anyProduct) : null;
+                    const sizes = Array.isArray(category?.sizes) ? category.sizes : [];
+                    return sizes.map((s: any) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ));
+                  })()}
+                </select>
               </div>
-            ))}
-            <div style={{ color: 'rgba(0,0,0,0.6)' }}>
-              {assembledSelectedFlavors.length}/{assembledFlavorsTotalNumber}
+
+              <div>
+                <label className="assembled-label">Sabores</label>
+                <div className="assembled-radio-group" role="radiogroup" aria-label="Quantidade de sabores">
+                  {Array.from({ length: Math.max(1, assembledMaxFlavors) }, (_, i) => i + 1).map((n) => (
+                    <label
+                      key={n}
+                      className={`assembled-radio-option ${assembledFlavorsTotalNumber === n ? 'assembled-radio-option--checked' : ''}`}
+                    >
+                      <input
+                        type="radio"
+                        name="assembledFlavorsTotal"
+                        value={n}
+                        checked={assembledFlavorsTotalNumber === n}
+                        onChange={() => setAssembledFlavorsTotal(String(n))}
+                      />
+                      <span>
+                        {n} sabor{n > 1 ? 'es' : ''}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <small style={{ color: 'rgba(0,0,0,0.6)' }}>Máx: {assembledMaxFlavors}</small>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div className="form-group">
-          <label>Adicionar sabor</label>
-          <Input
-            type="text"
-            value={assembledSearchTerm}
-            onChange={(e) => setAssembledSearchTerm(e.target.value)}
-            placeholder="Buscar sabor..."
-          />
+            <div style={{ marginTop: 12 }}>
+              <label className="assembled-label">Sabores selecionados</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {assembledSelectedFlavors.map((p, idx) => (
+                  <div key={`${p.id}-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <div>
+                      {p.name}
+                      <span style={{ color: 'rgba(0,0,0,0.6)' }}> #{idx + 1}</span>
+                    </div>
+                    <button type="button" onClick={() => removeAssembledFlavor(idx)} className="assembled-btn-cancel">
+                      Remover
+                    </button>
+                  </div>
+                ))}
+                {assembledSelectedFlavors.length === 0 && (
+                  <div style={{ color: 'rgba(0,0,0,0.6)' }}>Nenhum sabor selecionado</div>
+                )}
+                <div style={{ color: 'rgba(0,0,0,0.6)' }}>
+                  {assembledSelectedFlavors.length}/{assembledFlavorsTotalNumber}
+                </div>
+              </div>
+            </div>
 
-          <div className="product-search-results" style={{ marginTop: 10 }}>
-            {assembledAvailableFlavors.map((p) => (
+            <div style={{ marginTop: 12 }}>
+              <label className="assembled-label">Adicionar sabor</label>
+              <input
+                type="text"
+                value={assembledSearchTerm}
+                onChange={(e) => setAssembledSearchTerm(e.target.value)}
+                placeholder="Buscar sabor..."
+                className="assembled-input"
+                title="Buscar sabor"
+              />
               <div
-                key={p.id}
-                className="product-search-item"
-                onClick={() => addAssembledFlavor(p)}
                 style={{
-                  cursor: assembledSelectedFlavors.length >= assembledFlavorsTotalNumber ? 'not-allowed' : 'pointer',
-                  opacity: assembledSelectedFlavors.length >= assembledFlavorsTotalNumber ? 0.6 : 1,
+                  marginTop: 10,
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                  gap: 8,
                 }}
               >
-                <div className="product-search-item-name">
-                  {p.code && <span className="product-code">[{p.code}]</span>}
-                  <span>{p.name}</span>
-                </div>
+                {assembledAvailableFlavors.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => addAssembledFlavor(p)}
+                    disabled={assembledSelectedFlavors.length >= assembledFlavorsTotalNumber}
+                    className="assembled-product-card"
+                    style={{ cursor: 'pointer' }}
+                    title="Adicionar sabor"
+                  >
+                    <div className="assembled-product-name">{p.name}</div>
+                  </button>
+                ))}
               </div>
-            ))}
+            </div>
+
+            <div className="assembled-modal-actions">
+              <button onClick={() => setIsAssembledModalOpen(false)} className="assembled-btn-cancel">
+                Cancelar
+              </button>
+              <button onClick={confirmAssembledComanda} className="assembled-btn-confirm">
+                Confirmar
+              </button>
+            </div>
           </div>
         </div>
-      </Modal>
+      )}
+
+      <div className={`sales-page__modal ${isWeightModalOpen ? 'sales-page__modal--open' : ''}`}>
+        <div className="sales-page__modal-overlay" onClick={() => setIsWeightModalOpen(false)} />
+        <div className="sales-page__modal-content sales-page__modal-content--small">
+          <div className="sales-page__modal-header">
+            <h2 className="sales-page__modal-title">Capturar Peso - {pendingWeightProduct?.name}</h2>
+            <button onClick={() => setIsWeightModalOpen(false)} className="sales-page__modal-close">
+              ✕
+            </button>
+          </div>
+
+          <div className="sales-page__modal-body">
+            <div className="sales-page__weight-section">
+              <label className="sales-page__weight-label">Peso (kg)</label>
+              <input
+                type="text"
+                placeholder="0,000"
+                value={tempWeight}
+                onChange={(e) => setTempWeight(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleConfirmWeightComanda();
+                  }
+                }}
+                className="sales-page__weight-input"
+              />
+              <p className="sales-page__weight-hint">Digite o peso ou clique em "Ler da Balança"</p>
+
+              <div className="sales-page__weight-actions">
+                <button
+                  type="button"
+                  onClick={readWeightFromScale}
+                  disabled={isReadingScale}
+                  className="sales-page__weight-button sales-page__weight-button--scale"
+                >
+                  {isReadingScale ? 'Lendo...' : '📊 Ler da Balança'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="sales-page__modal-footer">
+            <button
+              onClick={() => setIsWeightModalOpen(false)}
+              className="sales-page__modal-button sales-page__modal-button--cancel"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleConfirmWeightComanda}
+              className="sales-page__modal-button sales-page__modal-button--confirm"
+            >
+              Confirmar
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Modal de Cadastro de Cliente */}
       <Modal

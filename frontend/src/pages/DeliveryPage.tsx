@@ -458,6 +458,12 @@ export const DeliveryPage: React.FC = () => {
   const assembledMaxFlavors = assembledSize?.maxFlavors ? Number(assembledSize.maxFlavors) : 1;
   const assembledFlavorsTotalNumber = Math.max(1, Math.min(assembledMaxFlavors, parseInt(assembledFlavorsTotal || '1', 10) || 1));
 
+  useEffect(() => {
+    if (!isAssembledModalOpen) return;
+    const next = String(assembledFlavorsTotalNumber);
+    if (next !== assembledFlavorsTotal) setAssembledFlavorsTotal(next);
+  }, [isAssembledModalOpen, assembledFlavorsTotalNumber, assembledFlavorsTotal]);
+
   const assembledAvailableFlavors = useMemo(() => {
     if (!assembledCategoryId) return [];
     const term = assembledSearchTerm.trim().toLowerCase();
@@ -740,7 +746,7 @@ export const DeliveryPage: React.FC = () => {
         items: deliveryStore.items.map(item => ({
           productId: item.productId,
           quantity: item.quantity,
-          ...(item.sizeId ? { sizeId: item.sizeId, flavorsTotal: item.flavorsTotal } : {}),
+          ...(item.sizeId ? { sizeId: item.sizeId, flavorsTotal: item.flavorsTotal ?? 1 } : {}),
         })),
         payments: payments.map(p => ({ paymentMethod: p.method as any, amount: p.amount })),
         deliveryFee,
@@ -1350,15 +1356,23 @@ ${addressText}
 
               <div>
                 <label className="assembled-label">Sabores</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={assembledMaxFlavors}
-                  value={assembledFlavorsTotal}
-                  onChange={(e) => setAssembledFlavorsTotal(e.target.value)}
-                  className="assembled-input"
-                  title="Quantidade de sabores"
-                />
+                <div className="assembled-radio-group" role="radiogroup" aria-label="Quantidade de sabores">
+                  {Array.from({ length: Math.max(1, assembledMaxFlavors) }, (_, i) => i + 1).map((n) => (
+                    <label
+                      key={n}
+                      className={`assembled-radio-option ${assembledFlavorsTotalNumber === n ? 'assembled-radio-option--checked' : ''}`}
+                    >
+                      <input
+                        type="radio"
+                        name="assembledFlavorsTotal"
+                        value={n}
+                        checked={assembledFlavorsTotalNumber === n}
+                        onChange={() => setAssembledFlavorsTotal(String(n))}
+                      />
+                      <span>{n} sabor{n > 1 ? 'es' : ''}</span>
+                    </label>
+                  ))}
+                </div>
                 <small style={{ color: 'rgba(0,0,0,0.6)' }}>Máx: {assembledMaxFlavors}</small>
               </div>
             </div>

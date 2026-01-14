@@ -281,7 +281,8 @@ export const CashPage: React.FC = () => {
 
   return (
     <div className="cash-page">
-      <div className="page-header">\n        <CreditCard size={32} />
+      <div className="page-header">
+        <CreditCard size={32} />
         <h1>Gerenciar Caixa</h1>
       </div>
 

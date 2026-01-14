@@ -766,12 +766,52 @@ export class DREController {
     this.dreService = new DREService();
   }
 
-  private parseDateInput(value: string, endOfDay: boolean): Date {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      const [y, m, d] = value.split('-').map((n) => parseInt(n, 10));
-      return new Date(y, m - 1, d, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
+  private parseDateInput(value: unknown, endOfDay: boolean): Date {
+    // Note: req.query may be mutated by validation middleware.
+    // Keep this parser robust for both string and Date inputs.
+    if (value instanceof Date) {
+      const date = new Date(value);
+      if (endOfDay) {
+        const isMidnight =
+          date.getHours() === 0 &&
+          date.getMinutes() === 0 &&
+          date.getSeconds() === 0 &&
+          date.getMilliseconds() === 0;
+        if (isMidnight) date.setHours(23, 59, 59, 999);
+      }
+      return date;
     }
-    return new Date(value);
+
+    const raw = String(value);
+    const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
+
+    if (isDateOnly) {
+      const [y, m, d] = raw.split('-').map((n) => parseInt(n, 10));
+      return new Date(
+        y,
+        m - 1,
+        d,
+        endOfDay ? 23 : 0,
+        endOfDay ? 59 : 0,
+        endOfDay ? 59 : 0,
+        endOfDay ? 999 : 0
+      );
+    }
+
+    const date = new Date(raw);
+    // These report endpoints are day-based.
+    // If the input has no explicit time component OR it resolves to midnight, include the full end day.
+    if (endOfDay) {
+      const isMidnight =
+        date.getHours() === 0 &&
+        date.getMinutes() === 0 &&
+        date.getSeconds() === 0 &&
+        date.getMilliseconds() === 0;
+      if (!raw.includes('T') || isMidnight) {
+        date.setHours(23, 59, 59, 999);
+      }
+    }
+    return date;
   }
 
   /**
@@ -782,8 +822,8 @@ export class DREController {
     const { startDate, endDate } = req.query;
 
     const dre = await this.dreService.generateDREReport({
-      startDate: this.parseDateInput(startDate as string, false),
-      endDate: this.parseDateInput(endDate as string, true),
+      startDate: this.parseDateInput(startDate, false),
+      endDate: this.parseDateInput(endDate, true),
     });
 
     res.json({
@@ -800,8 +840,8 @@ export class DREController {
     const { startDate, endDate } = req.query;
 
     const cashFlow = await this.dreService.generateCashFlow({
-      startDate: this.parseDateInput(startDate as string, false),
-      endDate: this.parseDateInput(endDate as string, true),
+      startDate: this.parseDateInput(startDate, false),
+      endDate: this.parseDateInput(endDate, true),
     });
 
     res.json({
@@ -818,8 +858,8 @@ export class DREController {
     const { startDate, endDate } = req.query;
 
     const analysis = await this.dreService.analyzeProfitability({
-      startDate: this.parseDateInput(startDate as string, false),
-      endDate: this.parseDateInput(endDate as string, true),
+      startDate: this.parseDateInput(startDate, false),
+      endDate: this.parseDateInput(endDate, true),
     });
 
     res.json({
@@ -849,8 +889,8 @@ export class DREController {
     const { startDate, endDate } = req.query;
 
     const report = await this.dreService.generateComparativeReport(
-      this.parseDateInput(startDate as string, false),
-      this.parseDateInput(endDate as string, true)
+      this.parseDateInput(startDate, false),
+      this.parseDateInput(endDate, true)
     );
 
     res.json({

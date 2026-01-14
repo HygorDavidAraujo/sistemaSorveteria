@@ -19,6 +19,7 @@ export const ProductsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [togglingStatusIds, setTogglingStatusIds] = useState<Record<string, boolean>>({});
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -117,7 +118,7 @@ export const ProductsPage: React.FC = () => {
           return;
         }
 
-        // Backend ainda exige salePrice no create; usamos o menor preço como "preço base".
+        // Regra Montado (opção 2): salePrice é sempre o menor preço por tamanho.
         effectiveSalePrice = Math.min(...sizePricesPayload.map((sp) => sp.price));
       } else {
         if (!editingId && (Number.isNaN(priceValue) || priceValue <= 0)) {
@@ -228,10 +229,125 @@ export const ProductsPage: React.FC = () => {
     }
   };
 
-  const filteredProducts = products.filter((p) =>
-    (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.description || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleToggleStatus = async (product: Product) => {
+    if (!product?.id) return;
+    const id = product.id;
+    if (togglingStatusIds[id]) return;
+
+    const nextIsActive = !Boolean(product.isActive);
+    setTogglingStatusIds((p) => ({ ...p, [id]: true }));
+    setError(null);
+
+    // Optimistic UI update
+    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, isActive: nextIsActive } : p)));
+
+    try {
+      await apiClient.updateProduct(id, { isActive: nextIsActive });
+      setSuccess(nextIsActive ? 'Produto marcado como disponível' : 'Produto marcado como indisponível');
+      setTimeout(() => setSuccess(null), 2000);
+    } catch (err: any) {
+      // Revert optimistic update
+      setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, isActive: !nextIsActive } : p)));
+      setError(err?.response?.data?.message || 'Erro ao atualizar status do produto');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setTogglingStatusIds((p) => {
+        const copy = { ...p };
+        delete copy[id];
+        return copy;
+      });
+    }
+  };
+
+  const resolveProductCategory = (product: Product): Category | null => {
+    const cat = product.category as any;
+    if (cat && typeof cat === 'object') return cat as Category;
+
+    const maybeId =
+      (product as any).category_id ||
+      (product as any).categoryId ||
+      product.categoryId ||
+      (typeof product.category === 'string' ? product.category : undefined);
+
+    if (maybeId && isUuid(String(maybeId))) {
+      return categories.find((c) => c.id === String(maybeId)) ?? null;
+    }
+    return null;
+  };
+
+  const formatCurrency = (value: unknown) => {
+    const n = Number(value);
+    const safe = Number.isFinite(n) ? n : 0;
+    return `R$ ${safe.toFixed(2)}`;
+  };
+
+  const getAssembledSizePriceLines = (product: Product): Array<{ key: string; sizeName: string; price: number }> => {
+    const category = resolveProductCategory(product);
+    const sizes = Array.isArray(category?.sizes) ? category!.sizes! : [];
+
+    const raw = Array.isArray((product as any).sizePrices) ? (product as any).sizePrices : [];
+
+    const lines = raw
+      .map((sp: any) => {
+        const sizeId =
+          sp?.categorySizeId ||
+          sp?.category_size_id ||
+          sp?.sizeId ||
+          sp?.size_id ||
+          sp?.categorySize?.id ||
+          sp?.categorySizeId;
+        const sizeName =
+          sp?.categorySize?.name ||
+          sizes.find((s: any) => String(s.id) === String(sizeId))?.name ||
+          'Tamanho';
+        const price = Number(sp?.price);
+        if (!Number.isFinite(price) || price <= 0) return null;
+        return { key: String(sizeId || `${sizeName}-${price}`), sizeName: String(sizeName || 'Tamanho'), price };
+      })
+      .filter(Boolean) as Array<{ key: string; sizeName: string; price: number }>;
+
+    // If we have displayOrder, sort by it.
+    const byOrder = new Map<string, number>();
+    for (const s of sizes) {
+      byOrder.set(String(s.id), Number(s.displayOrder ?? 0));
+    }
+
+    return lines.sort((a, b) => {
+      const ao = byOrder.get(a.key) ?? 0;
+      const bo = byOrder.get(b.key) ?? 0;
+      if (ao !== bo) return ao - bo;
+      return a.sizeName.localeCompare(b.sizeName);
+    });
+  };
+
+  const normalizeSearch = (value: unknown) => {
+    const s = String(value ?? '').trim().toLowerCase();
+    try {
+      return s.normalize('NFD').replace(new RegExp('\\p{Diacritic}', 'gu'), '');
+    } catch {
+      return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+  };
+
+  const filteredProducts = products.filter((p) => {
+    const term = normalizeSearch(searchTerm);
+    if (!term) return true;
+
+    const category = resolveProductCategory(p);
+
+    const haystack = [
+      p.code,
+      p.name,
+      p.description,
+      category?.name,
+      typeof p.category === 'string' ? p.category : undefined,
+    ]
+      .filter(Boolean)
+      .map(normalizeSearch)
+      .join(' ');
+
+    return haystack.includes(term);
+  });
 
   if (loading) return <Loading message="Carregando produtos..." />;
 
@@ -285,67 +401,101 @@ export const ProductsPage: React.FC = () => {
       <div className="products-page__search">
         <input
           type="text"
-          placeholder="Nome ou descrição..."
+          placeholder="Buscar por código, nome, descrição ou categoria..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="products-page__search-input"
         />
       </div>
 
-      <div className="products-page__grid">
-        {filteredProducts.map((product) => (
-          <div key={product.id} className="products-page__card">
-            <div className="products-page__card-image-container">
-              <div className="products-page__card-image">
-                🍦
-              </div>
-            </div>
-            <div className="products-page__card-content">
-              <h3 className="products-page__card-title">{product.name}</h3>
-              <p className="products-page__card-description">{product.description}</p>
-            </div>
+      <div className="products-page__hint" role="note">
+        Dica: clique no <strong>Status</strong> para alternar entre <strong>Disponível</strong> e <strong>Indisponível</strong>.
+      </div>
 
-            <div className="products-page__card-info">
-              <div className="products-page__info-row">
-                <span className="products-page__info-label">Preço:</span>
-                <span className="products-page__info-value">R$ {parseFloat(String(product.salePrice ?? 0)).toFixed(2)}</span>
-              </div>
-              {product.costPrice !== undefined && product.costPrice !== null && String(product.costPrice).trim() !== '' && (
-                <div className="products-page__info-row">
-                  <span className="products-page__info-label">Custo:</span>
-                  <span className="products-page__info-value">R$ {parseFloat(String(product.costPrice)).toFixed(2)}</span>
-                </div>
-              )}
-              <div className="products-page__info-row">
-                <span className="products-page__info-label">Categoria:</span>
-                <span className="products-page__info-value">{getCategoryName(product.category)}</span>
-              </div>
-              <div className="products-page__info-row">
-                <span className="products-page__info-label">Status:</span>
-                <span className={`products-page__status ${product.isActive ? 'products-page__status--available' : 'products-page__status--unavailable'}`}>
-                  {product.isActive ? 'Disponível' : 'Indisponível'}
-                </span>
-              </div>
-            </div>
+      <div className="products-table-wrapper">
+        <table className="products-table">
+          <thead>
+            <tr>
+              <th className="products-col-code">Código</th>
+              <th>Produto</th>
+              <th>Categoria</th>
+              <th>Preço</th>
+              <th>Status</th>
+              <th className="products-col-actions">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredProducts.map((product) => {
+              const category = resolveProductCategory(product);
+              const isAssembled = (category as any)?.categoryType === 'assembled';
+              const assembledLines = isAssembled ? getAssembledSizePriceLines(product) : [];
 
-            <div className="products-page__card-actions">
-              <button
-                onClick={() => handleEdit(product)}
-                className="products-page__button products-page__button--secondary"
-              >
-                <Edit size={16} />
-                Editar
-              </button>
-              <button
-                onClick={() => handleDelete(product.id)}
-                className="products-page__button products-page__button--danger"
-                title="Deletar produto"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          </div>
-        ))}
+              return (
+                <tr key={product.id}>
+                  <td className="products-code">{product.code || '-'}</td>
+                  <td className="products-name">
+                    <div className="products-name__title">{product.name}</div>
+                    {product.description && <div className="products-name__desc">{product.description}</div>}
+                  </td>
+                  <td>{category?.name || getCategoryName(product.category)}</td>
+                  <td className="products-price">
+                    {isAssembled ? (
+                      assembledLines.length > 0 ? (
+                        <div className="products-price-sizes">
+                          {assembledLines.map((line, idx) => (
+                            <span key={line.key} className="products-price-size">
+                              <strong>{line.sizeName}:</strong> {formatCurrency(line.price)}
+                              {idx < assembledLines.length - 1 ? ' | ' : ''}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span>{formatCurrency(product.salePrice)}</span>
+                      )
+                    ) : (
+                      <span>{formatCurrency(product.salePrice)}</span>
+                    )}
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className={`products-status ${product.isActive ? 'products-status--available' : 'products-status--unavailable'}`}
+                      title={product.isActive ? 'Clique para marcar como indisponível' : 'Clique para marcar como disponível'}
+                      aria-label={product.isActive ? 'Marcar produto como indisponível' : 'Marcar produto como disponível'}
+                      onClick={() => handleToggleStatus(product)}
+                      disabled={Boolean(togglingStatusIds[product.id])}
+                    >
+                      {Boolean(togglingStatusIds[product.id])
+                        ? 'Salvando...'
+                        : product.isActive
+                          ? 'Disponível'
+                          : 'Indisponível'}
+                    </button>
+                  </td>
+                  <td>
+                    <div className="products-actions">
+                      <button
+                        onClick={() => handleEdit(product)}
+                        className="products-action-button products-action-button--edit"
+                        title="Editar"
+                      >
+                        <Edit size={16} />
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDelete(product.id)}
+                        className="products-action-button products-action-button--delete"
+                        title="Excluir"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
       {filteredProducts.length === 0 && (

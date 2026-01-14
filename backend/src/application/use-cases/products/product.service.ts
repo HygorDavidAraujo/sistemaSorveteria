@@ -86,6 +86,23 @@ export class ProductService {
       }
     }
 
+    // Regra Montado (opção 2): desconsidera salePrice do payload e usa o menor preço por tamanho.
+    let effectiveSalePrice = data.salePrice;
+    if (category?.categoryType === 'assembled') {
+      const sizePrices = Array.isArray(data.sizePrices) ? data.sizePrices : [];
+      const minPrice = Math.min(...sizePrices.map((sp) => Number(sp.price)).filter((p) => Number.isFinite(p)));
+      if (!Number.isFinite(minPrice) || minPrice <= 0) {
+        throw new AppError('Categoria do tipo Montado exige preços por tamanho válidos', 400);
+      }
+      effectiveSalePrice = minPrice;
+    } else {
+      const salePrice = Number(data.salePrice);
+      if (!Number.isFinite(salePrice) || salePrice <= 0) {
+        throw new AppError('Preço de venda deve ser maior que zero', 400);
+      }
+      effectiveSalePrice = salePrice;
+    }
+
     const existingCode = await this.prismaClient.product.findUnique({
       where: { code: data.code },
     });
@@ -101,7 +118,7 @@ export class ProductService {
           code: data.code,
           description: data.description,
           categoryId: data.categoryId,
-          salePrice: data.salePrice,
+          salePrice: effectiveSalePrice,
           costPrice: data.costPrice,
           saleType: data.saleType,
           unit: data.unit,
@@ -286,6 +303,18 @@ export class ProductService {
       }
     }
 
+    const willBeAssembled = nextCategory?.categoryType === 'assembled';
+    if (willBeAssembled && !data.sizePrices) {
+      // Se o produto já é montado, pode reaproveitar preços existentes.
+      // Se não houver nenhum preço por tamanho persistido, exige sizePrices no payload.
+      const existingSizePricesCount = await this.prismaClient.productSizePrice.count({
+        where: { productId: id },
+      });
+      if (existingSizePricesCount === 0) {
+        throw new AppError('Informe ao menos um preço por tamanho', 400);
+      }
+    }
+
     if (data.sizePrices) {
       if (!nextCategory || nextCategory.categoryType !== 'assembled') {
         throw new AppError('Preços por tamanho só podem ser usados em categorias do tipo Montado', 400);
@@ -317,6 +346,11 @@ export class ProductService {
     const updatedProduct = await this.prismaClient.$transaction(async (tx) => {
       const { sizePrices: _ignoredSizePrices, ...productData } = data as any;
 
+      // Regra Montado (opção 2): desconsidera salePrice do payload.
+      if (willBeAssembled) {
+        delete productData.salePrice;
+      }
+
       const updated = await tx.product.update({
         where: { id },
         data: productData,
@@ -336,6 +370,26 @@ export class ProductService {
       // Se mudou para categoria comum, removemos preços por tamanho (não usados)
       if (nextCategory && nextCategory.categoryType !== 'assembled') {
         await tx.productSizePrice.deleteMany({ where: { productId: id } });
+      }
+
+      // Para categoria Montado, o salePrice passa a ser sempre o menor preço por tamanho.
+      if (willBeAssembled) {
+        const prices = data.sizePrices
+          ? data.sizePrices.map((sp) => Number(sp.price))
+          : (await tx.productSizePrice.findMany({
+              where: { productId: id },
+              select: { price: true },
+            })).map((sp) => Number(sp.price));
+
+        const minPrice = Math.min(...prices.filter((p) => Number.isFinite(p)));
+        if (!Number.isFinite(minPrice) || minPrice <= 0) {
+          throw new AppError('Não foi possível determinar o preço base do produto Montado', 400);
+        }
+
+        await tx.product.update({
+          where: { id },
+          data: { salePrice: minPrice },
+        });
       }
 
       return tx.product.findUniqueOrThrow({
