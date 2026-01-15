@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { apiClient } from '@/services/api';
 import { Card, Button, Input, Modal, Loading, Alert, Badge } from '@/components/common';
 import { Users, Plus, Eye, Gift } from 'lucide-react';
+import { CepSearchInput, CepSearchFieldsDisplay } from '@/components/CepSearchInput';
 import type { Customer } from '@/types';
+import type { AddressData } from '@/hooks/useGeolocation';
 import './CustomersPage.css';
 
 export const CustomersPage: React.FC = () => {
@@ -15,6 +17,7 @@ export const CustomersPage: React.FC = () => {
   const [isEditingDetail, setIsEditingDetail] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [cepAddressData, setCepAddressData] = useState<AddressData | null>(null);
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -36,6 +39,15 @@ export const CustomersPage: React.FC = () => {
     preferredContactMethod: '',
   });
 
+  const toDateInputValue = (value?: string | null) => {
+    if (!value) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    if (/^\d{4}-\d{2}-\d{2}T/.test(value)) return value.slice(0, 10);
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toISOString().slice(0, 10);
+  };
+
   useEffect(() => {
     loadCustomers();
   }, []);
@@ -53,10 +65,30 @@ export const CustomersPage: React.FC = () => {
     }
   };
 
+  const handleCepAddressFound = (address: AddressData) => {
+    setCepAddressData(address);
+    setForm(prev => ({
+      ...prev,
+      zipCode: address.cep,
+      street: address.logradouro,
+      neighborhood: address.bairro,
+      city: address.cidade,
+      state: address.estado,
+    }));
+  };
+
+  const handleCepClear = () => {
+    setCepAddressData(null);
+    setForm(prev => ({
+      ...prev,
+      zipCode: '',
+    }));
+  };
+
   const sanitizePayload = (data: typeof form) => {
     // Remove campos vazios para evitar 422 em campos que não aceitam string vazia no backend
     return Object.entries(data).reduce((acc: any, [key, value]) => {
-      if (value === '' || value === undefined) {
+      if (value === '' || value === undefined || value === null) {
         return acc;
       }
       acc[key] = value;
@@ -94,11 +126,11 @@ export const CustomersPage: React.FC = () => {
     if (selectedCustomer) {
       setForm({
         name: selectedCustomer.name,
-        email: selectedCustomer.email,
+        email: selectedCustomer.email || '',
         phone: selectedCustomer.phone || '',
         whatsapp: selectedCustomer.whatsapp || '',
         cpf: selectedCustomer.cpf || '',
-        birthDate: selectedCustomer.birthDate || '',
+        birthDate: toDateInputValue(selectedCustomer.birthDate),
         gender: selectedCustomer.gender || '',
         customerType: selectedCustomer.customerType || 'pf',
         street: selectedCustomer.street || '',
@@ -329,13 +361,19 @@ export const CustomersPage: React.FC = () => {
           <div className="customers-form-section">
             <h3 className="customers-form-section-title">Endereço</h3>
             <div className="customers-form-grid">
-              <Input
-                className="customers-form-input"
-                label="CEP"
-                value={form.zipCode}
-                onChange={(e) => setForm({ ...form, zipCode: e.target.value })}
-                placeholder="00000-000"
-              />
+              <div className="customers-form-input">
+                <CepSearchInput
+                  onAddressFound={handleCepAddressFound}
+                  onClear={handleCepClear}
+                  onCepChange={(cep) => setForm((prev) => ({ ...prev, zipCode: cep }))}
+                  initialCep={form.zipCode}
+                  label="CEP"
+                  showCoordinates={false}
+                />
+              </div>
+              {cepAddressData && (
+                <CepSearchFieldsDisplay address={cepAddressData} showCoordinates={false} />
+              )}
               <Input
                 className="customers-form-input"
                 label="Rua"
@@ -510,6 +548,21 @@ export const CustomersPage: React.FC = () => {
               <div className="customers-form-section">
                 <h3 className="customers-form-section-title">Endereço</h3>
                 <div className="customers-form-grid">
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <CepSearchInput
+                      onAddressFound={handleCepAddressFound}
+                      onClear={handleCepClear}
+                      onCepChange={(cep) => setForm((prev) => ({ ...prev, zipCode: cep }))}
+                      initialCep={form.zipCode}
+                      label="CEP"
+                      showCoordinates={false}
+                    />
+                  </div>
+                  {cepAddressData && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <CepSearchFieldsDisplay address={cepAddressData} showCoordinates={false} />
+                    </div>
+                  )}
                   <Input
                     className="customers-form-input"
                     label="Rua"
@@ -548,6 +601,13 @@ export const CustomersPage: React.FC = () => {
                     onChange={(e) => setForm({ ...form, state: e.target.value })}
                     placeholder="UF"
                     maxLength={2}
+                  />
+                  <Input
+                    className="customers-form-input"
+                    label="Ponto de Referência"
+                    value={form.referencePoint}
+                    onChange={(e) => setForm({ ...form, referencePoint: e.target.value })}
+                    placeholder="Próximo a..."
                   />
                 </div>
               </div>

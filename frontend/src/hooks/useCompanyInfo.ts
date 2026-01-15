@@ -10,6 +10,8 @@ interface CompanyInfo {
   whatsapp?: string;
   logoBase64?: string | null;
   logoMimeType?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export const useCompanyInfo = () => {

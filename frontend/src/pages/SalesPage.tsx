@@ -4,9 +4,11 @@ import { useSalesStore, useCashSessionStore } from '@/store';
 import { apiClient } from '@/services/api';
 import { Card, Button, Modal, Loading, Alert, Badge } from '@/components/common';
 import { Trash2, ShoppingCart, Plus, Minus, Printer } from 'lucide-react';
+import { CepSearchInput, CepSearchFieldsDisplay } from '@/components/CepSearchInput';
 import { printReceipt, formatCurrency, getPrintStyles } from '@/utils/printer';
 import { clearCartDraft, loadCartDraft, saveCartDraft } from '@/utils/cartDraft';
 import type { Product, Customer } from '@/types';
+import type { AddressData } from '@/hooks/useGeolocation';
 import './SalesPage.css';
 import '@/styles/assembledModal.css';
 
@@ -43,6 +45,7 @@ export const SalesPage: React.FC = () => {
   const [assembledSelectedFlavors, setAssembledSelectedFlavors] = useState<Product[]>([]);
   const [assembledSearchTerm, setAssembledSearchTerm] = useState('');
   const [assembledGroupId, setAssembledGroupId] = useState<string>('');
+  const [cepAddressData, setCepAddressData] = useState<AddressData | null>(null);
   const [customerForm, setCustomerForm] = useState({
     name: '',
     email: '',
@@ -538,18 +541,49 @@ export const SalesPage: React.FC = () => {
     }
   };
 
+  const handleCepAddressFound = (address: AddressData) => {
+    setCepAddressData(address);
+    setCustomerForm(prev => ({
+      ...prev,
+      zipCode: address.cep,
+      street: address.logradouro,
+      neighborhood: address.bairro,
+      city: address.cidade,
+      state: address.estado,
+    }));
+  };
+
+  const handleCepClear = () => {
+    setCepAddressData(null);
+    setCustomerForm(prev => ({
+      ...prev,
+      zipCode: '',
+    }));
+  };
+
   const handleApplyCoupon = async () => {
     if (!discountCode) return;
     try {
-      const response = await apiClient.validateCoupon(discountCode);
-      const rawDiscount = response?.discount_value ?? response?.discountValue;
-      if (rawDiscount !== undefined && rawDiscount !== null) {
-        setCouponDiscountValue(toMoneyNumber(rawDiscount));
+      // Calcular subtotal para validação
+      const sale_subtotal = salesStore.items.reduce((sum, item) => sum + item.totalPrice, 0);
+      
+      const response = await apiClient.validateCoupon(discountCode, sale_subtotal, selectedCustomer || '');
+      const discount = response.data?.discountAmount ?? response.discountAmount;
+      if (discount !== undefined && discount !== null) {
+        setCouponDiscountValue(toMoneyNumber(discount));
         setSuccess('Cupom aplicado com sucesso!');
         setTimeout(() => setSuccess(null), 3000);
       }
-    } catch (err) {
-      setError('Cupom inválido');
+    } catch (err: any) {
+      let errorMsg = 'Cupom inválido';
+      if (err?.response?.status === 404) {
+        errorMsg = 'Cupom não encontrado';
+      } else if (err?.response?.data?.message) {
+        errorMsg = err.response.data.message;
+      } else if (err?.message) {
+        errorMsg = err.message;
+      }
+      setError(errorMsg);
       setTimeout(() => setError(null), 3000);
     }
   };
@@ -771,7 +805,6 @@ export const SalesPage: React.FC = () => {
         deliveryFee: 0,
         additionalFee,
         loyaltyPointsUsed: 0,
-        couponCode: discountCode || undefined,
       });
 
       setSuccess('Venda finalizada com sucesso!');
@@ -1396,6 +1429,23 @@ export const SalesPage: React.FC = () => {
             <div className="sales-page__form-section">
               <h3 className="sales-page__form-section-title">Endereço</h3>
               
+              <div className="sales-page__form-group" style={{ marginBottom: '12px' }}>
+                <CepSearchInput
+                  onAddressFound={handleCepAddressFound}
+                  onClear={handleCepClear}
+                  onCepChange={(cep) => setCustomerForm((prev) => ({ ...prev, zipCode: cep }))}
+                  initialCep={customerForm.zipCode}
+                  label="CEP"
+                  showCoordinates={false}
+                />
+              </div>
+
+              {cepAddressData && (
+                <div style={{ marginBottom: '12px' }}>
+                  <CepSearchFieldsDisplay address={cepAddressData} showCoordinates={false} />
+                </div>
+              )}
+              
               <div className="sales-page__form-row">
                 <div className="sales-page__form-group sales-page__form-group--flex">
                   <label className="sales-page__form-label">Rua</label>
@@ -1465,16 +1515,6 @@ export const SalesPage: React.FC = () => {
                     className="sales-page__form-input"
                     placeholder="SP"
                     maxLength={2}
-                  />
-                </div>
-                <div className="sales-page__form-group">
-                  <label className="sales-page__form-label">CEP</label>
-                  <input
-                    type="text"
-                    value={customerForm.zipCode}
-                    onChange={(e) => setCustomerForm({...customerForm, zipCode: e.target.value})}
-                    className="sales-page__form-input"
-                    placeholder="00000-000"
                   />
                 </div>
               </div>

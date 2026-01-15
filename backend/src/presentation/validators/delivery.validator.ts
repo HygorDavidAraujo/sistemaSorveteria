@@ -95,6 +95,7 @@ export const deliveryValidators = {
     body: Joi.object({}),
     query: Joi.object({
       isActive: Joi.string().valid('true', 'false').optional(),
+      feeType: Joi.string().valid('neighborhood', 'distance').optional(),
     }),
     params: Joi.object({}),
   }),
@@ -109,11 +110,38 @@ export const deliveryValidators = {
 
   createFee: Joi.object({
     body: Joi.object({
-      neighborhood: Joi.string().max(100).required(),
-      city: Joi.string().max(100).required(),
+      feeType: Joi.string().valid('neighborhood', 'distance').default('neighborhood'),
+      // Neighborhood-based
+      neighborhood: Joi.when('feeType', {
+        is: 'neighborhood',
+        then: Joi.string().max(100).required(),
+        otherwise: Joi.string().max(100).optional().allow(null, ''),
+      }),
+      city: Joi.when('feeType', {
+        is: 'neighborhood',
+        then: Joi.string().max(100).required(),
+        otherwise: Joi.string().max(100).optional().allow(null, ''),
+      }),
       fee: Joi.number().min(0).required(),
       minOrderValue: Joi.number().min(0).default(0),
-      freeDeliveryAbove: Joi.number().min(0).optional(),
+      freeDeliveryAbove: Joi.number().min(0).optional().allow(null),
+      // Distance-based
+      maxDistance: Joi.when('feeType', {
+        is: 'distance',
+        // 0 = não isenta em nenhuma distância (cobra todas)
+        then: Joi.number().min(0).required(),
+        otherwise: Joi.number().optional().allow(null),
+      }),
+      feePerKm: Joi.when('feeType', {
+        is: 'distance',
+        then: Joi.number().positive().required(),
+        otherwise: Joi.number().optional().allow(null),
+      }),
+      baseFee: Joi.when('feeType', {
+        is: 'distance',
+        then: Joi.number().min(0).required(),
+        otherwise: Joi.number().optional().allow(null),
+      }),
       isActive: Joi.boolean().default(true),
     }),
     query: Joi.object({}),
@@ -122,11 +150,16 @@ export const deliveryValidators = {
 
   updateFee: Joi.object({
     body: Joi.object({
-      neighborhood: Joi.string().max(100).optional(),
-      city: Joi.string().max(100).optional(),
+      feeType: Joi.string().valid('neighborhood', 'distance').optional(),
+      neighborhood: Joi.string().max(100).optional().allow(null, ''),
+      city: Joi.string().max(100).optional().allow(null, ''),
       fee: Joi.number().min(0).optional(),
       minOrderValue: Joi.number().min(0).optional(),
       freeDeliveryAbove: Joi.number().min(0).optional().allow(null),
+      // 0 = não isenta em nenhuma distância (cobra todas)
+      maxDistance: Joi.number().min(0).optional().allow(null),
+      feePerKm: Joi.number().positive().optional().allow(null),
+      baseFee: Joi.number().min(0).optional().allow(null),
       isActive: Joi.boolean().optional(),
     }),
     query: Joi.object({}),

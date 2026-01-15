@@ -19,6 +19,8 @@ interface CreateCompanyInfoDTO {
   logoUrl?: string;
   logoBase64?: string;
   logoMimeType?: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 interface UpdateCompanyInfoDTO extends Partial<CreateCompanyInfoDTO> {}
@@ -37,6 +39,13 @@ export class CompanyInfoService {
     const logoDataBuffer = data.logoBase64 ? Buffer.from(data.logoBase64, 'base64') : undefined;
 
     if (existing) {
+      const latitude = Object.prototype.hasOwnProperty.call(data, 'latitude')
+        ? (data as any).latitude
+        : existing.latitude;
+      const longitude = Object.prototype.hasOwnProperty.call(data, 'longitude')
+        ? (data as any).longitude
+        : existing.longitude;
+
       // Update existing
       const updated = await (prisma as any).companyInfo.update({
         where: { id: existing.id },
@@ -57,6 +66,8 @@ export class CompanyInfoService {
           phone: data.phone || existing.phone,
           whatsapp: data.whatsapp || existing.whatsapp,
           logoUrl: data.logoUrl || existing.logoUrl,
+          latitude,
+          longitude,
           ...(logoDataBuffer
             ? {
                 logoData: logoDataBuffer,
@@ -90,6 +101,8 @@ export class CompanyInfoService {
           logoUrl: createData.logoUrl,
           logoData: logoDataBuffer,
           logoMimeType: createData.logoMimeType,
+          latitude: createData.latitude ?? null,
+          longitude: createData.longitude ?? null,
         },
       });
 

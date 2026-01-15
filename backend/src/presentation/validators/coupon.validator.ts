@@ -5,10 +5,11 @@ const uuid = Joi.string().uuid();
 // Criação de cupom
 export const createCouponSchema = Joi.object({
   body: Joi.object({
-    code: Joi.string().min(3).max(50).required().messages({
+    code: Joi.string().min(3).max(50).pattern(/^[A-Za-z0-9%_-]+$/).required().messages({
       'string.empty': 'Código é obrigatório',
       'string.min': 'Código deve ter no mínimo 3 caracteres',
       'string.max': 'Código deve ter no máximo 50 caracteres',
+      'string.pattern.base': 'Código deve conter apenas letras, números, %, _ ou -',
       'any.required': 'Código é obrigatório',
     }),
     description: Joi.string().max(500).optional().allow('').messages({
@@ -83,8 +84,9 @@ export const updateCouponSchema = Joi.object({
 // Validação de cupom
 export const validateCouponSchema = Joi.object({
   body: Joi.object({
-    code: Joi.string().required().messages({
+    code: Joi.string().pattern(/^[A-Za-z0-9%_-]+$/).required().messages({
       'string.empty': 'Código é obrigatório',
+      'string.pattern.base': 'Código inválido',
       'any.required': 'Código é obrigatório',
     }),
     subtotal: Joi.number().positive().required().messages({
@@ -92,9 +94,11 @@ export const validateCouponSchema = Joi.object({
       'number.positive': 'Subtotal deve ser positivo',
       'any.required': 'Subtotal é obrigatório',
     }),
-    customerId: uuid.required().messages({
+    customerId: Joi.alternatives().try(
+      uuid,
+      Joi.string().allow('')
+    ).optional().allow(null).messages({
       'string.guid': 'ID do cliente deve ser um UUID válido',
-      'any.required': 'ID do cliente é obrigatório',
     }),
   }),
 });

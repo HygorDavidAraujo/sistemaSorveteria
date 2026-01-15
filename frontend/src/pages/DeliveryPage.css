@@ -1,7 +1,7 @@
 /* Delivery Page - 100% CSS Puro seguindo padrão do sistema */
 
 .delivery-page {
-  padding: 1.5rem;
+  padding: 1rem;
   background-color: #f9fafb;
   min-height: 100vh;
 }
@@ -62,7 +62,7 @@
 /* Grid Layout */
 .delivery-page__grid {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-columns: 2fr 2fr 1fr;
   gap: 1.5rem;
 }
 
@@ -1121,4 +1121,40 @@
 .delivery-page__orders-list::-webkit-scrollbar-thumb:hover,
 .delivery-page__modal::-webkit-scrollbar-thumb:hover {
   background: #059669;
+}
+
+/* Coupon Styles */
+.delivery-page__cart-coupon-btn {
+  padding: 0.4rem 0.8rem;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  min-width: 70px;
+}
+
+.delivery-page__cart-coupon-btn:hover:not(:disabled) {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.delivery-page__cart-coupon-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.delivery-page__cart-coupon-btn--remove {
+  background: #ef4444;
+  min-width: 40px;
+}
+
+.delivery-page__cart-coupon-btn--remove:hover:not(:disabled) {
+  background: #dc2626;
 }

@@ -1641,3 +1641,39 @@
 .comandas-table td:last-child {
   text-align: center;
 }
+
+/* Coupon Styles */
+.comanda-cart-coupon-btn {
+  padding: 10px 16px;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  min-width: 70px;
+}
+
+.comanda-cart-coupon-btn:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.comanda-cart-coupon-btn:disabled {
+  background: var(--color-disabled);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.comanda-cart-coupon-btn--remove {
+  background: var(--color-danger);
+  min-width: 40px;
+}
+
+.comanda-cart-coupon-btn--remove:hover:not(:disabled) {
+  background: var(--color-danger-hover);
+}

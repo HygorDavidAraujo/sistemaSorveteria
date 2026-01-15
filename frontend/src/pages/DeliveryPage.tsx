@@ -3,11 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useDeliveryStore, useCashSessionStore, useProductsStore, useCustomersStore } from '@/store';
 import { apiClient } from '@/services/api';
 import { Truck, Plus, Minus, Trash2, UserPlus, Printer, MapPin, Clock } from 'lucide-react';
+import { CepSearchInput, CepSearchFieldsDisplay } from '@/components/CepSearchInput';
 import { printReceipt, formatCurrency, getPrintStyles } from '@/utils/printer';
 import { clearCartDraft, loadCartDraft, saveCartDraft } from '@/utils/cartDraft';
 import type { Product, Customer } from '@/types';
+import type { AddressData } from '@/hooks/useGeolocation';
 import './DeliveryPage.css';
 import '@/styles/assembledModal.css';
+import '@/styles/weightModal.css';
 
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
@@ -25,12 +28,15 @@ export const DeliveryPage: React.FC = () => {
   const [customerAddresses, setCustomerAddresses] = useState<any[]>([]);
   const [deliveryFee, setDeliveryFee] = useState<number>(0);
   const [additionalFee, setAdditionalFee] = useState<number>(0);
+  const [deliveryDistanceKm, setDeliveryDistanceKm] = useState<number | null>(null);
+  const [isDistanceLoading, setIsDistanceLoading] = useState<boolean>(false);
   
   // Produto e busca
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
   const [weightQuantity, setWeightQuantity] = useState('');
   const [selectedWeightProduct, setSelectedWeightProduct] = useState<Product | null>(null);
+  const [isReadingScale, setIsReadingScale] = useState(false);
 
   // Montado
   const [isAssembledModalOpen, setIsAssembledModalOpen] = useState(false);
@@ -43,6 +49,7 @@ export const DeliveryPage: React.FC = () => {
   
   // Modal de novo cliente
   const [isNewCustomerModalOpen, setIsNewCustomerModalOpen] = useState(false);
+  const [cepAddressData, setCepAddressData] = useState<AddressData | null>(null);
   const [customerForm, setCustomerForm] = useState({
     name: '',
     email: '',
@@ -68,6 +75,12 @@ export const DeliveryPage: React.FC = () => {
   const [estimatedTime, setEstimatedTime] = useState<number>(30);
   const [customerNotes, setCustomerNotes] = useState('');
   const [internalNotes, setInternalNotes] = useState('');
+  
+  // Cupom
+  const [couponCode, setCouponCode] = useState<string>('');
+  const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+  const [couponDiscount, setCouponDiscount] = useState<number>(0);
+  const [isCouponLoading, setIsCouponLoading] = useState(false);
 
   const toMoneyNumber = (value: unknown): number => {
     if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
@@ -93,6 +106,11 @@ export const DeliveryPage: React.FC = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [isOrderDetailsOpen, setIsOrderDetailsOpen] = useState(false);
+  
+  // Pagamentos do pedido ativo
+  const [orderPayments, setOrderPayments] = useState<Array<{ method: string; amount: number }>>([]);
+  const [currentOrderPaymentAmount, setCurrentOrderPaymentAmount] = useState('');
+  const [orderPaymentMethod, setOrderPaymentMethod] = useState<'cash' | 'credit_card' | 'debit_card' | 'pix'>('cash');
   
   const deliveryStore = useDeliveryStore();
   const { currentSession, loadSession } = useCashSessionStore();
@@ -162,6 +180,7 @@ export const DeliveryPage: React.FC = () => {
       setCustomerAddresses([]);
       setSelectedAddress('');
       setDeliveryFee(0);
+      setDeliveryDistanceKm(null);
     }
   }, [selectedCustomer]);
 
@@ -292,6 +311,8 @@ export const DeliveryPage: React.FC = () => {
         state: customer.state || '',
         zipCode: customer.zipCode || '',
         referencePoint: customer.referencePoint || '',
+        latitude: customer.latitude ?? null,
+        longitude: customer.longitude ?? null,
         isDefault: true,
       };
       
@@ -319,6 +340,7 @@ export const DeliveryPage: React.FC = () => {
   const calculateDeliveryFee = async () => {
     if (!selectedAddress) {
       setDeliveryFee(0);
+      setDeliveryDistanceKm(null);
       return;
     }
 
@@ -326,7 +348,99 @@ export const DeliveryPage: React.FC = () => {
       const address = customerAddresses.find(a => a.id === selectedAddress);
       if (!address) return;
 
-      // Don't calculate fee if neighborhood or city are missing
+      setIsDistanceLoading(true);
+
+      // Prefer distance-based calculation (store origin -> customer destination)
+      // 1) Load company coordinates
+      const companyRes = await apiClient.get('/settings/company-info');
+      const company = companyRes?.data;
+      let originLat = company?.latitude;
+      let originLon = company?.longitude;
+
+      // 2) Load default distance fee config (feeType=distance, neighborhood/city null)
+      const feesRes = await apiClient.get('/delivery/fees', { params: { feeType: 'distance', isActive: 'true' } });
+      const fees = feesRes?.data || [];
+      const defaultDistanceFee = fees.find((f: any) => !f.neighborhood && !f.city) || fees[0];
+
+      let destLat = (address as any).latitude;
+      let destLon = (address as any).longitude;
+
+      // If we don't have coordinates yet, try fetching them via CEP
+      if (
+        (typeof originLat !== 'number' || typeof originLon !== 'number') &&
+        company?.zipCode
+      ) {
+        const cepRes = await apiClient.post('/geolocation/search-cep', {
+          cep: String(company.zipCode).replace(/\D/g, ''),
+        });
+        originLat = cepRes?.data?.latitude ?? originLat;
+        originLon = cepRes?.data?.longitude ?? originLon;
+      }
+
+      if (
+        (typeof destLat !== 'number' || typeof destLon !== 'number') &&
+        (address as any).zipCode
+      ) {
+        const cepRes = await apiClient.post('/geolocation/search-cep', {
+          cep: String((address as any).zipCode).replace(/\D/g, ''),
+        });
+        destLat = cepRes?.data?.latitude ?? destLat;
+        destLon = cepRes?.data?.longitude ?? destLon;
+      }
+
+      if (
+        typeof originLat === 'number' &&
+        typeof originLon === 'number' &&
+        typeof destLat === 'number' &&
+        typeof destLon === 'number' &&
+        defaultDistanceFee?.feeType === 'distance'
+      ) {
+        const baseFee = Number(defaultDistanceFee.baseFee ?? defaultDistanceFee.fee ?? 0);
+        const feePerKm = Number(defaultDistanceFee.feePerKm ?? 0);
+        // maxDistance aqui é o "até X km cobra só a base" (ex.: 1)
+        const freeDistanceKm = Number(defaultDistanceFee.maxDistance ?? 1);
+
+        const distRes = await apiClient.post('/geolocation/calculate-distance', {
+          lat1: originLat,
+          lon1: originLon,
+          lat2: destLat,
+          lon2: destLon,
+        });
+
+        const distanceKm = Number(distRes?.data?.distanceKm ?? 0);
+        setDeliveryDistanceKm(Number.isFinite(distanceKm) ? distanceKm : null);
+
+        const feeRes = await apiClient.post('/geolocation/calculate-delivery-fee', {
+          distanceKm,
+          baseFee,
+          feePerKm,
+          freeDistanceKm,
+        });
+
+        setDeliveryFee(Number(feeRes?.data?.calculatedFee ?? 0));
+        return;
+      }
+
+      // Even if fee falls back to neighborhood, still try to compute distance (if coords exist)
+      if (
+        typeof originLat === 'number' &&
+        typeof originLon === 'number' &&
+        typeof destLat === 'number' &&
+        typeof destLon === 'number'
+      ) {
+        const distRes = await apiClient.post('/geolocation/calculate-distance', {
+          lat1: originLat,
+          lon1: originLon,
+          lat2: destLat,
+          lon2: destLon,
+        });
+        const distanceKm = Number(distRes?.data?.distanceKm ?? 0);
+        setDeliveryDistanceKm(Number.isFinite(distanceKm) ? distanceKm : null);
+      } else {
+        setDeliveryDistanceKm(null);
+      }
+
+      // Fallback: neighborhood-based fee
       if (!address.neighborhood || !address.city) {
         setDeliveryFee(0);
         return;
@@ -337,11 +451,15 @@ export const DeliveryPage: React.FC = () => {
         city: address.city,
         subtotal: subtotal,
       });
-      
+
       setDeliveryFee(response.data.fee || 0);
     } catch (err) {
       console.error('Erro ao calcular taxa:', err);
       setDeliveryFee(5.00); // Taxa padrão
+      setDeliveryDistanceKm(null);
+    }
+    finally {
+      setIsDistanceLoading(false);
     }
   };
 
@@ -457,6 +575,15 @@ export const DeliveryPage: React.FC = () => {
 
   const assembledMaxFlavors = assembledSize?.maxFlavors ? Number(assembledSize.maxFlavors) : 1;
   const assembledFlavorsTotalNumber = Math.max(1, Math.min(assembledMaxFlavors, parseInt(assembledFlavorsTotal || '1', 10) || 1));
+
+  // Reset pagamentos do pedido quando modal fecha
+  useEffect(() => {
+    if (!isOrderDetailsOpen) {
+      setOrderPayments([]);
+      setCurrentOrderPaymentAmount('');
+      setOrderPaymentMethod('cash');
+    }
+  }, [isOrderDetailsOpen]);
 
   useEffect(() => {
     if (!isAssembledModalOpen) return;
@@ -592,9 +719,14 @@ export const DeliveryPage: React.FC = () => {
 
   const handleConfirmWeight = () => {
     if (!selectedWeightProduct) return;
-    
-    const quantity = parseFloat(weightQuantity) || 0;
-    if (quantity <= 0) {
+
+    const raw = weightQuantity
+      .replace(/[^\d,]/g, '')
+      .replace(/,(?=.*,)/g, '')
+      .replace(',', '.');
+    const quantity = parseFloat(raw);
+
+    if (Number.isNaN(quantity) || quantity <= 0) {
       setError('Quantidade deve ser maior que 0');
       setTimeout(() => setError(null), 3000);
       return;
@@ -622,6 +754,24 @@ export const DeliveryPage: React.FC = () => {
     setIsWeightModalOpen(false);
     setSelectedWeightProduct(null);
     setWeightQuantity('');
+  };
+
+  const readWeightFromScale = async () => {
+    if (isReadingScale) return;
+    setIsReadingScale(true);
+    try {
+      const data = await apiClient.get('/scale/weight');
+      const weightKg = Number((data as any)?.weightKg);
+      if (!Number.isFinite(weightKg) || weightKg <= 0) {
+        throw new Error('Peso inválido retornado pela balança');
+      }
+      setWeightQuantity(weightKg.toFixed(3).replace('.', ','));
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Erro ao ler peso da balança');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setIsReadingScale(false);
+    }
   };
 
   const handleUpdateQuantity = (itemId: string, quantity: number) => {
@@ -671,6 +821,75 @@ export const DeliveryPage: React.FC = () => {
     }
   };
 
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) {
+      setError('Digite um código de cupom');
+      setTimeout(() => setError(null), 2000);
+      return;
+    }
+
+    if (!selectedCustomer) {
+      setError('Selecione um cliente para aplicar o cupom');
+      setTimeout(() => setError(null), 2000);
+      return;
+    }
+
+    setIsCouponLoading(true);
+    try {
+      const response = await apiClient.validateCoupon(couponCode.trim(), subtotal, selectedCustomer);
+      const validatedCoupon = response.data || response;
+      
+      setAppliedCoupon(validatedCoupon);
+      setCouponDiscount(validatedCoupon.discountAmount || 0);
+      setSuccess(`Cupom ${couponCode} aplicado com sucesso!`);
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      let errorMsg = 'Erro ao validar cupom';
+      if (err?.response?.status === 404) {
+        errorMsg = 'Cupom não encontrado';
+      } else if (err?.response?.data?.message) {
+        errorMsg = err.response.data.message;
+      } else if (err?.message) {
+        errorMsg = err.message;
+      }
+      setError(errorMsg);
+      setTimeout(() => setError(null), 3000);
+      setCouponCode('');
+      setAppliedCoupon(null);
+      setCouponDiscount(0);
+    } finally {
+      setIsCouponLoading(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setCouponCode('');
+    setAppliedCoupon(null);
+    setCouponDiscount(0);
+    setSuccess('Cupom removido');
+    setTimeout(() => setSuccess(null), 2000);
+  };
+
+  const handleCepAddressFound = (address: AddressData) => {
+    setCepAddressData(address);
+    setCustomerForm(prev => ({
+      ...prev,
+      zipCode: address.cep,
+      street: address.logradouro,
+      neighborhood: address.bairro,
+      city: address.cidade,
+      state: address.estado,
+    }));
+  };
+
+  const handleCepClear = () => {
+    setCepAddressData(null);
+    setCustomerForm(prev => ({
+      ...prev,
+      zipCode: '',
+    }));
+  };
+
   const handleAddPayment = () => {
     const amount = round2(parseFloat(currentPaymentAmount));
     if (isNaN(amount) || amount <= 0) {
@@ -685,6 +904,22 @@ export const DeliveryPage: React.FC = () => {
 
   const handleRemovePayment = (index: number) => {
     setPayments(payments.filter((_, i) => i !== index));
+  };
+
+  const handleAddOrderPayment = () => {
+    const amount = round2(parseFloat(currentOrderPaymentAmount));
+    if (isNaN(amount) || amount <= 0) {
+      setError('Digite um valor válido');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    setOrderPayments([...orderPayments, { method: orderPaymentMethod, amount }]);
+    setCurrentOrderPaymentAmount('');
+  };
+
+  const handleRemoveOrderPayment = (index: number) => {
+    setOrderPayments(orderPayments.filter((_, i) => i !== index));
   };
 
   const handleCheckout = async () => {
@@ -718,15 +953,10 @@ export const DeliveryPage: React.FC = () => {
       return;
     }
 
-    if (payments.length === 0) {
-      setError('Adicione ao menos uma forma de pagamento');
-      setTimeout(() => setError(null), 3000);
-      return;
-    }
-
     const totalPaid = round2(payments.reduce((sum, p) => sum + p.amount, 0));
     console.log('💰 totalPaid:', totalPaid);
-    if (Math.abs(totalPaid - total) > 0.009) {
+    // Se houver pagamentos lançados, valide o total; caso contrário, permita seguir sem pagamento
+    if (payments.length > 0 && Math.abs(totalPaid - total) > 0.009) {
       setError(`Valor pago (R$ ${totalPaid.toFixed(2)}) diferente do total (R$ ${total.toFixed(2)})`);
       setTimeout(() => setError(null), 3000);
       return;
@@ -740,22 +970,26 @@ export const DeliveryPage: React.FC = () => {
         return;
       }
 
+      const orderPayments = payments.length > 0
+        ? payments.map(p => ({ paymentMethod: p.method as any, amount: p.amount }))
+        : undefined;
+
       const orderData = {
-        customerId: selectedCustomer,
-        cashSessionId: currentSession.id,
-        items: deliveryStore.items.map(item => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          ...(item.sizeId ? { sizeId: item.sizeId, flavorsTotal: item.flavorsTotal ?? 1 } : {}),
-        })),
-        payments: payments.map(p => ({ paymentMethod: p.method as any, amount: p.amount })),
-        deliveryFee,
-        additionalFee,
-        discount: discountValueNum,
-        estimatedTime,
-        customerNotes: customerNotes || undefined,
-        internalNotes: internalNotes || undefined,
-      };
+          customerId: selectedCustomer,
+          cashSessionId: currentSession.id,
+          items: deliveryStore.items.map(item => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            ...(item.sizeId ? { sizeId: item.sizeId, flavorsTotal: item.flavorsTotal ?? 1 } : {}),
+          })),
+          ...(orderPayments ? { payments: orderPayments } : {}),
+          deliveryFee,
+          additionalFee,
+          discount: discountValueNum + couponDiscount,
+          estimatedTime,
+          customerNotes: customerNotes || undefined,
+          internalNotes: internalNotes || undefined,
+        };
 
       console.log('🚚 Enviando pedido payload:', orderData);
       const resp = await apiClient.post('/delivery/orders', orderData);
@@ -902,6 +1136,18 @@ ${addressText}
         </div>
       ` : ''}
 
+      ${order.payments && order.payments.length > 0 ? `
+        <div class="print-section">
+          <div class="print-section-title">💳 Formas de Pagamento</div>
+          ${order.payments.map((p: any) => `
+            <div class="print-row" style="font-size: 10px;">
+              <span class="print-row-label">${p.paymentMethod === 'cash' ? 'Dinheiro' : p.paymentMethod === 'credit_card' ? 'Cartão de Crédito' : p.paymentMethod === 'debit_card' ? 'Cartão de Débito' : p.paymentMethod === 'pix' ? 'PIX' : 'Outro'}:</span>
+              <span class="print-row-value">R$ ${parseFloat(p.amount || 0).toFixed(2)}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+
       <div class="print-section" style="margin-top: 8mm;">
         <div class="print-row" style="font-size: 10px;">
           <span>⏱️ Tempo estimado: ${order.estimatedTime || 30} minutos</span>
@@ -945,7 +1191,7 @@ ${addressText}
   const rawSubtotal = deliveryStore.items.reduce((sum, item) => sum + item.totalPrice, 0);
   const subtotal = round2(rawSubtotal);
   const discountValueNum = toMoneyNumber(discountValue);
-  const total = round2(subtotal + deliveryFee + additionalFee - discountValueNum);
+  const total = round2(subtotal + deliveryFee + additionalFee - discountValueNum - couponDiscount);
   const totalPaid = round2(payments.reduce((sum, p) => sum + p.amount, 0));
   const missingAmount = round2(Math.max(0, total - totalPaid));
   const changeAmount = round2(Math.max(0, totalPaid - total));
@@ -1035,60 +1281,56 @@ ${addressText}
             </div>
           </div>
           
-          {deliveryStore.items.length === 0 ? (
-            <p className="delivery-page__cart-empty">Carrinho vazio</p>
-          ) : (
-            <>
-              <div className="delivery-page__cart-items">
-                {groupedCartItems.map((entry) => {
-                  if (entry.kind === 'group') {
-                    const title = `Montado${entry.sizeLabel ? ` - ${entry.sizeLabel}` : ''} (${entry.flavorsTotal} sabor(es))`;
-                    return (
-                      <div key={`group-${entry.groupId}`} className="delivery-page__cart-item">
-                        <div className="delivery-page__cart-item-info" style={{ alignItems: 'flex-start' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
-                            <span className="delivery-page__cart-item-name">{title}</span>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              {entry.items.map((it) => (
-                                <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13 }}>
-                                  <span>
-                                    {it.productName}
-                                    {it.quantity > 1 ? ` x${it.quantity}` : ''}
-                                  </span>
-                                  <span style={{ color: 'rgba(0,0,0,0.65)' }}>
-                                    R$ {(Number(it.unitPrice || 0) * Number(it.quantity || 0)).toFixed(2)}
-                                  </span>
-                                </div>
-                              ))}
+          <div className="delivery-page__cart-items">
+            {groupedCartItems.map((entry) => {
+              if (entry.kind === 'group') {
+                const title = `Montado${entry.sizeLabel ? ` - ${entry.sizeLabel}` : ''} (${entry.flavorsTotal} sabor(es))`;
+                return (
+                  <div key={`group-${entry.groupId}`} className="delivery-page__cart-item">
+                    <div className="delivery-page__cart-item-info" style={{ alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+                        <span className="delivery-page__cart-item-name">{title}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {entry.items.map((it) => (
+                            <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13 }}>
+                              <span>
+                                {it.productName}
+                                {it.quantity > 1 ? ` x${it.quantity}` : ''}
+                              </span>
+                              <span style={{ color: 'rgba(0,0,0,0.65)' }}>
+                                R$ {(Number(it.unitPrice || 0) * Number(it.quantity || 0)).toFixed(2)}
+                              </span>
                             </div>
-                          </div>
+                          ))}
                         </div>
-
-                        <div className="delivery-page__cart-item-actions">
-                          <button
-                            onClick={() => entry.items.forEach((it) => handleRemoveItem(it.id))}
-                            className="delivery-page__cart-item-btn delivery-page__cart-item-btn--remove"
-                            title="Remover item montado"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-
-                        <div className="delivery-page__cart-item-total">R$ {entry.totalPrice.toFixed(2)}</div>
                       </div>
-                    );
-                  }
+                    </div>
 
-                  const item = entry.item;
-                  return (
-                    <div key={item.id} className="delivery-page__cart-item">
-                      <div className="delivery-page__cart-item-info">
-                        <span className="delivery-page__cart-item-name">{item.productName}</span>
-                        <span className="delivery-page__cart-item-price">
-                          R$ {item.unitPrice.toFixed(2)}{item.saleType === 'weight' ? '/kg' : ''}
-                        </span>
-                      </div>
-                      <div className="delivery-page__cart-item-actions">
+                    <div className="delivery-page__cart-item-actions">
+                      <button
+                        onClick={() => entry.items.forEach((it) => handleRemoveItem(it.id))}
+                        className="delivery-page__cart-item-btn delivery-page__cart-item-btn--remove"
+                        title="Remover item montado"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+
+                    <div className="delivery-page__cart-item-total">R$ {entry.totalPrice.toFixed(2)}</div>
+                  </div>
+                );
+              }
+
+              const item = entry.item;
+              return (
+                <div key={item.id} className="delivery-page__cart-item">
+                  <div className="delivery-page__cart-item-info">
+                    <span className="delivery-page__cart-item-name">{item.productName}</span>
+                    <span className="delivery-page__cart-item-price">
+                      R$ {item.unitPrice.toFixed(2)}{item.saleType === 'weight' ? '/kg' : ''}
+                    </span>
+                  </div>
+                  <div className="delivery-page__cart-item-actions">
                         <button
                           onClick={() => handleUpdateQuantity(item.id, item.quantity - (item.saleType === 'weight' ? 0.1 : 1))}
                           className="delivery-page__cart-item-btn"
@@ -1255,12 +1497,54 @@ ${addressText}
                   />
                 </div>
                 <div className="delivery-page__cart-total-row">
+                  <span>Cupom de Desconto:</span>
+                  <div style={{display: 'flex', gap: '8px', flex: 1}}>
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      className="delivery-page__cart-inline-input"
+                      placeholder="Digite o código"
+                      disabled={!!appliedCoupon || isCouponLoading}
+                      style={{flex: 1}}
+                    />
+                    {appliedCoupon ? (
+                      <button
+                        onClick={handleRemoveCoupon}
+                        className="delivery-page__cart-coupon-btn delivery-page__cart-coupon-btn--remove"
+                        title="Remover cupom"
+                      >
+                        ✕
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleApplyCoupon}
+                        className="delivery-page__cart-coupon-btn"
+                        disabled={!couponCode.trim() || isCouponLoading}
+                        title="Aplicar cupom"
+                      >
+                        {isCouponLoading ? '...' : 'Aplicar'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="delivery-page__cart-total-row">
                   <span>Subtotal:</span>
                   <span>R$ {subtotal.toFixed(2)}</span>
                 </div>
                 <div className="delivery-page__cart-total-row">
                   <span>Taxa de Entrega:</span>
                   <span>R$ {deliveryFee.toFixed(2)}</span>
+                </div>
+                <div className="delivery-page__cart-total-row">
+                  <span>Distância:</span>
+                  <span>
+                    {isDistanceLoading
+                      ? 'Calculando...'
+                      : deliveryDistanceKm === null
+                        ? '-'
+                        : `${deliveryDistanceKm.toFixed(2)} km`}
+                  </span>
                 </div>
                 {additionalFee > 0 && (
                   <div className="delivery-page__cart-total-row">
@@ -1272,6 +1556,12 @@ ${addressText}
                   <div className="delivery-page__cart-total-row">
                     <span>Desconto:</span>
                     <span>-R$ {discountValueNum.toFixed(2)}</span>
+                  </div>
+                )}
+                {couponDiscount > 0 && (
+                  <div className="delivery-page__cart-total-row">
+                    <span>Desconto Cupom ({appliedCoupon?.code}):</span>
+                    <span>-R$ {couponDiscount.toFixed(2)}</span>
                   </div>
                 )}
                 <div className="delivery-page__cart-total-row delivery-page__cart-total-final">
@@ -1287,8 +1577,6 @@ ${addressText}
               >
                 Finalizar Pedido
               </button>
-            </>
-          )}
         </div>
 
         {/* Pedidos */}
@@ -1440,31 +1728,63 @@ ${addressText}
         </div>
       )}
 
-      {isWeightModalOpen && (
-        <div className="delivery-page__modal-overlay">
-          <div className="delivery-page__modal">
-            <h3>Digite a quantidade em Kg</h3>
-            <p>{selectedWeightProduct?.name}</p>
-            <input
-              type="number"
-              step="0.001"
-              value={weightQuantity}
-              onChange={(e) => setWeightQuantity(e.target.value)}
-              placeholder="0.000"
-              className="delivery-page__input"
-              autoFocus
-            />
-            <div className="delivery-page__modal-actions">
-              <button onClick={() => setIsWeightModalOpen(false)} className="delivery-page__btn-cancel">
-                Cancelar
-              </button>
-              <button onClick={handleConfirmWeight} className="delivery-page__btn-confirm">
-                Confirmar
-              </button>
+      <div className={`sales-page__modal ${isWeightModalOpen ? 'sales-page__modal--open' : ''}`}>
+        <div className="sales-page__modal-overlay" onClick={() => setIsWeightModalOpen(false)} />
+        <div className="sales-page__modal-content sales-page__modal-content--small">
+          <div className="sales-page__modal-header">
+            <h2 className="sales-page__modal-title">Capturar Peso - {selectedWeightProduct?.name}</h2>
+            <button onClick={() => setIsWeightModalOpen(false)} className="sales-page__modal-close">
+              ✕
+            </button>
+          </div>
+
+          <div className="sales-page__modal-body">
+            <div className="sales-page__weight-section">
+              <label className="sales-page__weight-label">Peso (kg)</label>
+              <input
+                type="text"
+                placeholder="0,000"
+                value={weightQuantity}
+                onChange={(e) => setWeightQuantity(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleConfirmWeight();
+                  }
+                }}
+                className="sales-page__weight-input"
+                autoFocus
+              />
+              <p className="sales-page__weight-hint">Digite o peso ou clique em "Ler da Balança"</p>
+
+              <div className="sales-page__weight-actions">
+                <button
+                  type="button"
+                  onClick={readWeightFromScale}
+                  disabled={isReadingScale}
+                  className="sales-page__weight-button sales-page__weight-button--scale"
+                >
+                  {isReadingScale ? 'Lendo...' : '📊 Ler da Balança'}
+                </button>
+              </div>
             </div>
           </div>
+
+          <div className="sales-page__modal-footer">
+            <button
+              onClick={() => setIsWeightModalOpen(false)}
+              className="sales-page__modal-button sales-page__modal-button--cancel"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleConfirmWeight}
+              className="sales-page__modal-button sales-page__modal-button--confirm"
+            >
+              Confirmar
+            </button>
+          </div>
         </div>
-      )}
+      </div>
 
       {/* Modal de Novo Cliente */}
       {isNewCustomerModalOpen && (
@@ -1506,13 +1826,21 @@ ${addressText}
               </div>
               <h4>Endereço</h4>
               <div className="delivery-page__form-grid">
-                <input
-                  type="text"
-                  placeholder="CEP"
-                  value={customerForm.zipCode}
-                  onChange={(e) => setCustomerForm({ ...customerForm, zipCode: e.target.value })}
-                  className="delivery-page__input"
-                />
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <CepSearchInput
+                    onAddressFound={handleCepAddressFound}
+                    onClear={handleCepClear}
+                    onCepChange={(cep) => setCustomerForm((prev) => ({ ...prev, zipCode: cep }))}
+                    initialCep={customerForm.zipCode}
+                    label="CEP"
+                    showCoordinates={false}
+                  />
+                </div>
+                {cepAddressData && (
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <CepSearchFieldsDisplay address={cepAddressData} showCoordinates={false} />
+                  </div>
+                )}
                 <input
                   type="text"
                   placeholder="Rua *"
@@ -1586,61 +1914,12 @@ ${addressText}
         </div>
       )}
 
-      {/* Modal de Checkout */}
+      {/* Modal de Detalhes do Pedido (Checkout) */}
       {isCheckoutModalOpen && (
         <div className="delivery-page__modal-overlay">
           <div className="delivery-page__modal delivery-page__modal--large">
-            <h3>Finalizar Pedido</h3>
+            <h3>Detalhes do Pedido</h3>
             
-            <div className="delivery-page__checkout-section">
-              <h4>Pagamento</h4>
-              <div className="delivery-page__payment-form">
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as any)}
-                  className="delivery-page__select"
-                  title="Forma de pagamento"
-                >
-                  <option value="cash">Dinheiro</option>
-                  <option value="credit_card">Cartão de Crédito</option>
-                  <option value="debit_card">Cartão de Débito</option>
-                  <option value="pix">PIX</option>
-                </select>
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="Valor"
-                  value={currentPaymentAmount}
-                  onChange={(e) => setCurrentPaymentAmount(e.target.value)}
-                  className="delivery-page__input"
-                />
-                <button onClick={handleAddPayment} className="delivery-page__btn-add">
-                  Adicionar
-                </button>
-              </div>
-
-              {payments.length > 0 && (
-                <div className="delivery-page__payment-list">
-                  {payments.map((p, i) => (
-                    <div key={i} className="delivery-page__payment-item">
-                      <span>{p.method === 'cash' ? 'Dinheiro' : p.method === 'credit_card' ? 'Crédito' : p.method === 'debit_card' ? 'Débito' : 'PIX'}</span>
-                      <span>R$ {p.amount.toFixed(2)}</span>
-                      <button onClick={() => handleRemovePayment(i)} className="delivery-page__btn-remove" title="Remover pagamento">
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="delivery-page__payment-status">
-                <div>Total: R$ {total.toFixed(2)}</div>
-                <div>Pago: R$ {totalPaid.toFixed(2)}</div>
-                {missingAmount > 0 && <div className="delivery-page__payment-missing">Falta: R$ {missingAmount.toFixed(2)}</div>}
-                {changeAmount > 0 && <div className="delivery-page__payment-change">Troco: R$ {changeAmount.toFixed(2)}</div>}
-              </div>
-            </div>
-
             <div className="delivery-page__checkout-section">
               <h4>Detalhes da Entrega</h4>
               <label>
@@ -1681,7 +1960,6 @@ ${addressText}
               <button
                 onClick={handleCheckout}
                 className="delivery-page__btn-confirm"
-                disabled={missingAmount > 0}
               >
                 Confirmar Pedido
               </button>
@@ -1697,6 +1975,59 @@ ${addressText}
             <h3>Pedido #{selectedOrder.orderNumber}</h3>
             
             <div className="delivery-page__order-details">
+              <div className="delivery-page__order-detail-section">
+                <h4>Pagamento</h4>
+                <div className="delivery-page__payment-form">
+                  <select
+                    value={orderPaymentMethod}
+                    onChange={(e) => setOrderPaymentMethod(e.target.value as any)}
+                    className="delivery-page__select"
+                    title="Forma de pagamento"
+                  >
+                    <option value="cash">Dinheiro</option>
+                    <option value="credit_card">Cartão de Crédito</option>
+                    <option value="debit_card">Cartão de Débito</option>
+                    <option value="pix">PIX</option>
+                  </select>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="Valor"
+                    value={currentOrderPaymentAmount}
+                    onChange={(e) => setCurrentOrderPaymentAmount(e.target.value)}
+                    className="delivery-page__input"
+                  />
+                  <button onClick={handleAddOrderPayment} className="delivery-page__btn-add">
+                    Adicionar
+                  </button>
+                </div>
+
+                {orderPayments.length > 0 && (
+                  <div className="delivery-page__payment-list">
+                    {orderPayments.map((p, i) => (
+                      <div key={i} className="delivery-page__payment-item">
+                        <span>{p.method === 'cash' ? 'Dinheiro' : p.method === 'credit_card' ? 'Crédito' : p.method === 'debit_card' ? 'Débito' : 'PIX'}</span>
+                        <span>R$ {p.amount.toFixed(2)}</span>
+                        <button onClick={() => handleRemoveOrderPayment(i)} className="delivery-page__btn-remove" title="Remover pagamento">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="delivery-page__payment-status">
+                  <div>Total: R$ {parseFloat(selectedOrder.total).toFixed(2)}</div>
+                  <div>Pago: R$ {round2(orderPayments.reduce((sum, p) => sum + p.amount, 0)).toFixed(2)}</div>
+                  {round2(Math.max(0, parseFloat(selectedOrder.total) - orderPayments.reduce((sum, p) => sum + p.amount, 0))) > 0 && (
+                    <div className="delivery-page__payment-missing">Falta: R$ {round2(Math.max(0, parseFloat(selectedOrder.total) - orderPayments.reduce((sum, p) => sum + p.amount, 0))).toFixed(2)}</div>
+                  )}
+                  {round2(Math.max(0, orderPayments.reduce((sum, p) => sum + p.amount, 0) - parseFloat(selectedOrder.total))) > 0 && (
+                    <div className="delivery-page__payment-change">Troco: R$ {round2(Math.max(0, orderPayments.reduce((sum, p) => sum + p.amount, 0) - parseFloat(selectedOrder.total))).toFixed(2)}</div>
+                  )}
+                </div>
+              </div>
+
               <div className="delivery-page__order-detail-section">
                 <h4>Status Atual</h4>
                 <div className="delivery-page__status-buttons">

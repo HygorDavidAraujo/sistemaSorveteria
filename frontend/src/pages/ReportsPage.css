@@ -119,6 +119,55 @@
   background: rgba(129, 93, 209, 0.05);
 }
 
+.reports-sales-module,
+.reports-sales-payments {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.reports-bar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.reports-bar-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 140px;
+  gap: 12px;
+  align-items: center;
+}
+
+.reports-bar-label {
+  font-weight: 600;
+  color: var(--color-dark);
+}
+
+.reports-bar-track {
+  height: 10px;
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.reports-bar-fill {
+  height: 100%;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  border-radius: 999px;
+}
+
+.reports-bar-fill-alt {
+  background: linear-gradient(135deg, var(--color-success) 0%, var(--color-primary) 100%);
+}
+
+.reports-bar-value {
+  text-align: right;
+  font-weight: 600;
+  font-size: 14px;
+}
+
 .reports-detail-item {
   display: flex;
   align-items: center;

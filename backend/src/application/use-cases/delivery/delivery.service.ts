@@ -45,20 +45,30 @@ export interface DeliveryOrderFilters {
 }
 
 export interface CreateDeliveryFeeDTO {
-  neighborhood: string;
-  city: string;
+  feeType?: 'neighborhood' | 'distance';
+  neighborhood?: string | null;
+  city?: string | null;
   fee: number;
   minOrderValue?: number;
-  freeDeliveryAbove?: number;
+  freeDeliveryAbove?: number | null;
+  // Distance-based
+  maxDistance?: number | null;
+  feePerKm?: number | null;
+  baseFee?: number | null;
   isActive?: boolean;
 }
 
 export interface UpdateDeliveryFeeDTO {
-  neighborhood?: string;
-  city?: string;
+  feeType?: 'neighborhood' | 'distance';
+  neighborhood?: string | null;
+  city?: string | null;
   fee?: number;
   minOrderValue?: number;
-  freeDeliveryAbove?: number;
+  freeDeliveryAbove?: number | null;
+  // Distance-based
+  maxDistance?: number | null;
+  feePerKm?: number | null;
+  baseFee?: number | null;
   isActive?: boolean;
 }
 
@@ -76,6 +86,7 @@ export class DeliveryService {
   private includeOrderRelations() {
     return {
       items: true,
+      payments: true,
       customer: {
         select: {
           id: true,
@@ -318,6 +329,17 @@ export class DeliveryService {
             unitPrice: it.unitPrice,
             costPrice: it.costPrice,
             subtotal: it.subtotal,
+          })),
+        });
+      }
+
+      // Persistir pagamentos (para exibição no comprovante)
+      if (data.payments && data.payments.length > 0) {
+        await tx.deliveryOrderPayment.createMany({
+          data: data.payments.map((p) => ({
+            deliveryOrderId: order.id,
+            paymentMethod: p.paymentMethod,
+            amount: p.amount,
           })),
         });
       }
@@ -597,10 +619,13 @@ export class DeliveryService {
 
   // Delivery Fees Management
 
-  async listFees(isActive?: boolean) {
+  async listFees(isActive?: boolean, feeType?: 'neighborhood' | 'distance') {
     const where: any = {};
     if (isActive !== undefined) {
       where.isActive = isActive;
+    }
+    if (feeType) {
+      where.feeType = feeType;
     }
 
     const fees = await this.prismaClient.deliveryFee.findMany({
@@ -624,29 +649,44 @@ export class DeliveryService {
   }
 
   async createFee(data: CreateDeliveryFeeDTO) {
-    // Verificar se já existe taxa para o mesmo bairro/cidade
-    const existing = await this.prismaClient.deliveryFee.findFirst({
-      where: {
-        neighborhood: data.neighborhood,
-        city: data.city,
-        isActive: true,
-      },
-    });
+    const feeType = data.feeType ?? 'neighborhood';
+
+    if (feeType === 'neighborhood') {
+      if (!data.neighborhood || !data.city) {
+        throw new AppError('Bairro e cidade são obrigatórios para taxa por bairro', 400);
+      }
+    }
+
+    // Verificar se já existe taxa ativa para a mesma combinação
+    const existingWhere: any = { isActive: true, feeType };
+    if (feeType === 'distance' && !data.neighborhood && !data.city) {
+      existingWhere.neighborhood = null;
+      existingWhere.city = null;
+    } else {
+      existingWhere.neighborhood = data.neighborhood ?? null;
+      existingWhere.city = data.city ?? null;
+    }
+
+    const existing = await this.prismaClient.deliveryFee.findFirst({ where: existingWhere });
 
     if (existing) {
-      throw new AppError(
-        `Já existe uma taxa ativa para ${data.neighborhood}, ${data.city}`,
-        400
-      );
+      const location = existingWhere.neighborhood || existingWhere.city
+        ? `${existingWhere.neighborhood ?? ''}, ${existingWhere.city ?? ''}`.replace(/^,\s*|,\s*$/g, '')
+        : 'taxa padrão';
+      throw new AppError(`Já existe uma taxa ativa para ${location}`, 400);
     }
 
     const fee = await this.prismaClient.deliveryFee.create({
       data: {
-        neighborhood: data.neighborhood,
-        city: data.city,
+        feeType,
+        neighborhood: data.neighborhood ?? null,
+        city: data.city ?? null,
         fee: data.fee,
         minOrderValue: data.minOrderValue ?? 0,
-        freeDeliveryAbove: data.freeDeliveryAbove,
+        freeDeliveryAbove: data.freeDeliveryAbove ?? null,
+        maxDistance: data.maxDistance ?? null,
+        feePerKm: data.feePerKm ?? null,
+        baseFee: data.baseFee ?? null,
         isActive: data.isActive ?? true,
       },
     });
@@ -666,11 +706,15 @@ export class DeliveryService {
     const updated = await this.prismaClient.deliveryFee.update({
       where: { id },
       data: {
+        feeType: data.feeType,
         neighborhood: data.neighborhood,
         city: data.city,
         fee: data.fee,
         minOrderValue: data.minOrderValue,
         freeDeliveryAbove: data.freeDeliveryAbove,
+        maxDistance: data.maxDistance,
+        feePerKm: data.feePerKm,
+        baseFee: data.baseFee,
         isActive: data.isActive,
       },
     });

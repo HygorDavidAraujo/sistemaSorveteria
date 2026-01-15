@@ -22,11 +22,23 @@ import financialRoutes from '@presentation/http/routes/financial.routes';
 import settingsRoutes from '@presentation/http/routes/settings.routes';
 import scaleRoutes from '@presentation/http/routes/scale.routes';
 import reportsRoutes from '@presentation/http/routes/reports.routes';
+import geolocationRoutes from '@presentation/http/routes/geolocation.routes';
 
 export function createApp(): Application {
   const app = express();
 
   const isProduction = process.env.NODE_ENV === 'production';
+
+  // When running behind a reverse proxy (e.g., nginx), Express must trust proxy headers
+  // so that middlewares like express-rate-limit can correctly identify the client IP.
+  const trustProxyEnabled = (process.env.TRUST_PROXY ?? (isProduction ? 'true' : 'false'))
+    .toLowerCase()
+    .trim() === 'true';
+
+  if (trustProxyEnabled) {
+    // Trust the first proxy hop (nginx in our docker network)
+    app.set('trust proxy', 1);
+  }
 
   // Security middleware
   app.use(helmet());
@@ -99,6 +111,7 @@ export function createApp(): Application {
   app.use(`${apiPrefix}/reports`, reportsRoutes);
   app.use(`${apiPrefix}/settings`, settingsRoutes);
   app.use(`${apiPrefix}/scale`, scaleRoutes);
+  app.use(`${apiPrefix}/geolocation`, geolocationRoutes);
 
   // 404 handler
   app.use((req: Request, res: Response) => {

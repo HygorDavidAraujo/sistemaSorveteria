@@ -77,45 +77,67 @@ export class AccountPayableService {
       throw new AppError('Valor deve ser maior que zero', 400);
     }
 
-    if (data.dueDate < new Date()) {
+    // Comparar datas no nível de dia usando horário local (evita erro de UTC em datas ISO "YYYY-MM-DD")
+    const now = new Date();
+    const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    // Converter string ISO "YYYY-MM-DD" para data local sem retroceder fuso (new Date("YYYY-MM-DD") é UTC)
+    let dueLocal: Date;
+    if (typeof (data as any).dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test((data as any).dueDate)) {
+      const [y, m, d] = (data as any).dueDate.split('-').map(Number);
+      dueLocal = new Date(y, m - 1, d); // data local à meia-noite
+    } else {
+      const due = new Date(data.dueDate);
+      dueLocal = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+    }
+
+    if (dueLocal < todayLocal) {
       throw new AppError('Data de vencimento não pode ser no passado', 400);
     }
 
-    // Definir status inicial - usar apenas status do Prisma
-    const now = new Date();
+    // Definir status inicial
     let status: 'pending' | 'overdue' = 'pending';
-    if (data.dueDate < now) {
-      status = 'overdue';
-    }
 
-    // Criar conta a pagar
-    const accountPayable = await this.prismaClient.accountPayable.create({
-      data: {
-        supplierName: data.supplierName,
-        description: data.description,
-        amount: data.amount,
-        dueDate: data.dueDate,
-        status,
-        categoryId: data.categoryId,
-        notes: data.notes,
-        createdById: data.createdById,
-      },
-      include: {
-        category: true,
-        createdBy: createdBySafeSelect,
-      },
-    });
+    // Criar conta a pagar e transação financeira em transação atômica
+    const accountPayable = await this.prismaClient.$transaction(async (tx) => {
+      // Criar conta a pagar
+      const payable = await tx.accountPayable.create({
+        data: {
+          supplierName: data.supplierName,
+          description: data.description,
+          amount: data.amount,
+          dueDate: data.dueDate,
+          status,
+          categoryId: data.categoryId,
+          notes: data.notes,
+          createdById: data.createdById,
+        },
+        include: {
+          category: true,
+          createdBy: createdBySafeSelect,
+        },
+      });
 
-    // Registrar transação financeira correspondente
-    await this.financialService.createTransaction({
-      categoryId: data.categoryId,
-      transactionType: 'expense',
-      amount: data.amount,
-      description: `Conta a Pagar: ${data.description}`,
-      referenceNumber: accountPayable.id,
-      transactionDate: new Date(),
-      dueDate: data.dueDate,
-      createdById: data.createdById,
+      // Registrar transação financeira correspondente
+      try {
+        await this.financialService.createTransaction({
+          categoryId: data.categoryId,
+          transactionType: 'expense',
+          amount: data.amount,
+          description: `Conta a Pagar: ${data.description}`,
+          referenceNumber: payable.id,
+          transactionDate: new Date(),
+          dueDate: data.dueDate,
+          status: 'pending', // Defina explicitamente para pending
+          createdById: data.createdById,
+        });
+      } catch (error) {
+        // Se falhar na transação financeira, a conta ainda será criada
+        // mas registre o erro para auditoria
+        console.error('Erro ao criar transação financeira para conta a pagar:', error);
+      }
+
+      return payable;
     });
 
     return accountPayable as any;

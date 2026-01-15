@@ -29,7 +29,19 @@ import {
 const router = Router();
 
 /**
- * Todas as rotas requerem autenticação
+ * POST /api/v1/coupons/validate
+ * Validar cupom (PÚBLICA - sem autenticação requerida)
+ */
+router.post('/validate', validate(validateCouponSchema), validateCoupon);
+
+/**
+ * POST /api/v1/coupons/apply
+ * Aplicar cupom (PÚBLICA - sem autenticação requerida)
+ */
+router.post('/apply', validate(applyCouponSchema), applyCoupon);
+
+/**
+ * Todas as demais rotas requerem autenticação
  */
 router.use(authenticate);
 
@@ -66,24 +78,6 @@ router.get(
   validate(getCouponUsageReportSchema),
   getCouponUsageReport
 );
-
-/**
- * POST /api/v1/coupons/validate
- * Validar cupom (todos autenticados)
- */
-router.post('/validate', validate(validateCouponSchema), validateCoupon);
-
-/**
- * POST /api/v1/coupons/apply
- * Aplicar cupom (registrar uso) - todos autenticados
- */
-router.post('/apply', validate(applyCouponSchema), applyCoupon);
-
-/**
- * POST /api/v1/coupons/expire-old
- * Expirar cupons vencidos - job automático (apenas admin)
- */
-router.post('/expire-old', authorize(['admin']), expireOldCoupons);
 
 /**
  * GET /api/v1/coupons/:id

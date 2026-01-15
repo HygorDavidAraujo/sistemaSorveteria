@@ -1,12 +1,15 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '@shared/utils/async-handler';
 import { ProductReportsService, ProductRankingMetric, ProductReportGranularity } from '@application/use-cases/reports/product-reports.service';
+import { GeneralReportsService } from '@application/use-cases/reports/general-reports.service';
 
 export class ReportsController {
   private productReportsService: ProductReportsService;
+  private generalReportsService: GeneralReportsService;
 
   constructor() {
     this.productReportsService = new ProductReportsService();
+    this.generalReportsService = new GeneralReportsService();
   }
 
   private parseDateInput(value: string, endOfDay: boolean): Date {
@@ -64,6 +67,48 @@ export class ReportsController {
       startDate: this.parseDateInput(startDate as string, false),
       endDate: this.parseDateInput(endDate as string, true),
       granularity: granularity as ProductReportGranularity,
+    });
+
+    res.json({
+      success: true,
+      data,
+    });
+  });
+
+  getBirthdayCustomers = asyncHandler(async (req: Request, res: Response) => {
+    const { startDate, endDate } = req.query;
+
+    const data = await this.generalReportsService.getBirthdayCustomers({
+      startDate: this.parseDateInput(startDate as string, false),
+      endDate: this.parseDateInput(endDate as string, true),
+    });
+
+    res.json({
+      success: true,
+      data,
+    });
+  });
+
+  getSalesByModule = asyncHandler(async (req: Request, res: Response) => {
+    const { startDate, endDate } = req.query;
+
+    const data = await this.generalReportsService.getSalesByModule({
+      startDate: this.parseDateInput(startDate as string, false),
+      endDate: this.parseDateInput(endDate as string, true),
+    });
+
+    res.json({
+      success: true,
+      data,
+    });
+  });
+
+  getSalesByPaymentMethod = asyncHandler(async (req: Request, res: Response) => {
+    const { startDate, endDate } = req.query;
+
+    const data = await this.generalReportsService.getSalesByPaymentMethod({
+      startDate: this.parseDateInput(startDate as string, false),
+      endDate: this.parseDateInput(endDate as string, true),
     });
 
     res.json({

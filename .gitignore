@@ -1,0 +1,21 @@
+# Root ignores (monorepo)
+node_modules/
+
+# Logs
+logs/
+*.log
+
+# Build output
+/dist/
+/build/
+
+# Environment files
+.env
+.env.*
+backend.env
+frontend.env
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/

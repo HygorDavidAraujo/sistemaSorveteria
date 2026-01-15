@@ -170,8 +170,12 @@ export class ApiClient {
     return response.data;
   }
 
-  async validateCoupon(code: string) {
-    const response = await this.client.post('/coupons/validate', { code });
+  async validateCoupon(code: string, subtotal?: number, customerId?: string) {
+    const response = await this.client.post('/coupons/validate', { 
+      code,
+      subtotal: subtotal || 0,
+      customerId: customerId || ''
+    });
     return response.data;
   }
 
@@ -264,6 +268,28 @@ export class ApiClient {
 
   async getProductABCCurveReport(startDate: string, endDate: string) {
     const response = await this.client.get('/reports/products/abc', {
+      params: { startDate, endDate },
+    });
+    return response.data;
+  }
+
+  // General Reports
+  async getBirthdayCustomersReport(startDate: string, endDate: string) {
+    const response = await this.client.get('/reports/customers/birthdays', {
+      params: { startDate, endDate },
+    });
+    return response.data;
+  }
+
+  async getSalesByModuleReport(startDate: string, endDate: string) {
+    const response = await this.client.get('/reports/sales/modules', {
+      params: { startDate, endDate },
+    });
+    return response.data;
+  }
+
+  async getSalesByPaymentMethodsReport(startDate: string, endDate: string) {
+    const response = await this.client.get('/reports/sales/payment-methods', {
       params: { startDate, endDate },
     });
     return response.data;
@@ -423,6 +449,33 @@ export class ApiClient {
 
   async getAccountsReceivableDSO() {
     const response = await this.client.get('/financial/accounts-receivable/analytics/dso');
+    return response.data;
+  }
+
+  // Geolocation
+  async searchCepAddress(cep: string) {
+    const response = await this.client.post('/geolocation/search-cep', { cep });
+    return response.data;
+  }
+
+  async calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number, useHaversine?: boolean) {
+    const response = await this.client.post('/geolocation/calculate-distance', {
+      lat1,
+      lon1,
+      lat2,
+      lon2,
+      useHaversine,
+    });
+    return response.data;
+  }
+
+  async calculateDeliveryFee(distanceKm: number, baseFee: number, feePerKm: number = 0, freeDistanceKm: number = 0) {
+    const response = await this.client.post('/geolocation/calculate-delivery-fee', {
+      distanceKm,
+      baseFee,
+      feePerKm,
+      freeDistanceKm,
+    });
     return response.data;
   }
 

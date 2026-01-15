@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Coupon Validation</title>
+    <style>
+        body { font-family: Arial; margin: 20px; }
+        button { padding: 10px 20px; margin: 10px 0; cursor: pointer; }
+        #response { background: #f0f0f0; padding: 10px; margin-top: 20px; white-space: pre-wrap; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>Test Coupon Validation Endpoint</h1>
+    
+    <button onclick="testWithoutError()">Test Valid Coupon (should work)</button>
+    <button onclick="testWithError()">Test Below Minimum (should return 422 error)</button>
+    
+    <div id="response">Response will appear here...</div>
+    
+    <script>
+        async function testWithoutError() {
+            const response = await fetch('http://localhost:3000/api/v1/coupons/validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    code: "INDICA20%OFF",
+                    subtotal: 50.00,  // Above minimum of 30
+                    customerId: null
+                })
+            });
+            
+            document.getElementById('response').textContent = 
+                `Status: ${response.status}\n${await response.text()}`;
+        }
+        
+        async function testWithError() {
+            const response = await fetch('http://localhost:3000/api/v1/coupons/validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    code: "INDICA20%OFF",
+                    subtotal: 22.30,  // Below minimum of 30
+                    customerId: null
+                })
+            });
+            
+            document.getElementById('response').textContent = 
+                `Status: ${response.status}\n${await response.text()}`;
+        }
+    </script>
+</body>
+</html>

@@ -104,7 +104,9 @@ export class DeliveryController {
         ? req.query.isActive === 'true'
         : undefined;
 
-      const fees = await this.deliveryService.listFees(isActive);
+      const feeType = req.query.feeType as any;
+
+      const fees = await this.deliveryService.listFees(isActive, feeType);
 
       res.json({
         status: 'success',

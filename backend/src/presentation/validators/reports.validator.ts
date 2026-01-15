@@ -45,3 +45,15 @@ export const productTimeSeriesReportSchema = Joi.object({
     granularity: Joi.string().valid('day', 'month', 'year').optional(),
   }),
 });
+
+export const birthdayCustomersReportSchema = Joi.object({
+  query: reportDateRangeQuerySchema,
+});
+
+export const salesByModuleReportSchema = Joi.object({
+  query: reportDateRangeQuerySchema,
+});
+
+export const salesByPaymentMethodReportSchema = Joi.object({
+  query: reportDateRangeQuerySchema,
+});

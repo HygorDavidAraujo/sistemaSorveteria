@@ -41,6 +41,8 @@ interface CompanyInfo {
   logoUrl?: string;
   logoBase64?: string | null;
   logoMimeType?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export const SettingsPage: React.FC = () => {
@@ -108,6 +110,8 @@ export const SettingsPage: React.FC = () => {
     logoUrl: '',
     logoBase64: null,
     logoMimeType: null,
+    latitude: null,
+    longitude: null,
   });
 
   // Loyalty/Cashback config state
@@ -133,12 +137,29 @@ export const SettingsPage: React.FC = () => {
   });
   const [isLoadingCashback, setIsLoadingCashback] = useState(false);
 
+  // Delivery config state
+  const [deliveryConfig, setDeliveryConfig] = useState({
+    defaultFee: '5.00',
+    feePerKm: '1.50',
+    freeDistanceKm: '5',
+    minTimeMinutes: '30',
+    maxTimeMinutes: '60',
+    minOrderValue: '20.00',
+    enableFees: true,
+    enableMinOrder: false,
+  });
+  const [deliveryFees, setDeliveryFees] = useState<any[]>([]);
+  const [isLoadingDelivery, setIsLoadingDelivery] = useState(false);
+
   useEffect(() => {
     if (activeTab === 'user' && isAdmin && users.length === 0 && !isLoadingUsers) {
       loadUsers();
     }
     if (activeTab === 'company' && !companyInfo.cnpj && !isLoadingCompany) {
       loadCompanyInfo();
+    }
+    if (activeTab === 'delivery' && !isLoadingDelivery && deliveryFees.length === 0) {
+      loadDeliveryFees();
     }
     if (activeTab === 'loyalty' && !isLoadingLoyalty && loyaltyConfig.pointsPerReal === 1 && loyaltyConfig.pointsExpirationDays === 365) {
       loadLoyaltyConfig();
@@ -188,6 +209,49 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
+  const handleLookupCompanyCep = async () => {
+    try {
+      const cep = formatCEP(companyInfo.zipCode);
+      if (cep.length !== 8) {
+        setError('Informe um CEP válido (8 dígitos)');
+        setTimeout(() => setError(null), 3000);
+        return;
+      }
+
+      setIsLoadingCompany(true);
+      const result = await apiClient.searchCepAddress(cep);
+      const data = result?.data;
+
+      if (!data) {
+        throw new Error('CEP não encontrado');
+      }
+
+      setCompanyInfo((prev) => {
+        const parsedLatitude = Number((data as any).latitude);
+        const parsedLongitude = Number((data as any).longitude);
+
+        return {
+          ...prev,
+          zipCode: cep,
+          street: data.logradouro || prev.street,
+          neighborhood: data.bairro || prev.neighborhood,
+          city: data.cidade || prev.city,
+          state: data.estado || prev.state,
+          latitude: Number.isFinite(parsedLatitude) ? parsedLatitude : prev.latitude,
+          longitude: Number.isFinite(parsedLongitude) ? parsedLongitude : prev.longitude,
+        };
+      });
+
+      setSuccess('CEP encontrado. Endereço e coordenadas preenchidos!');
+      setTimeout(() => setSuccess(null), 2500);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Erro ao buscar CEP');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setIsLoadingCompany(false);
+    }
+  };
+
   const loadLoyaltyConfig = async () => {
     if (isLoadingLoyalty) return; // Prevent duplicate calls
     try {
@@ -217,6 +281,78 @@ export const SettingsPage: React.FC = () => {
       // Don't set error state for auto-load failures
     } finally {
       setIsLoadingCashback(false);
+    }
+  };
+
+  const loadDeliveryFees = async () => {
+    if (isLoadingDelivery) return;
+    try {
+      setIsLoadingDelivery(true);
+      const response = await apiClient.get('/delivery/fees');
+      if (response.data) {
+        setDeliveryFees(response.data);
+        // Se houver uma taxa padrão, popular o form
+        if (response.data.length > 0) {
+          const defaultFee = response.data.find((f: any) => !f.neighborhood && !f.city) || response.data[0];
+          setDeliveryConfig({
+            defaultFee: defaultFee.fee?.toString() || '5.00',
+            feePerKm: defaultFee.feePerKm?.toString() || '1.50',
+            freeDistanceKm: defaultFee.maxDistance?.toString() || '5',
+            minTimeMinutes: '30',
+            maxTimeMinutes: '60',
+            minOrderValue: defaultFee.minOrderValue?.toString() || '20.00',
+            enableFees: defaultFee.isActive !== false,
+            enableMinOrder: (defaultFee.minOrderValue || 0) > 0,
+          });
+        }
+      }
+    } catch (err: any) {
+      console.error('Erro ao carregar taxas de entrega:', err);
+    } finally {
+      setIsLoadingDelivery(false);
+    }
+  };
+
+  const handleSaveDeliveryConfig = async () => {
+    try {
+      setIsLoadingDelivery(true);
+
+      const toNumber = (value: string, fallback = 0) => {
+        const parsed = Number.parseFloat(String(value ?? '').replace(',', '.'));
+        return Number.isFinite(parsed) ? parsed : fallback;
+      };
+
+      // Criar ou atualizar a taxa padrão (configuração por distância)
+      // OBS: não enviamos `null` para campos string/number para não bater no Joi.
+      const feeData = {
+        feeType: 'distance',
+        fee: toNumber(deliveryConfig.defaultFee, 0),
+        minOrderValue: deliveryConfig.enableMinOrder ? toNumber(deliveryConfig.minOrderValue, 0) : 0,
+        maxDistance: toNumber(deliveryConfig.freeDistanceKm, 0),
+        feePerKm: toNumber(deliveryConfig.feePerKm, 0),
+        baseFee: toNumber(deliveryConfig.defaultFee, 0),
+        isActive: deliveryConfig.enableFees,
+      };
+
+      // Verificar se já existe uma taxa padrão
+      const existingFee = deliveryFees.find((f: any) => !f.neighborhood && !f.city);
+      
+      if (existingFee) {
+        // Atualizar
+        await apiClient.put(`/delivery/fees/${existingFee.id}`, feeData);
+      } else {
+        // Criar
+        await apiClient.post('/delivery/fees', feeData);
+      }
+
+      setSuccess('Configuração de entrega salva com sucesso!');
+      await loadDeliveryFees();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Erro ao salvar configuração de entrega');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setIsLoadingDelivery(false);
     }
   };
 
@@ -288,8 +424,31 @@ export const SettingsPage: React.FC = () => {
       setError(null);
       setSuccess(null);
 
-      console.log('📤 Enviando dados da empresa:', companyInfo);
-      const response = await apiClient.post('/settings/company-info', companyInfo);
+      const normalizeCoordinate = (value: unknown): number | null => {
+        if (value === null || value === undefined) return null;
+        if (typeof value === 'string' && value.trim() === '') return null;
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      };
+
+      const normalizedZip = formatCEP(companyInfo.zipCode);
+      const normalizedLatitude = normalizeCoordinate(companyInfo.latitude as unknown);
+      const normalizedLongitude = normalizeCoordinate(companyInfo.longitude as unknown);
+
+      const latitudeToSave =
+        normalizedLatitude === 0 && normalizedLongitude === 0 ? null : normalizedLatitude;
+      const longitudeToSave =
+        normalizedLatitude === 0 && normalizedLongitude === 0 ? null : normalizedLongitude;
+
+      const payload: CompanyInfo = {
+        ...companyInfo,
+        zipCode: normalizedZip,
+        latitude: latitudeToSave,
+        longitude: longitudeToSave,
+      };
+
+      console.log('📤 Enviando dados da empresa:', payload);
+      const response = await apiClient.post('/settings/company-info', payload);
       console.log('✅ Resposta do servidor:', response);
       
       setSuccess('Informações da empresa atualizadas com sucesso!');
@@ -831,14 +990,60 @@ export const SettingsPage: React.FC = () => {
               <div className="settings-form-grid">
                 <div className="settings-form-group">
                   <label className="settings-form-label">CEP *</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="text"
+                      name="zipCode"
+                      value={companyInfo.zipCode}
+                      onChange={handleCompanyInfoChange}
+                      placeholder="00000-000"
+                      className="settings-form-input"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={handleLookupCompanyCep}
+                      className="settings-btn settings-btn-primary"
+                      style={{ whiteSpace: 'nowrap', padding: '10px 12px' }}
+                      disabled={isLoadingCompany}
+                      title="Buscar CEP e preencher coordenadas da loja"
+                    >
+                      Buscar CEP
+                    </button>
+                  </div>
+                </div>
+                <div className="settings-form-group">
+                  <label className="settings-form-label">Latitude (origem)</label>
                   <input
-                    type="text"
-                    name="zipCode"
-                    value={companyInfo.zipCode}
-                    onChange={handleCompanyInfoChange}
-                    placeholder="00000-000"
+                    type="number"
+                    name="latitude"
+                    value={companyInfo.latitude ?? ''}
+                    onChange={(e) =>
+                      setCompanyInfo((prev) => ({
+                        ...prev,
+                        latitude: e.target.value === '' ? null : Number(e.target.value),
+                      }))
+                    }
+                    placeholder="Ex.: -16.6869"
                     className="settings-form-input"
-                    required
+                    step="any"
+                  />
+                </div>
+                <div className="settings-form-group">
+                  <label className="settings-form-label">Longitude (origem)</label>
+                  <input
+                    type="number"
+                    name="longitude"
+                    value={companyInfo.longitude ?? ''}
+                    onChange={(e) =>
+                      setCompanyInfo((prev) => ({
+                        ...prev,
+                        longitude: e.target.value === '' ? null : Number(e.target.value),
+                      }))
+                    }
+                    placeholder="Ex.: -49.2648"
+                    className="settings-form-input"
+                    step="any"
                   />
                 </div>
                 <div className="settings-form-group">
@@ -1019,7 +1224,13 @@ export const SettingsPage: React.FC = () => {
                 </p>
               </div>
               <label className="settings-toggle">
-                <input type="checkbox" className="settings-toggle-input" defaultChecked title="Ativar taxa de entrega" />
+                <input 
+                  type="checkbox" 
+                  className="settings-toggle-input" 
+                  checked={deliveryConfig.enableFees}
+                  onChange={(e) => setDeliveryConfig({...deliveryConfig, enableFees: e.target.checked})}
+                  title="Ativar taxa de entrega" 
+                />
                 <div className="settings-toggle-slider"></div>
               </label>
             </div>
@@ -1030,6 +1241,8 @@ export const SettingsPage: React.FC = () => {
                   type="number"
                   step="0.01"
                   placeholder="5.00"
+                  value={deliveryConfig.defaultFee}
+                  onChange={(e) => setDeliveryConfig({...deliveryConfig, defaultFee: e.target.value})}
                   className="settings-form-input"
                 />
               </div>
@@ -1039,6 +1252,8 @@ export const SettingsPage: React.FC = () => {
                   type="number"
                   step="0.01"
                   placeholder="1.50"
+                  value={deliveryConfig.feePerKm}
+                  onChange={(e) => setDeliveryConfig({...deliveryConfig, feePerKm: e.target.value})}
                   className="settings-form-input"
                 />
               </div>
@@ -1047,6 +1262,8 @@ export const SettingsPage: React.FC = () => {
                 <input
                   type="number"
                   placeholder="5"
+                  value={deliveryConfig.freeDistanceKm}
+                  onChange={(e) => setDeliveryConfig({...deliveryConfig, freeDistanceKm: e.target.value})}
                   className="settings-form-input"
                 />
               </div>
@@ -1069,6 +1286,8 @@ export const SettingsPage: React.FC = () => {
                 <input
                   type="number"
                   placeholder="30"
+                  value={deliveryConfig.minTimeMinutes}
+                  onChange={(e) => setDeliveryConfig({...deliveryConfig, minTimeMinutes: e.target.value})}
                   className="settings-form-input"
                 />
               </div>
@@ -1077,6 +1296,8 @@ export const SettingsPage: React.FC = () => {
                 <input
                   type="number"
                   placeholder="60"
+                  value={deliveryConfig.maxTimeMinutes}
+                  onChange={(e) => setDeliveryConfig({...deliveryConfig, maxTimeMinutes: e.target.value})}
                   className="settings-form-input"
                 />
               </div>
@@ -1093,7 +1314,13 @@ export const SettingsPage: React.FC = () => {
                 </p>
               </div>
               <label className="settings-toggle">
-                <input type="checkbox" className="settings-toggle-input" title="Ativar pedido mínimo" />
+                <input 
+                  type="checkbox" 
+                  className="settings-toggle-input" 
+                  checked={deliveryConfig.enableMinOrder}
+                  onChange={(e) => setDeliveryConfig({...deliveryConfig, enableMinOrder: e.target.checked})}
+                  title="Ativar pedido mínimo" 
+                />
                 <div className="settings-toggle-slider"></div>
               </label>
             </div>
@@ -1103,75 +1330,32 @@ export const SettingsPage: React.FC = () => {
                 <input
                   type="number"
                   step="0.01"
-                  placeholder="25.00"
+                  placeholder="20.00"
+                  value={deliveryConfig.minOrderValue}
+                  onChange={(e) => setDeliveryConfig({...deliveryConfig, minOrderValue: e.target.value})}
+                  disabled={!deliveryConfig.enableMinOrder}
                   className="settings-form-input"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Raio de Entrega */}
-          <div className="settings-delivery-option">
-            <div className="settings-delivery-option-header">
-              <div>
-                <p className="settings-delivery-option-title">📍 Raio de Entrega</p>
-                <p className="settings-delivery-option-description">
-                  Distância máxima que você entrega
-                </p>
-              </div>
-              <label className="settings-toggle">
-                <input type="checkbox" className="settings-toggle-input" title="Ativar limite de raio" />
-                <div className="settings-toggle-slider"></div>
-              </label>
-            </div>
-            <div className="settings-delivery-fees">
-              <div className="settings-form-group">
-                <label className="settings-form-label">Raio Máximo (Km)</label>
-                <input
-                  type="number"
-                  placeholder="10"
-                  className="settings-form-input"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Horário de Funcionamento */}
-          <div className="settings-delivery-option">
-            <div className="settings-delivery-option-header">
-              <div>
-                <p className="settings-delivery-option-title">🕐 Horário de Entrega</p>
-                <p className="settings-delivery-option-description">
-                  Configure os horários de funcionamento para entregas
-                </p>
-              </div>
-            </div>
-            <div className="settings-delivery-fees">
-              <div className="settings-form-group">
-                <label className="settings-form-label">Abertura</label>
-                <input
-                  type="time"
-                  className="settings-form-input"
-                  defaultValue="08:00"
-                />
-              </div>
-              <div className="settings-form-group">
-                <label className="settings-form-label">Fechamento</label>
-                <input
-                  type="time"
-                  className="settings-form-input"
-                  defaultValue="22:00"
                 />
               </div>
             </div>
           </div>
 
           <div className="settings-form-actions">
-            <Button variant="primary">
-              Salvar Configurações
+            <Button 
+              type="button" 
+              variant="primary" 
+              onClick={handleSaveDeliveryConfig}
+              disabled={isLoadingDelivery}
+            >
+              {isLoadingDelivery ? 'Salvando...' : 'Salvar Configurações'}
             </Button>
-            <Button variant="secondary">
-              Restaurar Padrões
+            <Button 
+              type="button" 
+              variant="secondary" 
+              onClick={loadDeliveryFees}
+              disabled={isLoadingDelivery}
+            >
+              Recarregar
             </Button>
           </div>
         </div>

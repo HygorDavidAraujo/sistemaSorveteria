@@ -4,8 +4,10 @@ import { Card, Button, Input, Modal, Loading, Alert } from '@/components/common'
 import { Plus, Minus, Trash2, ShoppingCart, DollarSign, UserPlus, Printer } from 'lucide-react';
 import { apiClient } from '@/services/api';
 import { useCashSessionStore, useCustomersStore } from '@/store';
+import { CepSearchInput, CepSearchFieldsDisplay } from '@/components/CepSearchInput';
 import { printReceipt, formatCurrency, getPrintStyles } from '@/utils/printer';
 import { clearCartDraft, loadCartDraft, saveCartDraft, type CartDraft, type CartDraftItem } from '@/utils/cartDraft';
+import type { AddressData } from '@/hooks/useGeolocation';
 import './ComandasPage.css';
 import '@/styles/assembledModal.css';
 import '@/styles/weightModal.css';
@@ -134,6 +136,7 @@ export const ComandasPage: React.FC = () => {
   const [isNewCustomerModalOpen, setIsNewCustomerModalOpen] = useState(false);
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
   const [isCustomerSearchOpen, setIsCustomerSearchOpen] = useState(false);
+  const [cepAddressData, setCepAddressData] = useState<AddressData | null>(null);
   const [customerForm, setCustomerForm] = useState({
     name: '',
     email: '',
@@ -160,6 +163,12 @@ export const ComandasPage: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [currentPaymentAmount, setCurrentPaymentAmount] = useState('');
   const [quantityInputs, setQuantityInputs] = useState<Record<string, string>>({});
+  
+  // Cupom
+  const [couponCode, setCouponCode] = useState<string>('');
+  const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+  const [couponDiscount, setCouponDiscount] = useState<number>(0);
+  const [isCouponLoading, setIsCouponLoading] = useState(false);
 
   // Montado
   const [isAssembledModalOpen, setIsAssembledModalOpen] = useState(false);
@@ -432,9 +441,10 @@ export const ComandasPage: React.FC = () => {
     const additionalValue = selectedComanda?.status === 'OPEN'
       ? parseFloat(additionalFee || '0')
       : (selectedComanda?.additionalFee || 0);
+    const totalBeforeCoupon = Math.max(0, Number(subtotalValue) + Math.max(0, additionalValue) - Math.max(0, discountValue));
     const totalToPay = selectedComanda?.status === 'CLOSED'
       ? selectedComanda.total
-      : Math.max(0, Number(subtotalValue) + Math.max(0, additionalValue) - Math.max(0, discountValue));
+      : Math.max(0, totalBeforeCoupon - couponDiscount);
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
     const remaining = Math.max(0, totalToPay - totalPaid);
     const change = Math.max(0, totalPaid - totalToPay);
@@ -449,7 +459,7 @@ export const ComandasPage: React.FC = () => {
       change,
       isPaid: totalPaid > 0 && remaining === 0,
     };
-  }, [selectedComanda, discount, additionalFee, payments]);
+  }, [selectedComanda, discount, additionalFee, payments, couponDiscount]);
 
   const openComandaAndMaybeImport = async () => {
     
@@ -988,6 +998,89 @@ export const ComandasPage: React.FC = () => {
     }
   };
 
+  const handleCepAddressFound = (address: AddressData) => {
+    setCepAddressData(address);
+    setCustomerForm(prev => ({
+      ...prev,
+      zipCode: address.cep,
+      street: address.logradouro,
+      neighborhood: address.bairro,
+      city: address.cidade,
+      state: address.estado,
+    }));
+  };
+
+  const handleCepClear = () => {
+    setCepAddressData(null);
+    setCustomerForm(prev => ({
+      ...prev,
+      zipCode: '',
+    }));
+  };
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) {
+      setError('Digite um código de cupom');
+      setTimeout(() => setError(null), 2000);
+      return;
+    }
+
+    if (!selectedComanda) {
+      setError('Selecione uma comanda para aplicar o cupom');
+      setTimeout(() => setError(null), 2000);
+      return;
+    }
+
+    if (!selectedCustomerId) {
+      setError('Selecione um cliente para aplicar o cupom');
+      setTimeout(() => setError(null), 2000);
+      return;
+    }
+
+    setIsCouponLoading(true);
+    try {
+      const currentSubtotal = selectedComanda.items
+        .filter(item => !item.isCancelled)
+        .reduce((sum, item) => sum + item.subtotal, 0);
+      
+      const response = await apiClient.validateCoupon(
+        couponCode.trim(), 
+        currentSubtotal, 
+        selectedCustomerId
+      );
+      const validatedCoupon = response.data || response;
+      
+      setAppliedCoupon(validatedCoupon);
+      setCouponDiscount(validatedCoupon.discountAmount || 0);
+      setSuccess(`Cupom ${couponCode} aplicado com sucesso!`);
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      let errorMsg = 'Erro ao validar cupom';
+      if (err?.response?.status === 404) {
+        errorMsg = 'Cupom não encontrado';
+      } else if (err?.response?.data?.message) {
+        errorMsg = err.response.data.message;
+      } else if (err?.message) {
+        errorMsg = err.message;
+      }
+      setError(errorMsg);
+      setTimeout(() => setError(null), 3000);
+      setCouponCode('');
+      setAppliedCoupon(null);
+      setCouponDiscount(0);
+    } finally {
+      setIsCouponLoading(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setCouponCode('');
+    setAppliedCoupon(null);
+    setCouponDiscount(0);
+    setSuccess('Cupom removido');
+    setTimeout(() => setSuccess(null), 2000);
+  };
+
   const handleAddPayment = () => {
     const parsed = parseFloat((currentPaymentAmount || '').replace(',', '.'));
     if (isNaN(parsed) || parsed <= 0) {
@@ -1126,14 +1219,19 @@ export const ComandasPage: React.FC = () => {
     }
 
     try {
-      const response = await apiClient.post(`/comandas/${selectedComanda.id}/close`, {
-        discount: paymentSummary.discountValue,
+      // Incluir desconto do cupom + desconto manual no desconto total
+      const totalDiscount = paymentSummary.discountValue + couponDiscount;
+      
+      const closePayload: any = {
+        discount: totalDiscount,
         additionalFee: paymentSummary.additionalValue,
         payments: payments.map(p => ({
           paymentMethod: p.method,
           amount: p.amount
         }))
-      });
+      };
+      
+      const response = await apiClient.post(`/comandas/${selectedComanda.id}/close`, closePayload);
 
       const comandaData = normalizeComanda(response.data?.data || response.data);
       updateSelectedComandaState(comandaData);
@@ -1715,6 +1813,41 @@ export const ComandasPage: React.FC = () => {
                   </div>
                 )}
 
+                {selectedComanda.status === 'OPEN' && (
+                  <div className="comanda-cart-section comanda-cart-discount">
+                    <label className="comanda-cart-section-label">Cupom de Desconto</label>
+                    <div style={{display: 'flex', gap: '8px'}}>
+                      <input
+                        type="text"
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                        placeholder="Digite o código"
+                        disabled={!!appliedCoupon || isCouponLoading}
+                        className="comanda-cart-discount-input"
+                        style={{flex: 1}}
+                      />
+                      {appliedCoupon ? (
+                        <button
+                          onClick={handleRemoveCoupon}
+                          className="comanda-cart-coupon-btn comanda-cart-coupon-btn--remove"
+                          title="Remover cupom"
+                        >
+                          ✕
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleApplyCoupon}
+                          className="comanda-cart-coupon-btn"
+                          disabled={!couponCode.trim() || isCouponLoading}
+                          title="Aplicar cupom"
+                        >
+                          {isCouponLoading ? '...' : 'Aplicar'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="comanda-cart-totals">
                   <div className="comanda-cart-totals-row">
                     <span>Subtotal</span>
@@ -1730,6 +1863,12 @@ export const ComandasPage: React.FC = () => {
                     <div className="comanda-cart-totals-row comanda-cart-totals-row--discount">
                       <span>Desconto</span>
                       <span className="comanda-cart-totals-value">- {formatCurrency(paymentSummary.discountValue)}</span>
+                    </div>
+                  )}
+                  {couponDiscount > 0 && (
+                    <div className="comanda-cart-totals-row comanda-cart-totals-row--discount">
+                      <span>Desconto Cupom ({appliedCoupon?.code})</span>
+                      <span className="comanda-cart-totals-value">- {formatCurrency(couponDiscount)}</span>
                     </div>
                   )}
                   <div className="comanda-cart-totals-row comanda-cart-totals-row--final">
@@ -2189,11 +2328,21 @@ export const ComandasPage: React.FC = () => {
           <div className="form-section">
             <h3 className="form-section-title">Endereço (Opcional)</h3>
             <div className="form-grid">
-              <Input
-                label="CEP"
-                value={customerForm.zipCode}
-                onChange={(e) => setCustomerForm({ ...customerForm, zipCode: e.target.value })}
-              />
+              <div style={{ gridColumn: '1 / -1' }}>
+                <CepSearchInput
+                  onAddressFound={handleCepAddressFound}
+                  onClear={handleCepClear}
+                  onCepChange={(cep) => setCustomerForm((prev) => ({ ...prev, zipCode: cep }))}
+                  initialCep={customerForm.zipCode}
+                  label="CEP"
+                  showCoordinates={false}
+                />
+              </div>
+              {cepAddressData && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <CepSearchFieldsDisplay address={cepAddressData} showCoordinates={false} />
+                </div>
+              )}
               <Input
                 label="Rua"
                 value={customerForm.street}

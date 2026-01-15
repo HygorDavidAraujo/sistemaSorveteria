@@ -28,6 +28,9 @@ export const settingsValidators = {
       logoUrl: Joi.string().allow('').optional(),
       logoBase64: Joi.string().base64({ paddingRequired: false }).allow('').optional(),
       logoMimeType: Joi.string().max(100).allow('').optional(),
+      // Geolocation (store origin)
+      latitude: Joi.number().min(-90).max(90).optional().allow(null),
+      longitude: Joi.number().min(-180).max(180).optional().allow(null),
     }),
     query: Joi.object({}),
     params: Joi.object({}),

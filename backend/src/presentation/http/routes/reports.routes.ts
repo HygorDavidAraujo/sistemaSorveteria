@@ -5,6 +5,9 @@ import {
   productRankingReportSchema,
   productABCCurveReportSchema,
   productTimeSeriesReportSchema,
+  birthdayCustomersReportSchema,
+  salesByModuleReportSchema,
+  salesByPaymentMethodReportSchema,
 } from '@presentation/validators/reports.validator';
 import { ReportsController } from '@presentation/http/controllers/reports.controller';
 
@@ -19,5 +22,16 @@ router.use(authenticate);
 router.get('/products/ranking', validate(productRankingReportSchema), controller.getProductRanking);
 router.get('/products/abc', validate(productABCCurveReportSchema), controller.getProductABCCurve);
 router.get('/products/timeseries', validate(productTimeSeriesReportSchema), controller.getProductTimeSeries);
+
+/**
+ * CUSTOMER REPORTS
+ */
+router.get('/customers/birthdays', validate(birthdayCustomersReportSchema), controller.getBirthdayCustomers);
+
+/**
+ * SALES REPORTS
+ */
+router.get('/sales/modules', validate(salesByModuleReportSchema), controller.getSalesByModule);
+router.get('/sales/payment-methods', validate(salesByPaymentMethodReportSchema), controller.getSalesByPaymentMethod);
 
 export default router;

@@ -48,13 +48,15 @@ services:
       dockerfile: Dockerfile
     container_name: gelatini-backend
     restart: unless-stopped
+    env_file:
+      - ./backend.env
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
+      TRUST_PROXY: "true"
       DATABASE_URL: postgresql://gelatini:gelatini123@postgres:5432/gelatini_db?schema=public
       REDIS_HOST: redis
       REDIS_PORT: "6379"
-      API_PORT: "3000"
-      API_HOST: 0.0.0.0
+      PORT: "3000"
       LOG_LEVEL: debug
       RUN_MIGRATIONS: "true"
     ports:
@@ -65,8 +67,6 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./backend:/app
-      - /app/node_modules
       - backend_logs:/app/logs
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
@@ -82,20 +82,15 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api/v1
     container_name: gelatini-frontend
     restart: unless-stopped
-    environment:
-      VITE_API_URL: http://localhost:3000/api/v1
-      NODE_ENV: development
     ports:
-      - "5173:5173"
+      - "5173:80"
     depends_on:
       backend:
         condition: service_healthy
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/dist
     networks:
       - gelatini-network
 

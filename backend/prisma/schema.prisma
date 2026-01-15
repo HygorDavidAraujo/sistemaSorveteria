@@ -75,6 +75,8 @@ model Customer {
   state                  String?              @db.VarChar(2)
   zipCode                String?              @map("zip_code") @db.VarChar(10)
   referencePoint         String?              @map("reference_point")
+  latitude               Float?               @db.DoublePrecision
+  longitude              Float?               @db.DoublePrecision
   // Additional customer fields
   birthDate              DateTime?            @map("birth_date") @db.Date
   gender                 Gender?
@@ -446,12 +448,17 @@ model DeliveryOrder {
   deliveryPerson    String?         @map("delivery_person") @db.VarChar(255)
   customerNotes     String?         @map("customer_notes")
   internalNotes     String?         @map("internal_notes")
+  // Geolocation data
+  deliveryLatitude  Float?          @map("delivery_latitude") @db.DoublePrecision
+  deliveryLongitude Float?          @map("delivery_longitude") @db.DoublePrecision
+  distanceKm        Decimal?        @map("distance_km") @db.Decimal(8, 2)
   orderedAt         DateTime        @default(now()) @map("ordered_at") @db.Timestamptz(6)
   preparingAt       DateTime?       @map("preparing_at") @db.Timestamptz(6)
   outForDeliveryAt  DateTime?       @map("out_for_delivery_at") @db.Timestamptz(6)
   deliveredAt       DateTime?       @map("delivered_at") @db.Timestamptz(6)
   createdById       String          @map("created_by") @db.Uuid
   items             DeliveryOrderItem[]
+  payments          DeliveryOrderPayment[]
   cashSession       CashSession     @relation(fields: [cashSessionId], references: [id])
   createdBy         User            @relation(fields: [createdById], references: [id])
   customer          Customer        @relation(fields: [customerId], references: [id])
@@ -478,6 +485,18 @@ model DeliveryOrderItem {
   @@index([deliveryOrderId])
   @@index([productId])
   @@map("delivery_order_items")
+}
+
+model DeliveryOrderPayment {
+  id              String        @id @default(uuid()) @db.Uuid
+  deliveryOrderId String        @map("delivery_order_id") @db.Uuid
+  paymentMethod   PaymentMethod @map("payment_method")
+  amount          Decimal       @db.Decimal(10, 2)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  deliveryOrder   DeliveryOrder @relation(fields: [deliveryOrderId], references: [id], onDelete: Cascade)
+
+  @@index([deliveryOrderId])
+  @@map("delivery_order_payments")
 }
 
 model DeliveryFee {
@@ -904,6 +923,9 @@ model CompanyInfo {
   logoUrl            String?  @map("logo_url")
   logoData           Bytes?   @map("logo_data")
   logoMimeType       String?  @map("logo_mime_type") @db.VarChar(100)
+  // Geolocation for delivery calculation
+  latitude           Float?   @db.DoublePrecision
+  longitude          Float?   @db.DoublePrecision
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 

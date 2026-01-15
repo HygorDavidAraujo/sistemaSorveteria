@@ -282,6 +282,50 @@ export interface ProductABCCurveReport {
   items: ProductABCCurveItem[];
 }
 
+export interface BirthdayCustomerItem {
+  id: string;
+  name: string;
+  birthDate: string;
+  phone?: string;
+  whatsapp?: string;
+  email?: string;
+}
+
+export interface BirthdayCustomersReport {
+  period: { startDate: string; endDate: string };
+  total: number;
+  customers: BirthdayCustomerItem[];
+}
+
+export type SalesModule = 'pdv' | 'comanda' | 'delivery';
+
+export interface SalesByModuleItem {
+  module: SalesModule;
+  label: string;
+  totalAmount: number;
+  count: number;
+}
+
+export interface SalesByModuleReport {
+  period: { startDate: string; endDate: string };
+  totals: { totalAmount: number; count: number };
+  modules: SalesByModuleItem[];
+}
+
+export interface SalesByPaymentMethodItem {
+  paymentMethod: PaymentMethod;
+  label: string;
+  amount: number;
+  count: number;
+  share: number;
+}
+
+export interface SalesByPaymentMethodReport {
+  period: { startDate: string; endDate: string };
+  totals: { amount: number; count: number };
+  methods: SalesByPaymentMethodItem[];
+}
+
 export interface FinancialIndicatorsReport {
   currentRatio: number;
   quickRatio: number;

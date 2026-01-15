@@ -15,6 +15,9 @@ import type {
   ProductABCCurveReport,
   ProductReportGranularity,
   ProductRankingMetric,
+  BirthdayCustomersReport,
+  SalesByModuleReport,
+  SalesByPaymentMethodReport,
 } from '@/types';
 import './ReportsPage.css';
 
@@ -27,7 +30,10 @@ type ReportKind =
   | 'indicators'
   | 'products-timeseries'
   | 'products-ranking'
-  | 'products-abc';
+  | 'products-abc'
+  | 'customers-birthdays'
+  | 'sales-modules'
+  | 'sales-payments';
 
 export const ReportsPage: React.FC = () => {
   const [reportKind, setReportKind] = useState<ReportKind>('dre');
@@ -46,6 +52,9 @@ export const ReportsPage: React.FC = () => {
     | ProductTimeSeriesReport
     | ProductRankingReport
     | ProductABCCurveReport
+    | BirthdayCustomersReport
+    | SalesByModuleReport
+    | SalesByPaymentMethodReport
     | null
   >(null);
   const [loading, setLoading] = useState(false);
@@ -110,6 +119,15 @@ export const ReportsPage: React.FC = () => {
           break;
         case 'products-abc':
           data = unwrap(await apiClient.getProductABCCurveReport(startDate, endDate));
+          break;
+        case 'customers-birthdays':
+          data = unwrap(await apiClient.getBirthdayCustomersReport(startDate, endDate));
+          break;
+        case 'sales-modules':
+          data = unwrap(await apiClient.getSalesByModuleReport(startDate, endDate));
+          break;
+        case 'sales-payments':
+          data = unwrap(await apiClient.getSalesByPaymentMethodsReport(startDate, endDate));
           break;
         default:
           data = null;
@@ -283,6 +301,46 @@ export const ReportsPage: React.FC = () => {
           String(((p.cumulativeShare ?? 0) * 100).toFixed(2)),
         ]);
       });
+    } else if (reportKind === 'customers-birthdays') {
+      const r = report as BirthdayCustomersReport;
+      rows.push(['CLIENTES ANIVERSARIANTES']);
+      rows.push(['Total', String(r.total ?? 0)]);
+      rows.push(['']);
+      rows.push(['Cliente', 'Nascimento', 'Telefone', 'WhatsApp', 'Email']);
+      r.customers?.forEach((c) => {
+        rows.push([
+          c.name,
+          c.birthDate ? format(new Date(c.birthDate), 'dd/MM/yyyy') : '',
+          c.phone ?? '',
+          c.whatsapp ?? '',
+          c.email ?? '',
+        ]);
+      });
+    } else if (reportKind === 'sales-modules') {
+      const r = report as SalesByModuleReport;
+      rows.push(['COMPARATIVO DE VENDAS POR MÓDULO']);
+      rows.push(['Total de Vendas', String(r.totals?.count ?? 0)]);
+      rows.push(['Total (R$)', money(r.totals?.totalAmount ?? 0)]);
+      rows.push(['']);
+      rows.push(['Módulo', 'Quantidade', 'Total (R$)']);
+      r.modules?.forEach((m) => {
+        rows.push([m.label, String(m.count ?? 0), money(m.totalAmount ?? 0)]);
+      });
+    } else if (reportKind === 'sales-payments') {
+      const r = report as SalesByPaymentMethodReport;
+      rows.push(['VENDAS POR FORMA DE PAGAMENTO']);
+      rows.push(['Total de Pagamentos', String(r.totals?.count ?? 0)]);
+      rows.push(['Total (R$)', money(r.totals?.amount ?? 0)]);
+      rows.push(['']);
+      rows.push(['Forma de Pagamento', 'Quantidade', 'Total (R$)', 'Participação (%)']);
+      r.methods?.forEach((m) => {
+        rows.push([
+          m.label,
+          String(m.count ?? 0),
+          money(m.amount ?? 0),
+          String(((m.share ?? 0) * 100).toFixed(2)),
+        ]);
+      });
     }
 
     const csv = rows.map((row) => row.join(',')).join('\n');
@@ -300,7 +358,7 @@ export const ReportsPage: React.FC = () => {
     <div className="reports-page">
       <div className="page-header">
         <BarChart3 size={32} />
-        <h1>Relatórios Financeiros</h1>
+        <h1>Relatórios</h1>
       </div>
 
       {error && (
@@ -322,6 +380,9 @@ export const ReportsPage: React.FC = () => {
               }}
               className="reports-select"
             >
+              <option value="customers-birthdays">Clientes - Aniversariantes</option>
+              <option value="sales-modules">Vendas - Comparativo por Módulo</option>
+              <option value="sales-payments">Vendas - Por Forma de Pagamento</option>
               <option value="dre">DRE (Resultado)</option>
               <option value="cash-flow">Fluxo de Caixa</option>
               <option value="profitability">Lucratividade</option>
@@ -518,6 +579,59 @@ export const ReportsPage: React.FC = () => {
                   </p>
                 </div>
               </Card>
+            )}
+
+            {reportKind === 'customers-birthdays' && (
+              <Card>
+                <div className="reports-metric-card reports-metric-sales">
+                  <p className="reports-metric-label">Clientes Aniversariantes</p>
+                  <p className="reports-metric-value reports-metric-value-large">
+                    {Number((report as BirthdayCustomersReport).total || 0)}
+                  </p>
+                </div>
+              </Card>
+            )}
+
+            {reportKind === 'sales-modules' && (
+              <>
+                <Card>
+                  <div className="reports-metric-card reports-metric-sales">
+                    <p className="reports-metric-label">Total de Vendas</p>
+                    <p className="reports-metric-value reports-metric-value-large">
+                      {Number((report as SalesByModuleReport).totals?.count || 0)}
+                    </p>
+                  </div>
+                </Card>
+                <Card>
+                  <div className="reports-metric-card reports-metric-revenue">
+                    <p className="reports-metric-label">Valor Total</p>
+                    <p className="reports-metric-value reports-metric-value-large">
+                      R$ {Number((report as SalesByModuleReport).totals?.totalAmount || 0).toFixed(2)}
+                    </p>
+                  </div>
+                </Card>
+              </>
+            )}
+
+            {reportKind === 'sales-payments' && (
+              <>
+                <Card>
+                  <div className="reports-metric-card reports-metric-sales">
+                    <p className="reports-metric-label">Pagamentos</p>
+                    <p className="reports-metric-value reports-metric-value-large">
+                      {Number((report as SalesByPaymentMethodReport).totals?.count || 0)}
+                    </p>
+                  </div>
+                </Card>
+                <Card>
+                  <div className="reports-metric-card reports-metric-revenue">
+                    <p className="reports-metric-label">Valor Total</p>
+                    <p className="reports-metric-value reports-metric-value-large">
+                      R$ {Number((report as SalesByPaymentMethodReport).totals?.amount || 0).toFixed(2)}
+                    </p>
+                  </div>
+                </Card>
+              </>
             )}
           </div>
 
@@ -810,6 +924,123 @@ export const ReportsPage: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {reportKind === 'customers-birthdays' && (
+              <div className="reports-table-wrapper">
+                <table className="reports-table">
+                  <thead>
+                    <tr>
+                      <th>Cliente</th>
+                      <th>Nascimento</th>
+                      <th>Telefone</th>
+                      <th>WhatsApp</th>
+                      <th>Email</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(report as BirthdayCustomersReport).customers?.map((c) => (
+                      <tr key={c.id}>
+                        <td>{c.name}</td>
+                        <td>{c.birthDate ? format(new Date(c.birthDate), 'dd/MM/yyyy') : ''}</td>
+                        <td>{c.phone ?? ''}</td>
+                        <td>{c.whatsapp ?? ''}</td>
+                        <td>{c.email ?? ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {reportKind === 'sales-modules' && (
+              <div className="reports-sales-module">
+                <div className="reports-bar-chart">
+                  {(report as SalesByModuleReport).modules?.map((m) => {
+                    const max = Math.max(
+                      ...((report as SalesByModuleReport).modules || []).map((item) => item.totalAmount || 0),
+                      0
+                    );
+                    const width = max > 0 ? (m.totalAmount / max) * 100 : 0;
+                    return (
+                      <div key={m.module} className="reports-bar-row">
+                        <div className="reports-bar-label">{m.label}</div>
+                        <div className="reports-bar-track">
+                          <div className="reports-bar-fill" style={{ width: `${width}%` }} />
+                        </div>
+                        <div className="reports-bar-value">R$ {Number(m.totalAmount || 0).toFixed(2)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="reports-table-wrapper">
+                  <table className="reports-table">
+                    <thead>
+                      <tr>
+                        <th>Módulo</th>
+                        <th>Quantidade</th>
+                        <th>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(report as SalesByModuleReport).modules?.map((m) => (
+                        <tr key={m.module}>
+                          <td>{m.label}</td>
+                          <td>{Number(m.count || 0)}</td>
+                          <td>R$ {Number(m.totalAmount || 0).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {reportKind === 'sales-payments' && (
+              <div className="reports-sales-payments">
+                <div className="reports-bar-chart">
+                  {(report as SalesByPaymentMethodReport).methods?.map((m) => {
+                    const max = Math.max(
+                      ...((report as SalesByPaymentMethodReport).methods || []).map((item) => item.amount || 0),
+                      0
+                    );
+                    const width = max > 0 ? (m.amount / max) * 100 : 0;
+                    return (
+                      <div key={m.paymentMethod} className="reports-bar-row">
+                        <div className="reports-bar-label">{m.label}</div>
+                        <div className="reports-bar-track">
+                          <div className="reports-bar-fill reports-bar-fill-alt" style={{ width: `${width}%` }} />
+                        </div>
+                        <div className="reports-bar-value">R$ {Number(m.amount || 0).toFixed(2)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="reports-table-wrapper">
+                  <table className="reports-table">
+                    <thead>
+                      <tr>
+                        <th>Forma</th>
+                        <th>Quantidade</th>
+                        <th>Total</th>
+                        <th>Participação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(report as SalesByPaymentMethodReport).methods?.map((m) => (
+                        <tr key={m.paymentMethod}>
+                          <td>{m.label}</td>
+                          <td>{Number(m.count || 0)}</td>
+                          <td>R$ {Number(m.amount || 0).toFixed(2)}</td>
+                          <td>{((m.share || 0) * 100).toFixed(2)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </Card>
