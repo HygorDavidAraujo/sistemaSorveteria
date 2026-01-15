@@ -1,7 +1,7 @@
 {
   "name": "sistema-sorveteria",
   "private": true,
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Monorepo runner (backend + frontend)",
   "scripts": {
     "infra:up": "docker compose up -d postgres redis",

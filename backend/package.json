@@ -1,6 +1,6 @@
 {
   "name": "gelatini-backend",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "GELATINI Management System - Backend API",
   "main": "dist/index.js",
   "scripts": {
