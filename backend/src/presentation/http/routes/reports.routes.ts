@@ -8,6 +8,7 @@ import {
   birthdayCustomersReportSchema,
   salesByModuleReportSchema,
   salesByPaymentMethodReportSchema,
+  cardFeesByPaymentMethodReportSchema,
 } from '@presentation/validators/reports.validator';
 import { ReportsController } from '@presentation/http/controllers/reports.controller';
 
@@ -33,5 +34,6 @@ router.get('/customers/birthdays', validate(birthdayCustomersReportSchema), cont
  */
 router.get('/sales/modules', validate(salesByModuleReportSchema), controller.getSalesByModule);
 router.get('/sales/payment-methods', validate(salesByPaymentMethodReportSchema), controller.getSalesByPaymentMethod);
+router.get('/fees/card', validate(cardFeesByPaymentMethodReportSchema), controller.getCardFeesByPaymentMethod);
 
 export default router;

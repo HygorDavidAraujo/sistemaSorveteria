@@ -18,6 +18,7 @@ import type {
   BirthdayCustomersReport,
   SalesByModuleReport,
   SalesByPaymentMethodReport,
+  CardFeesByPaymentMethodReport,
 } from '@/types';
 import './ReportsPage.css';
 
@@ -33,7 +34,8 @@ type ReportKind =
   | 'products-abc'
   | 'customers-birthdays'
   | 'sales-modules'
-  | 'sales-payments';
+  | 'sales-payments'
+  | 'card-fees';
 
 export const ReportsPage: React.FC = () => {
   const [reportKind, setReportKind] = useState<ReportKind>('dre');
@@ -55,6 +57,7 @@ export const ReportsPage: React.FC = () => {
     | BirthdayCustomersReport
     | SalesByModuleReport
     | SalesByPaymentMethodReport
+    | CardFeesByPaymentMethodReport
     | null
   >(null);
   const [loading, setLoading] = useState(false);
@@ -128,6 +131,9 @@ export const ReportsPage: React.FC = () => {
           break;
         case 'sales-payments':
           data = unwrap(await apiClient.getSalesByPaymentMethodsReport(startDate, endDate));
+          break;
+        case 'card-fees':
+          data = unwrap(await apiClient.getCardFeesByPaymentMethodReport(startDate, endDate));
           break;
         default:
           data = null;
@@ -341,6 +347,23 @@ export const ReportsPage: React.FC = () => {
           String(((m.share ?? 0) * 100).toFixed(2)),
         ]);
       });
+    } else if (reportKind === 'card-fees') {
+      const r = report as CardFeesByPaymentMethodReport;
+      rows.push(['TAXAS DE CARTÃO POR FORMA DE PAGAMENTO']);
+      rows.push(['Total de Transações', String(r.totals?.count ?? 0)]);
+      rows.push(['Total Processado (R$)', money(r.totals?.amount ?? 0)]);
+      rows.push(['Total de Taxas (R$)', money(r.totals?.feeAmount ?? 0)]);
+      rows.push(['']);
+      rows.push(['Forma de Pagamento', 'Quantidade', 'Total (R$)', 'Taxa (%)', 'Taxa (R$)']);
+      r.methods?.forEach((m) => {
+        rows.push([
+          m.label,
+          String(m.count ?? 0),
+          money(m.amount ?? 0),
+          String(Number(m.feePercent ?? 0).toFixed(2)),
+          money(m.feeAmount ?? 0),
+        ]);
+      });
     }
 
     const csv = rows.map((row) => row.join(',')).join('\n');
@@ -383,6 +406,7 @@ export const ReportsPage: React.FC = () => {
               <option value="customers-birthdays">Clientes - Aniversariantes</option>
               <option value="sales-modules">Vendas - Comparativo por Módulo</option>
               <option value="sales-payments">Vendas - Por Forma de Pagamento</option>
+              <option value="card-fees">Taxas de Cartão - Por Forma de Pagamento</option>
               <option value="dre">DRE (Resultado)</option>
               <option value="cash-flow">Fluxo de Caixa</option>
               <option value="profitability">Lucratividade</option>
@@ -628,6 +652,27 @@ export const ReportsPage: React.FC = () => {
                     <p className="reports-metric-label">Valor Total</p>
                     <p className="reports-metric-value reports-metric-value-large">
                       R$ {Number((report as SalesByPaymentMethodReport).totals?.amount || 0).toFixed(2)}
+                    </p>
+                  </div>
+                </Card>
+              </>
+            )}
+
+            {reportKind === 'card-fees' && (
+              <>
+                <Card>
+                  <div className="reports-metric-card reports-metric-sales">
+                    <p className="reports-metric-label">Total de Taxas</p>
+                    <p className="reports-metric-value reports-metric-value-large">
+                      R$ {Number((report as CardFeesByPaymentMethodReport).totals?.feeAmount || 0).toFixed(2)}
+                    </p>
+                  </div>
+                </Card>
+                <Card>
+                  <div className="reports-metric-card reports-metric-revenue">
+                    <p className="reports-metric-label">Valor Processado</p>
+                    <p className="reports-metric-value reports-metric-value-large">
+                      R$ {Number((report as CardFeesByPaymentMethodReport).totals?.amount || 0).toFixed(2)}
                     </p>
                   </div>
                 </Card>
@@ -1038,6 +1083,41 @@ export const ReportsPage: React.FC = () => {
                           <td>{((m.share || 0) * 100).toFixed(2)}%</td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {reportKind === 'card-fees' && (
+              <div className="reports-sales-payments">
+                <div className="reports-table-wrapper">
+                  <table className="reports-table">
+                    <thead>
+                      <tr>
+                        <th>Forma</th>
+                        <th>Quantidade</th>
+                        <th>Total</th>
+                        <th>Taxa (%)</th>
+                        <th>Taxa (R$)</th>
+                        <th>Participação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(report as CardFeesByPaymentMethodReport).methods?.map((m) => {
+                        const totalFee = Number((report as CardFeesByPaymentMethodReport).totals?.feeAmount || 0);
+                        const share = totalFee > 0 ? (Number(m.feeAmount || 0) / totalFee) * 100 : 0;
+                        return (
+                          <tr key={m.paymentMethod}>
+                            <td>{m.label}</td>
+                            <td>{Number(m.count || 0)}</td>
+                            <td>R$ {Number(m.amount || 0).toFixed(2)}</td>
+                            <td>{Number(m.feePercent || 0).toFixed(2)}%</td>
+                            <td>R$ {Number(m.feeAmount || 0).toFixed(2)}</td>
+                            <td>{share.toFixed(2)}%</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

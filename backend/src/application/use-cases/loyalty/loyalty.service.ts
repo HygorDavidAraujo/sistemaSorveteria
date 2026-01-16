@@ -9,7 +9,7 @@ export class LoyaltyService {
    */
   async getLoyaltyConfig() {
     const config = await this.prismaClient.loyaltyConfig.findFirst({
-      where: { isActive: true },
+      orderBy: { updatedAt: 'desc' },
     });
 
     if (!config) {

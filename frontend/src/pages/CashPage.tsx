@@ -32,14 +32,14 @@ export const CashPage: React.FC = () => {
 
   const formatCurrencyLocal = (value: number) => formatCurrency(value);
 
-  const handlePrintClosingReceipt = (sessionData: any, declaredCash: number) => {
+  const handlePrintClosingReceipt = async (sessionData: any, declaredCash: number) => {
     if (!sessionData) return;
 
     const initialCash = parseFloat(sessionData.initialCash || 0);
     const totalSales = parseFloat(sessionData.totalSales || 0);
     const totalCash = parseFloat(sessionData.totalCash || 0);
-    const totalCard = parseFloat(sessionData.totalCard || 0);
-    const totalPix = parseFloat(sessionData.totalPix || 0);
+    const totalCardRaw = parseFloat(sessionData.totalCard || 0);
+    const totalPixRaw = parseFloat(sessionData.totalPix || 0);
     const openedAt = sessionData.openedAt ? new Date(sessionData.openedAt).toLocaleString('pt-BR') : '-';
     const closedAtRaw = sessionData.closedAt || sessionData.cashierClosedAt || sessionData.managerClosedAt;
     const closedAt = closedAtRaw ? new Date(closedAtRaw).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR');
@@ -48,6 +48,33 @@ export const CashPage: React.FC = () => {
     const operator = typeof sessionData.openedBy === 'object'
       ? (sessionData.openedBy?.fullName || sessionData.openedBy?.email || 'Operador')
       : (sessionData.openedBy || 'Operador');
+
+    let reportData: any = null;
+    if (sessionData.id) {
+      try {
+        const reportResponse = await apiClient.get(`/cash-sessions/${sessionData.id}/report`);
+        reportData = reportResponse?.data ?? reportResponse;
+      } catch (err) {
+        reportData = null;
+      }
+    }
+
+    const breakdown = reportData?.breakdown ?? sessionData?.breakdown ?? null;
+    const paymentBreakdown = Array.isArray(sessionData?.paymentBreakdown)
+      ? sessionData.paymentBreakdown
+      : [];
+    const sumByMethod = (method: string) =>
+      paymentBreakdown.reduce((sum: number, item: any) => {
+        if (item?.paymentMethod !== method) return sum;
+        const amount = item?.expectedAmount ?? item?.countedAmount ?? 0;
+        return sum + Number(amount || 0);
+      }, 0);
+
+    const totalCredit = Number(breakdown?.creditCard ?? sumByMethod('credit_card'));
+    const totalDebit = Number(breakdown?.debitCard ?? sumByMethod('debit_card'));
+    const totalCard = Number(breakdown?.totalCard ?? (totalCredit + totalDebit));
+    const totalPix = Number(breakdown?.pix ?? totalPixRaw);
+    const totalOverall = totalCash + totalCard + totalPix;
 
     const content = `
       <div class="print-header">
@@ -69,16 +96,24 @@ export const CashPage: React.FC = () => {
           <span class="print-row-value">${formatCurrencyLocal(totalCash)}</span>
         </div>
         <div class="print-row">
-          <span class="print-row-label">Vendas - Cartão</span>
+          <span class="print-row-label">Vendas - Cartões (Total)</span>
           <span class="print-row-value">${formatCurrencyLocal(totalCard)}</span>
+        </div>
+        <div class="print-row">
+          <span class="print-row-label">  Cartões de Crédito</span>
+          <span class="print-row-value">${formatCurrencyLocal(totalCredit)}</span>
+        </div>
+        <div class="print-row">
+          <span class="print-row-label">  Cartões de Débito</span>
+          <span class="print-row-value">${formatCurrencyLocal(totalDebit)}</span>
         </div>
         <div class="print-row">
           <span class="print-row-label">Vendas - Pix</span>
           <span class="print-row-value">${formatCurrencyLocal(totalPix)}</span>
         </div>
         <div class="print-row highlight total">
-          <span class="print-row-label">TOTAL DE VENDAS</span>
-          <span class="print-row-value">${formatCurrencyLocal(totalSales)}</span>
+          <span class="print-row-label">TOTAL GERAL</span>
+          <span class="print-row-value">${formatCurrencyLocal(totalOverall || totalSales)}</span>
         </div>
       </div>
 
@@ -269,7 +304,7 @@ export const CashPage: React.FC = () => {
       setClosingBalance('');
       await loadSession();
       await loadCashSessionsHistory();
-      handlePrintClosingReceipt(closedSession || currentSession, parsedClosing);
+      await handlePrintClosingReceipt(closedSession || currentSession, parsedClosing);
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erro ao fechar caixa');

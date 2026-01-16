@@ -651,6 +651,23 @@ export const SalesPage: React.FC = () => {
     };
   }, [payments, total]);
 
+  const paymentBreakdown = useMemo(() => {
+    const totals = payments.reduce<Record<string, number>>((acc, p) => {
+      acc[p.method] = (acc[p.method] || 0) + p.amount;
+      return acc;
+    }, {});
+
+    const ordered = ['cash', 'credit_card', 'debit_card', 'pix'];
+    const orderedItems = ordered
+      .filter((method) => totals[method])
+      .map((method) => ({ method, amount: parseFloat(totals[method].toFixed(2)) }));
+    const extraItems = Object.keys(totals)
+      .filter((method) => !ordered.includes(method))
+      .map((method) => ({ method, amount: parseFloat(totals[method].toFixed(2)) }));
+
+    return [...orderedItems, ...extraItems];
+  }, [payments]);
+
   const handleAddPayment = () => {
     const parsed = parseFloat(currentPaymentAmount.replace(',', '.'));
     if (isNaN(parsed) || parsed <= 0) {
@@ -1435,6 +1452,23 @@ export const SalesPage: React.FC = () => {
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {paymentBreakdown.length > 0 && (
+                <div className="sales-page__payment-breakdown">
+                  <div className="sales-page__payment-breakdown-title">Resumo por método</div>
+                  {paymentBreakdown.map((item) => (
+                    <div key={item.method} className="sales-page__payment-breakdown-row">
+                      <span>{getPaymentMethodLabel(item.method)}</span>
+                      <span>R$ {item.amount.toFixed(2)}</span>
+                    </div>
+                  ))}
+                  {(missingAmount > 0 || changeAmount > 0) && (
+                    <div className="sales-page__payment-breakdown-warning">
+                      ⚠️ Divergência de R$ {Math.max(missingAmount, changeAmount).toFixed(2)} entre total e pagamentos.
+                    </div>
+                  )}
                 </div>
               )}
 

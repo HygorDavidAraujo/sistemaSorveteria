@@ -461,6 +461,23 @@ export const ComandasPage: React.FC = () => {
     };
   }, [selectedComanda, discount, additionalFee, payments, couponDiscount]);
 
+  const paymentBreakdown = useMemo(() => {
+    const totals = payments.reduce<Record<string, number>>((acc, p) => {
+      acc[p.method] = (acc[p.method] || 0) + p.amount;
+      return acc;
+    }, {});
+
+    const ordered = ['cash', 'credit_card', 'debit_card', 'pix', 'other'];
+    const orderedItems = ordered
+      .filter((method) => totals[method])
+      .map((method) => ({ method, amount: Number(totals[method].toFixed(2)) }));
+    const extraItems = Object.keys(totals)
+      .filter((method) => !ordered.includes(method))
+      .map((method) => ({ method, amount: Number(totals[method].toFixed(2)) }));
+
+    return [...orderedItems, ...extraItems];
+  }, [payments]);
+
   const openComandaAndMaybeImport = async () => {
     
     // Verifica se existe sessão de caixa aberta
@@ -2090,6 +2107,23 @@ export const ComandasPage: React.FC = () => {
                             </button>
                           </div>
                         ))}
+                      </div>
+                    )}
+
+                    {paymentBreakdown.length > 0 && (
+                      <div className="comanda-payment-breakdown">
+                        <div className="comanda-payment-breakdown-title">Resumo por método</div>
+                        {paymentBreakdown.map((item) => (
+                          <div key={item.method} className="comanda-payment-breakdown-row">
+                            <span>{getPaymentMethodLabel(item.method)}</span>
+                            <span>{formatCurrency(item.amount)}</span>
+                          </div>
+                        ))}
+                        {(paymentSummary.remaining > 0 || paymentSummary.change > 0) && (
+                          <div className="comanda-payment-breakdown-warning">
+                            ⚠️ Divergência de {formatCurrency(Math.max(paymentSummary.remaining, paymentSummary.change))} entre total e pagamentos.
+                          </div>
+                        )}
                       </div>
                     )}
 

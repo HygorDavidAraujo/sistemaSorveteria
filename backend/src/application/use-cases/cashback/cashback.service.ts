@@ -9,7 +9,7 @@ export class CashbackService {
    */
   async getCashbackConfig() {
     const config = await this.prismaClient.cashbackConfig.findFirst({
-      where: { isActive: true },
+      orderBy: { updatedAt: 'desc' },
     });
 
     if (!config) {

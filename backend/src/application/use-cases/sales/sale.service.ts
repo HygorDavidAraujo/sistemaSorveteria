@@ -4,6 +4,7 @@ import { AppError } from '@shared/errors/app-error';
 import { LoyaltyService } from '@application/use-cases/loyalty/loyalty.service';
 import { CashbackService } from '@application/use-cases/cashback/cashback.service';
 import { CouponService } from '@application/use-cases/coupons/coupon.service';
+import { PaymentFeeService } from '@application/use-cases/financial/payment-fee.service';
 
 export interface SaleItemInput {
   productId: string;
@@ -555,6 +556,20 @@ export class SaleService {
         data: paymentTotals,
       });
 
+      const feeService = new PaymentFeeService(tx as any);
+      await feeService.createCardFeeTransaction({
+        source: 'sale',
+        referenceId: sale.id,
+        referenceLabel: `Venda #${sale.saleNumber}`,
+        payments: data.payments.map((p) => ({
+          paymentMethod: p.paymentMethod,
+          amount: p.amount,
+        })),
+        transactionDate: sale.saleDate ?? new Date(),
+        createdById: data.createdById,
+        saleId: sale.id,
+      });
+
       return sale;
     });
   }
@@ -656,6 +671,15 @@ export class SaleService {
           adjustedById: userId,
         },
         include: this.includeRelations(),
+      });
+
+      await tx.financialTransaction.deleteMany({
+        where: {
+          saleId: id,
+          tags: {
+            has: 'card_fee',
+          },
+        },
       });
 
       // Criar registro de ajuste

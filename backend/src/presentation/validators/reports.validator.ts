@@ -57,3 +57,7 @@ export const salesByModuleReportSchema = Joi.object({
 export const salesByPaymentMethodReportSchema = Joi.object({
   query: reportDateRangeQuerySchema,
 });
+
+export const cardFeesByPaymentMethodReportSchema = Joi.object({
+  query: reportDateRangeQuerySchema,
+});

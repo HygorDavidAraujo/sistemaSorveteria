@@ -4,6 +4,7 @@ import { AppError } from '@shared/errors/app-error';
 import { LoyaltyService } from '@application/use-cases/loyalty/loyalty.service';
 import { CashbackService } from '@application/use-cases/cashback/cashback.service';
 import { CouponService } from '@application/use-cases/coupons/coupon.service';
+import { PaymentFeeService } from '@application/use-cases/financial/payment-fee.service';
 
 export interface CreateComandaDTO {
   tableNumber?: string;
@@ -712,6 +713,20 @@ export class ComandaService {
         data: paymentTotals,
       });
 
+      const feeService = new PaymentFeeService(tx as any);
+      await feeService.createCardFeeTransaction({
+        source: 'comanda',
+        referenceId: comandaId,
+        referenceLabel: `Comanda #${comanda.comandaNumber}`,
+        payments: data.payments.map((p) => ({
+          paymentMethod: p.paymentMethod,
+          amount: p.amount,
+        })),
+        transactionDate: closedComanda.closedAt ?? new Date(),
+        createdById: data.closedById,
+        comandaId,
+      });
+
       // Atualizar cliente se houver
       if (customer) {
         let loyaltyBalance = customer.loyaltyPoints;
@@ -808,6 +823,15 @@ export class ComandaService {
         where: { comandaId },
       });
 
+      await tx.financialTransaction.deleteMany({
+        where: {
+          comandaId,
+          tags: {
+            has: 'card_fee',
+          },
+        },
+      });
+
       // Reabrir comanda
       const reopenedComanda = await tx.comanda.update({
         where: { id: comandaId },
@@ -895,6 +919,15 @@ export class ComandaService {
     }
 
     return this.prismaClient.$transaction(async (tx) => {
+      await tx.financialTransaction.deleteMany({
+        where: {
+          comandaId,
+          tags: {
+            has: 'card_fee',
+          },
+        },
+      });
+
       // Cancelar todos os itens ativos
       for (const item of comanda.items) {
         await tx.comandaItem.update({

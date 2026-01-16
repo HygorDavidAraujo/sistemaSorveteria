@@ -905,6 +905,47 @@
   border-bottom: none;
 }
 
+.delivery-page__payment-breakdown {
+  border: 1px dashed #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  background: #ffffff;
+}
+
+.delivery-page__payment-breakdown-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.delivery-page__payment-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.35rem 0;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.delivery-page__payment-breakdown-row + .delivery-page__payment-breakdown-row {
+  border-top: 1px solid #f3f4f6;
+}
+
+.delivery-page__payment-breakdown-warning {
+  margin-top: 0.6rem;
+  background: #fef3c7;
+  color: #92400e;
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid #f59e0b;
+  border-radius: 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
 .delivery-page__btn-remove {
   background: transparent;
   border: none;

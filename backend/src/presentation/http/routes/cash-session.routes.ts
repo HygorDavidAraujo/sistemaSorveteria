@@ -63,7 +63,7 @@ router.post(
 // Relatório rápido
 router.get(
   '/:id/report',
-  authorize(['admin', 'manager']),
+  authorize(['admin', 'manager', 'cashier']),
   validate(cashSessionValidators.idParam),
   controller.report.bind(controller)
 );

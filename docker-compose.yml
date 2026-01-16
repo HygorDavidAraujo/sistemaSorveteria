@@ -68,8 +68,6 @@ services:
         condition: service_healthy
     volumes:
       - backend_logs:/app/logs
-    devices:
-      - "/dev/ttyUSB0:/dev/ttyUSB0"
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
       interval: 30s

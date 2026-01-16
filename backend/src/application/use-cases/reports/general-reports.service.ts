@@ -270,4 +270,154 @@ export class GeneralReportsService {
       methods: enriched,
     };
   }
+
+  async getCardFeesByPaymentMethod(filters: DateRangeFilters) {
+    const { startDate, endDate } = filters;
+
+    if (startDate > endDate) {
+      throw new AppError('Data inicial não pode ser maior que a data final', 400);
+    }
+
+    const feeTransactions = await this.prismaClient.financialTransaction.findMany({
+      where: {
+        transactionDate: {
+          gte: startDate,
+          lte: endDate,
+        },
+        transactionType: 'expense',
+        status: 'paid',
+        tags: {
+          has: 'card_fee',
+        },
+      },
+      select: {
+        amount: true,
+        description: true,
+        tags: true,
+      },
+    });
+
+    const methods: Record<PaymentMethod, { amount: number; count: number; feeAmount: number; feePercent: number }> = {
+      cash: { amount: 0, count: 0, feeAmount: 0, feePercent: 0 },
+      debit_card: { amount: 0, count: 0, feeAmount: 0, feePercent: 0 },
+      credit_card: { amount: 0, count: 0, feeAmount: 0, feePercent: 0 },
+      pix: { amount: 0, count: 0, feeAmount: 0, feePercent: 0 },
+      other: { amount: 0, count: 0, feeAmount: 0, feePercent: 0 },
+    };
+
+    const parseMoney = (raw: string) => {
+      const valueRaw = String(raw ?? '').trim();
+      if (!valueRaw) return 0;
+      const hasDot = valueRaw.includes('.');
+      const hasComma = valueRaw.includes(',');
+
+      let normalized = valueRaw;
+      if (hasDot && hasComma) {
+        normalized = valueRaw.replace(/\./g, '').replace(',', '.');
+      } else if (hasComma && !hasDot) {
+        normalized = valueRaw.replace(',', '.');
+      }
+
+      const value = Number(normalized);
+      return Number.isFinite(value) ? value : 0;
+    };
+
+    const parsePercent = (raw: string) => {
+      const valueRaw = String(raw ?? '').trim();
+      if (!valueRaw) return 0;
+      const normalized = valueRaw.replace(',', '.');
+      const value = Number(normalized);
+      return Number.isFinite(value) ? value : 0;
+    };
+
+    const extractFromTags = (tags: string[] | null | undefined) => {
+      if (!tags || tags.length === 0) return null;
+      const methodTag = tags.find((tag) => tag.startsWith('method:'));
+      const baseTag = tags.find((tag) => tag.startsWith('base:'));
+      const feePercentTag = tags.find((tag) => tag.startsWith('feePercent:'));
+      if (!methodTag) return null;
+      const method = methodTag.replace('method:', '') as PaymentMethod;
+      const base = baseTag ? parseMoney(baseTag.replace('base:', '')) : 0;
+      const feePercent = feePercentTag ? parsePercent(feePercentTag.replace('feePercent:', '')) : 0;
+      return { method, base, feePercent };
+    };
+
+    const parseLegacyDescription = (description: string | null | undefined) => {
+      if (!description) return [] as Array<{ method: PaymentMethod; base: number; feePercent: number; feeAmount: number }>;
+      const results: Array<{ method: PaymentMethod; base: number; feePercent: number; feeAmount: number }> = [];
+      const patterns: Array<{ method: PaymentMethod; regex: RegExp }> = [
+        { method: 'credit_card', regex: /Cart[aã]o\s+Cr[eé]dito\s+([\d.,]+)%\s+sobre\s+R\$\s+([\d.,]+)\s*=\s*R\$\s+([\d.,]+)/gi },
+        { method: 'debit_card', regex: /Cart[aã]o\s+D[eé]bito\s+([\d.,]+)%\s+sobre\s+R\$\s+([\d.,]+)\s*=\s*R\$\s+([\d.,]+)/gi },
+      ];
+
+      for (const pattern of patterns) {
+        let match: RegExpExecArray | null;
+        while ((match = pattern.regex.exec(description)) !== null) {
+          const feePercent = parsePercent(match[1]);
+          const base = parseMoney(match[2]);
+          const feeAmount = parseMoney(match[3]);
+          results.push({ method: pattern.method, base, feePercent, feeAmount });
+        }
+      }
+
+      return results;
+    };
+
+    for (const txn of feeTransactions) {
+      const feeAmount = Number(txn.amount || 0);
+      const tagsInfo = extractFromTags(txn.tags as any);
+
+      if (tagsInfo) {
+        const bucket = methods[tagsInfo.method] ?? methods.other;
+        bucket.amount += tagsInfo.base;
+        bucket.feeAmount += feeAmount;
+        bucket.count += 1;
+        bucket.feePercent = tagsInfo.feePercent;
+        continue;
+      }
+
+      const parsed = parseLegacyDescription(txn.description);
+      if (parsed.length > 0) {
+        for (const item of parsed) {
+          const bucket = methods[item.method] ?? methods.other;
+          bucket.amount += item.base;
+          bucket.feeAmount += item.feeAmount;
+          bucket.count += 1;
+          bucket.feePercent = item.feePercent;
+        }
+        continue;
+      }
+
+      methods.other.feeAmount += feeAmount;
+      methods.other.count += 1;
+    }
+
+    const list = (Object.keys(methods) as PaymentMethod[]).map((method) => ({
+      paymentMethod: method,
+      label: paymentMethodLabels[method],
+      amount: methods[method].amount,
+      count: methods[method].count,
+      feePercent: methods[method].feePercent,
+      feeAmount: methods[method].feeAmount,
+    }));
+
+    const totals = list.reduce(
+      (acc, item) => {
+        acc.amount += item.amount;
+        acc.feeAmount += item.feeAmount;
+        acc.count += item.count;
+        return acc;
+      },
+      { amount: 0, feeAmount: 0, count: 0 }
+    );
+
+    return {
+      period: {
+        startDate,
+        endDate,
+      },
+      totals,
+      methods: list,
+    };
+  }
 }

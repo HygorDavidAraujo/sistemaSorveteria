@@ -326,6 +326,21 @@ export interface SalesByPaymentMethodReport {
   methods: SalesByPaymentMethodItem[];
 }
 
+export interface CardFeesByPaymentMethodItem {
+  paymentMethod: PaymentMethod;
+  label: string;
+  amount: number;
+  count: number;
+  feePercent: number;
+  feeAmount: number;
+}
+
+export interface CardFeesByPaymentMethodReport {
+  period: { startDate: string; endDate: string };
+  totals: { amount: number; feeAmount: number; count: number };
+  methods: CardFeesByPaymentMethodItem[];
+}
+
 export interface FinancialIndicatorsReport {
   currentRatio: number;
   quickRatio: number;

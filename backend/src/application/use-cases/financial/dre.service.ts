@@ -153,7 +153,34 @@ export class DREService {
       0
     );
 
-    const grossRevenue = grossRevenueFromSales + grossRevenueFromComandas + grossRevenueFromDeliveries;
+    const manualRevenueTransactions = await this.prismaClient.financialTransaction.findMany({
+      where: {
+        transactionDate: {
+          gte: startDate,
+          lte: endDate,
+        },
+        transactionType: 'revenue',
+        status: 'paid',
+        saleId: null,
+        comandaId: null,
+        deliveryOrderId: null,
+        category: {
+          name: {
+            not: {
+              contains: 'Financeira',
+            },
+          },
+        },
+      },
+      include: { category: true },
+    });
+
+    const manualRevenue = manualRevenueTransactions
+      .filter((txn) => !txn.category?.name?.includes('Extraordinária'))
+      .reduce((sum, txn) => sum + Number(txn.amount), 0);
+
+    const grossRevenue =
+      grossRevenueFromSales + grossRevenueFromComandas + grossRevenueFromDeliveries + manualRevenue;
 
     // 2. RECEITA LÍQUIDA (valor efetivamente cobrado)
     const netRevenueFromSales = sales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
@@ -165,7 +192,7 @@ export class DREService {
       (sum, order) => sum + Number(order.total || 0),
       0
     );
-    const netRevenue = netRevenueFromSales + netRevenueFromComandas + netRevenueFromDeliveries;
+    const netRevenue = netRevenueFromSales + netRevenueFromComandas + netRevenueFromDeliveries + manualRevenue;
 
     // 3. DESCONTOS (derivado para manter consistência bruta - descontos = líquida)
     const discounts = Math.max(0, grossRevenue - netRevenue);
@@ -607,6 +634,11 @@ export class DREService {
         category: {
           categoryType: {
             in: includeCategoryTypes,
+          },
+          name: {
+            not: {
+              contains: 'Imposto',
+            },
           },
         },
         AND: this.buildExcludeDescriptionPrefixes(excludeDescriptionPrefixes),

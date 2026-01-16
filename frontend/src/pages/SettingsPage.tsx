@@ -488,9 +488,18 @@ export const SettingsPage: React.FC = () => {
     if (isLoadingLoyalty) return; // Prevent duplicate calls
     try {
       setIsLoadingLoyalty(true);
-      const response = await apiClient.get('/loyalty/config');
-      if (response.data) {
-        setLoyaltyConfig(response.data);
+      const response: any = await apiClient.get('/loyalty/config');
+      const data = response?.data ?? response;
+      if (data) {
+        setLoyaltyConfig({
+          pointsPerReal: Number(data.pointsPerReal ?? 1),
+          minPurchaseForPoints: Number(data.minPurchaseForPoints ?? 0),
+          pointsExpirationDays: Number(data.pointsExpirationDays ?? 365),
+          minPointsToRedeem: Number(data.minPointsToRedeem ?? 100),
+          pointsRedemptionValue: Number(data.pointsRedemptionValue ?? 0.01),
+          applyToAllProducts: data.applyToAllProducts ?? true,
+          isActive: data.isActive ?? true,
+        });
       }
     } catch (err: any) {
       console.error('Erro ao carregar configuração de lealdade:', err);
@@ -504,9 +513,22 @@ export const SettingsPage: React.FC = () => {
     if (isLoadingCashback) return; // Prevent duplicate calls
     try {
       setIsLoadingCashback(true);
-      const response = await apiClient.get('/cashback/config');
-      if (response.data) {
-        setCashbackConfig(response.data);
+      const response: any = await apiClient.get('/cashback/config');
+      const data = response?.data ?? response;
+      if (data) {
+        setCashbackConfig({
+          cashbackPercentage: Number(data.cashbackPercentage ?? 2),
+          minPurchaseForCashback: Number(data.minPurchaseForCashback ?? 0),
+          maxCashbackPerPurchase: data.maxCashbackPerPurchase === null || data.maxCashbackPerPurchase === undefined
+            ? null
+            : Number(data.maxCashbackPerPurchase),
+          cashbackExpirationDays: data.cashbackExpirationDays === null || data.cashbackExpirationDays === undefined
+            ? null
+            : Number(data.cashbackExpirationDays),
+          minCashbackToUse: Number(data.minCashbackToUse ?? 5),
+          applyToAllProducts: data.applyToAllProducts ?? true,
+          isActive: data.isActive ?? true,
+        });
       }
     } catch (err: any) {
       console.error('Erro ao carregar configuração de cashback:', err);

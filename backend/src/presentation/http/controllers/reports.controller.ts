@@ -116,4 +116,18 @@ export class ReportsController {
       data,
     });
   });
+
+  getCardFeesByPaymentMethod = asyncHandler(async (req: Request, res: Response) => {
+    const { startDate, endDate } = req.query;
+
+    const data = await this.generalReportsService.getCardFeesByPaymentMethod({
+      startDate: this.parseDateInput(startDate as string, false),
+      endDate: this.parseDateInput(endDate as string, true),
+    });
+
+    res.json({
+      success: true,
+      data,
+    });
+  });
 }

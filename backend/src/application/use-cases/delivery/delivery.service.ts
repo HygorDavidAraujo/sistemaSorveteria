@@ -4,6 +4,7 @@ import { AppError } from '@shared/errors/app-error';
 import { LoyaltyService } from '@application/use-cases/loyalty/loyalty.service';
 import { CashbackService } from '@application/use-cases/cashback/cashback.service';
 import { CouponService } from '@application/use-cases/coupons/coupon.service';
+import { PaymentFeeService } from '@application/use-cases/financial/payment-fee.service';
 
 export interface CreateDeliveryOrderDTO {
   customerId: string;
@@ -398,6 +399,22 @@ export class DeliveryService {
         where: { id: data.cashSessionId },
         data: paymentTotals,
       });
+
+      if (data.payments && data.payments.length > 0) {
+        const feeService = new PaymentFeeService(tx as any);
+        await feeService.createCardFeeTransaction({
+          source: 'delivery',
+          referenceId: order.id,
+          referenceLabel: `Delivery #${order.orderNumber}`,
+          payments: data.payments.map((p) => ({
+            paymentMethod: p.paymentMethod,
+            amount: p.amount,
+          })),
+          transactionDate: order.orderedAt ?? new Date(),
+          createdById: data.createdById,
+          deliveryOrderId: order.id,
+        });
+      }
 
       if (customer) {
         let loyaltyBalance = customer.loyaltyPoints;

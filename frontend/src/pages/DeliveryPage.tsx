@@ -1228,6 +1228,17 @@ ${addressText}
     return colors[status] || '#6b7280';
   };
 
+  const getPaymentMethodLabel = (method: string) => {
+    const labels: Record<string, string> = {
+      cash: 'Dinheiro',
+      credit_card: 'Cartão de Crédito',
+      debit_card: 'Cartão de Débito',
+      pix: 'PIX',
+      other: 'Outros',
+    };
+    return labels[method] || method;
+  };
+
   const rawSubtotal = deliveryStore.items.reduce((sum, item) => sum + item.totalPrice, 0);
   const subtotal = round2(rawSubtotal);
   const discountValueNum = toMoneyNumber(discountValue);
@@ -1235,6 +1246,23 @@ ${addressText}
   const totalPaid = round2(payments.reduce((sum, p) => sum + p.amount, 0));
   const missingAmount = round2(Math.max(0, total - totalPaid));
   const changeAmount = round2(Math.max(0, totalPaid - total));
+
+  const orderPaymentBreakdown = useMemo(() => {
+    const totals = orderPayments.reduce<Record<string, number>>((acc, p) => {
+      acc[p.method] = (acc[p.method] || 0) + p.amount;
+      return acc;
+    }, {});
+
+    const ordered = ['cash', 'credit_card', 'debit_card', 'pix', 'other'];
+    const orderedItems = ordered
+      .filter((method) => totals[method])
+      .map((method) => ({ method, amount: round2(totals[method]) }));
+    const extraItems = Object.keys(totals)
+      .filter((method) => !ordered.includes(method))
+      .map((method) => ({ method, amount: round2(totals[method]) }));
+
+    return [...orderedItems, ...extraItems];
+  }, [orderPayments]);
 
   console.log('🔘 Render - selectedCustomer:', selectedCustomer);
   console.log('🔘 Render - selectedAddress:', selectedAddress);
@@ -2053,6 +2081,27 @@ ${addressText}
                         </button>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {orderPaymentBreakdown.length > 0 && (
+                  <div className="delivery-page__payment-breakdown">
+                    <div className="delivery-page__payment-breakdown-title">Resumo por método</div>
+                    {orderPaymentBreakdown.map((item) => (
+                      <div key={item.method} className="delivery-page__payment-breakdown-row">
+                        <span>{getPaymentMethodLabel(item.method)}</span>
+                        <span>R$ {item.amount.toFixed(2)}</span>
+                      </div>
+                    ))}
+                    {(round2(Math.max(0, parseFloat(selectedOrder.total) - orderPayments.reduce((sum, p) => sum + p.amount, 0))) > 0
+                      || round2(Math.max(0, orderPayments.reduce((sum, p) => sum + p.amount, 0) - parseFloat(selectedOrder.total))) > 0) && (
+                      <div className="delivery-page__payment-breakdown-warning">
+                        ⚠️ Divergência de R$ {round2(Math.max(
+                          Math.max(0, parseFloat(selectedOrder.total) - orderPayments.reduce((sum, p) => sum + p.amount, 0)),
+                          Math.max(0, orderPayments.reduce((sum, p) => sum + p.amount, 0) - parseFloat(selectedOrder.total))
+                        )).toFixed(2)} entre total e pagamentos.
+                      </div>
+                    )}
                   </div>
                 )}
 

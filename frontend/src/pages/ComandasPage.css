@@ -1532,6 +1532,47 @@
   background: rgba(239, 68, 68, 0.1);
 }
 
+.comanda-payment-breakdown {
+  background: #ffffff;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--border-radius);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.comanda-payment-breakdown-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.comanda-payment-breakdown-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  padding: 6px 0;
+  color: #374151;
+}
+
+.comanda-payment-breakdown-row + .comanda-payment-breakdown-row {
+  border-top: 1px solid #f3f4f6;
+}
+
+.comanda-payment-breakdown-warning {
+  margin-top: 8px;
+  background: #fef3c7;
+  color: #92400e;
+  padding: 8px 10px;
+  border-left: 4px solid #f59e0b;
+  border-radius: var(--border-radius);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .comanda-payment-status {
   padding: 12px;
   background: var(--color-light);

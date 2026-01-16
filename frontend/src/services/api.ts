@@ -295,6 +295,13 @@ export class ApiClient {
     return response.data;
   }
 
+  async getCardFeesByPaymentMethodReport(startDate: string, endDate: string) {
+    const response = await this.client.get('/reports/fees/card', {
+      params: { startDate, endDate },
+    });
+    return response.data;
+  }
+
   async getDailyReport(date: string) {
     const response = await this.client.get('/financial/daily', {
       params: { date },
