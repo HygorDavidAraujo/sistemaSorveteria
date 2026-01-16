@@ -146,8 +146,8 @@ npm run dev
 Após executar o seed:
 
 ```
-Email: hygordavidaraujo@gmail.com
-Senha: admin123
+E-mail: login
+Senha: login
 ```
 
 **⚠️ IMPORTANTE:** Altere essas credenciais imediatamente em produção!
