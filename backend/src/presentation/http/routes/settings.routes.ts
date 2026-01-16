@@ -35,4 +35,52 @@ router.post(
   settingsController.createOrUpdateCompanyInfo.bind(settingsController)
 );
 
+/**
+ * GET /settings/scale
+ * Obter configurações da balança
+ * Acesso: admin
+ */
+router.get(
+  '/scale',
+  authenticate,
+  authorize('admin'),
+  settingsController.getScaleConfig.bind(settingsController)
+);
+
+/**
+ * PUT /settings/scale
+ * Atualizar configurações da balança
+ * Acesso: admin
+ */
+router.put(
+  '/scale',
+  authenticate,
+  authorize('admin'),
+  validate(settingsValidators.upsertScaleConfig),
+  settingsController.upsertScaleConfig.bind(settingsController)
+);
+
+/**
+ * GET /settings/printer
+ * Obter configurações de impressão
+ * Acesso: público
+ */
+router.get(
+  '/printer',
+  settingsController.getPrinterConfig.bind(settingsController)
+);
+
+/**
+ * PUT /settings/printer
+ * Atualizar configurações de impressão
+ * Acesso: admin
+ */
+router.put(
+  '/printer',
+  authenticate,
+  authorize('admin'),
+  validate(settingsValidators.upsertPrinterConfig),
+  settingsController.upsertPrinterConfig.bind(settingsController)
+);
+
 export default router;

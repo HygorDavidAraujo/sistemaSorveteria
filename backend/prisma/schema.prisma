@@ -549,6 +549,26 @@ model CashbackConfig {
   @@map("cashback_config")
 }
 
+model ScaleConfig {
+  id             String   @id @default(uuid()) @db.Uuid
+  isEnabled      Boolean  @default(false) @map("is_enabled")
+  manufacturer   String   @default("TOLEDO") @db.VarChar(30)
+  model          String?  @db.VarChar(60)
+  protocol       String   @default("toledo_prix") @db.VarChar(30)
+  port           String   @db.VarChar(50)
+  baudRate       Int      @default(9600) @map("baud_rate")
+  dataBits       Int      @default(8) @map("data_bits")
+  stopBits       Int      @default(1) @map("stop_bits")
+  parity         String   @default("none") @db.VarChar(10)
+  stableOnly     Boolean  @default(true) @map("stable_only")
+  readTimeoutMs  Int      @default(1500) @map("read_timeout_ms")
+  requestCommand String?  @map("request_command") @db.VarChar(50)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("scale_config")
+}
+
 model CashbackTransaction {
   id                 String                   @id @default(uuid()) @db.Uuid
   customerId         String                   @map("customer_id") @db.Uuid
@@ -930,4 +950,23 @@ model CompanyInfo {
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("company_info")
+}
+
+model PrinterConfig {
+  id                 String   @id @default(uuid()) @db.Uuid
+  paperWidth         String   @default("80mm") @map("paper_width") @db.VarChar(10)
+  contentWidth       String   @default("70mm") @map("content_width") @db.VarChar(10)
+  fontFamily         String   @default("Courier New") @map("font_family") @db.VarChar(100)
+  fontSize           Int      @default(11) @map("font_size")
+  lineHeight         Float    @default(1.4) @map("line_height") @db.DoublePrecision
+  marginMm           Int      @default(5) @map("margin_mm")
+  maxCharsPerLine    Int      @default(42) @map("max_chars_per_line")
+  showLogo           Boolean  @default(true) @map("show_logo")
+  showCompanyInfo    Boolean  @default(true) @map("show_company_info")
+  footerText         String?  @map("footer_text") @db.VarChar(255)
+  footerSecondaryText String? @map("footer_secondary_text") @db.VarChar(255)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("printer_config")
 }

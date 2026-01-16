@@ -3,6 +3,16 @@
 Data da verificação: Janeiro 2025  
 Sistema: Gelatini - Sistema de Gestão de Sorveteria
 
+## ✅ Atualização (16/01/2026)
+
+**Estado atual validado:**
+- Frontend com páginas de **Comandas**, **Delivery** e **Cupons** implementadas.
+- Fluxos de venda por peso com **integração de balança** (PDV/Comandas/Delivery).
+- Aba de **Configurações** inclui parâmetros de balança e testes de leitura.
+- Backend com endpoints de configuração e leitura de peso (serial/USB) e listagem de portas.
+
+**Conclusão:** as lacunas apontadas na verificação de 2025 foram resolvidas. Este relatório deve ser considerado **histórico** para comparação; o estado atual está alinhado com o backend.
+
 ## 📋 RESUMO EXECUTIVO
 
 ### ✅ Status Geral

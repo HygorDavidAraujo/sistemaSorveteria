@@ -45,6 +45,10 @@ interface CompanyInfo {
   longitude?: number | null;
 }
 
+type ScaleManufacturer = 'TOLEDO' | 'URANO' | 'FILIZOLA' | 'GENERIC';
+type ScaleProtocol = 'toledo_prix' | 'urano' | 'filizola' | 'generic';
+type ScaleParity = 'none' | 'even' | 'odd' | 'mark' | 'space';
+
 export const SettingsPage: React.FC = () => {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
@@ -54,7 +58,7 @@ export const SettingsPage: React.FC = () => {
   
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'user' | 'company' | 'delivery' | 'loyalty'>('user');
+  const [activeTab, setActiveTab] = useState<'user' | 'company' | 'delivery' | 'loyalty' | 'scale' | 'printer'>('user');
   const [terminalId, setTerminalId] = useState<string>(
     localStorage.getItem('terminalId') || 'TERMINAL_01'
   );
@@ -76,6 +80,64 @@ export const SettingsPage: React.FC = () => {
 
   const formatCEP = (value: string) => {
     return value.replace(/\D/g, '').slice(0, 8);
+  };
+
+  const getScaleDefaults = (manufacturer: ScaleManufacturer) => {
+    switch (manufacturer) {
+      case 'URANO':
+        return {
+          manufacturer: 'URANO' as ScaleManufacturer,
+          model: 'URANO POP-Z' as string,
+          protocol: 'urano' as ScaleProtocol,
+          baudRate: 9600,
+          dataBits: 8,
+          stopBits: 1,
+          parity: 'none' as ScaleParity,
+          readTimeoutMs: 1500,
+          stableOnly: true,
+          requestCommand: '',
+        };
+      case 'FILIZOLA':
+        return {
+          manufacturer: 'FILIZOLA' as ScaleManufacturer,
+          model: 'FILIZOLA MF-300' as string,
+          protocol: 'filizola' as ScaleProtocol,
+          baudRate: 9600,
+          dataBits: 8,
+          stopBits: 1,
+          parity: 'none' as ScaleParity,
+          readTimeoutMs: 1500,
+          stableOnly: true,
+          requestCommand: '',
+        };
+      case 'GENERIC':
+        return {
+          manufacturer: 'GENERIC' as ScaleManufacturer,
+          model: 'Balança Serial' as string,
+          protocol: 'generic' as ScaleProtocol,
+          baudRate: 9600,
+          dataBits: 8,
+          stopBits: 1,
+          parity: 'none' as ScaleParity,
+          readTimeoutMs: 1500,
+          stableOnly: false,
+          requestCommand: '',
+        };
+      case 'TOLEDO':
+      default:
+        return {
+          manufacturer: 'TOLEDO' as ScaleManufacturer,
+          model: 'PRIX 3 FIT' as string,
+          protocol: 'toledo_prix' as ScaleProtocol,
+          baudRate: 9600,
+          dataBits: 8,
+          stopBits: 1,
+          parity: 'none' as ScaleParity,
+          readTimeoutMs: 1500,
+          stableOnly: true,
+          requestCommand: '',
+        };
+    }
   };
   
   // User management state
@@ -151,6 +213,45 @@ export const SettingsPage: React.FC = () => {
   const [deliveryFees, setDeliveryFees] = useState<any[]>([]);
   const [isLoadingDelivery, setIsLoadingDelivery] = useState(false);
 
+  // Scale config state
+  const [scaleConfig, setScaleConfig] = useState({
+    isEnabled: false,
+    manufacturer: 'TOLEDO' as ScaleManufacturer,
+    model: 'PRIX 3 FIT',
+    protocol: 'toledo_prix' as ScaleProtocol,
+    port: 'COM3',
+    baudRate: 9600,
+    dataBits: 8,
+    stopBits: 1,
+    parity: 'none' as ScaleParity,
+    stableOnly: true,
+    readTimeoutMs: 1500,
+    requestCommand: '',
+  });
+  const [isLoadingScale, setIsLoadingScale] = useState(false);
+  const [isTestingScale, setIsTestingScale] = useState(false);
+  const [scaleTestResult, setScaleTestResult] = useState<string | null>(null);
+  const [availableScalePorts, setAvailableScalePorts] = useState<
+    Array<{ path: string; friendlyName?: string; manufacturer?: string }>
+  >([]);
+  const [scalePortsWarning, setScalePortsWarning] = useState<string | null>(null);
+
+  // Printer config state
+  const [printerConfig, setPrinterConfig] = useState({
+    paperWidth: '80mm',
+    contentWidth: '70mm',
+    fontFamily: 'Courier New',
+    fontSize: 11,
+    lineHeight: 1.4,
+    marginMm: 5,
+    maxCharsPerLine: 42,
+    showLogo: true,
+    showCompanyInfo: true,
+    footerText: 'Documento não fiscal',
+    footerSecondaryText: 'Gelatini © 2026',
+  });
+  const [isLoadingPrinter, setIsLoadingPrinter] = useState(false);
+
   useEffect(() => {
     if (activeTab === 'user' && isAdmin && users.length === 0 && !isLoadingUsers) {
       loadUsers();
@@ -164,6 +265,13 @@ export const SettingsPage: React.FC = () => {
     if (activeTab === 'loyalty' && !isLoadingLoyalty && loyaltyConfig.pointsPerReal === 1 && loyaltyConfig.pointsExpirationDays === 365) {
       loadLoyaltyConfig();
       loadCashbackConfig();
+    }
+    if (activeTab === 'scale' && isAdmin && !isLoadingScale) {
+      loadScaleConfig();
+      loadScalePorts();
+    }
+    if (activeTab === 'printer' && isAdmin && !isLoadingPrinter) {
+      loadPrinterConfig();
     }
   }, [activeTab]);
 
@@ -206,6 +314,130 @@ export const SettingsPage: React.FC = () => {
       console.error('❌ Erro ao carregar informações da empresa:', err);
     } finally {
       setIsLoadingCompany(false);
+    }
+  };
+
+  const loadScaleConfig = async () => {
+    try {
+      setIsLoadingScale(true);
+      setScaleTestResult(null);
+      const response = await apiClient.get('/settings/scale');
+      if (response?.data) {
+        const data = response.data;
+        setScaleConfig((prev) => ({
+          ...prev,
+          ...data,
+          requestCommand: data.requestCommand || '',
+        }));
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Erro ao carregar configurações da balança');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setIsLoadingScale(false);
+    }
+  };
+
+  const handleSaveScaleConfig = async () => {
+    try {
+      setIsLoadingScale(true);
+      setError(null);
+      const payload = {
+        ...scaleConfig,
+        requestCommand: scaleConfig.requestCommand?.trim() || null,
+      };
+      await apiClient.put('/settings/scale', payload);
+      setSuccess('Configurações da balança salvas com sucesso!');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Erro ao salvar configurações da balança');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setIsLoadingScale(false);
+    }
+  };
+
+  const handleTestScale = async () => {
+    try {
+      setIsTestingScale(true);
+      setScaleTestResult(null);
+      const response = await apiClient.get('/scale/weight');
+      const weightRaw = Number((response as any)?.weightKg ?? (response as any)?.data?.weightKg);
+      const weight = Number.isFinite(weightRaw) && weightRaw > 100 && weightRaw < 100000
+        ? weightRaw / 1000
+        : weightRaw;
+      if (!Number.isFinite(weight) || weight <= 0) {
+        throw new Error('Leitura inválida');
+      }
+      setScaleTestResult(`Peso lido: ${weight.toFixed(3)} kg`);
+    } catch (err: any) {
+      setScaleTestResult(err.response?.data?.message || err.message || 'Falha ao ler balança');
+    } finally {
+      setIsTestingScale(false);
+    }
+  };
+
+  const loadScalePorts = async () => {
+    try {
+      setScalePortsWarning(null);
+      const response = await apiClient.get('/scale/ports');
+      const ports = (response as any)?.ports ?? (response as any)?.data?.ports ?? [];
+      const warning = (response as any)?.warning ?? (response as any)?.data?.warning ?? null;
+      if (Array.isArray(ports)) {
+        setAvailableScalePorts(ports);
+      }
+      if (warning) {
+        setScalePortsWarning(String(warning));
+      }
+    } catch (err: any) {
+      setAvailableScalePorts([]);
+      setScalePortsWarning(err?.message || 'Não foi possível listar portas seriais');
+    }
+  };
+
+  const loadPrinterConfig = async () => {
+    try {
+      setIsLoadingPrinter(true);
+      const response = await apiClient.get('/settings/printer');
+      const data = (response as any)?.data || response;
+      if (data?.data || data) {
+        const config = data?.data || data;
+        setPrinterConfig((prev) => ({
+          ...prev,
+          ...config,
+          fontSize: Number(config.fontSize ?? prev.fontSize),
+          lineHeight: Number(config.lineHeight ?? prev.lineHeight),
+          marginMm: Number(config.marginMm ?? prev.marginMm),
+          maxCharsPerLine: Number(config.maxCharsPerLine ?? prev.maxCharsPerLine),
+        }));
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Erro ao carregar configurações de impressão');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setIsLoadingPrinter(false);
+    }
+  };
+
+  const handleSavePrinterConfig = async () => {
+    try {
+      setIsLoadingPrinter(true);
+      setError(null);
+      const payload = {
+        ...printerConfig,
+        fontSize: Number(printerConfig.fontSize),
+        lineHeight: Number(printerConfig.lineHeight),
+        marginMm: Number(printerConfig.marginMm),
+        maxCharsPerLine: Number(printerConfig.maxCharsPerLine),
+      };
+      await apiClient.put('/settings/printer', payload);
+      setSuccess('Configurações de impressão salvas com sucesso!');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Erro ao salvar configurações de impressão');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setIsLoadingPrinter(false);
     }
   };
 
@@ -371,7 +603,22 @@ export const SettingsPage: React.FC = () => {
 
   const handleSaveCashbackConfig = async () => {
     try {
-      await apiClient.patch('/cashback/config', cashbackConfig);
+      const normalizeNullableNumber = (value: unknown) => {
+        if (value === null || value === undefined || value === '') return undefined;
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : undefined;
+      };
+
+      const payload = {
+        ...cashbackConfig,
+        cashbackPercentage: normalizeNullableNumber(cashbackConfig.cashbackPercentage) ?? 0,
+        minPurchaseForCashback: normalizeNullableNumber(cashbackConfig.minPurchaseForCashback) ?? 0,
+        minCashbackToUse: normalizeNullableNumber(cashbackConfig.minCashbackToUse) ?? 0,
+        maxCashbackPerPurchase: normalizeNullableNumber(cashbackConfig.maxCashbackPerPurchase),
+        cashbackExpirationDays: normalizeNullableNumber(cashbackConfig.cashbackExpirationDays),
+      };
+
+      await apiClient.patch('/cashback/config', payload);
       setSuccess('Configuração de cashback salva com sucesso!');
       // Recarregar dados após salvar
       await loadCashbackConfig();
@@ -612,6 +859,18 @@ export const SettingsPage: React.FC = () => {
               onClick={() => setActiveTab('loyalty')}
             >
               🎁 Fidelidade
+            </button>
+            <button
+              className={`tab-button ${activeTab === 'scale' ? 'active' : ''}`}
+              onClick={() => setActiveTab('scale')}
+            >
+              ⚖️ Balança
+            </button>
+            <button
+              className={`tab-button ${activeTab === 'printer' ? 'active' : ''}`}
+              onClick={() => setActiveTab('printer')}
+            >
+              🖨️ Impressão
             </button>
           </>
         )}
@@ -990,7 +1249,7 @@ export const SettingsPage: React.FC = () => {
               <div className="settings-form-grid">
                 <div className="settings-form-group">
                   <label className="settings-form-label">CEP *</label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <div className="settings-cep-row">
                     <input
                       type="text"
                       name="zipCode"
@@ -1003,8 +1262,7 @@ export const SettingsPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleLookupCompanyCep}
-                      className="settings-btn settings-btn-primary"
-                      style={{ whiteSpace: 'nowrap', padding: '10px 12px' }}
+                      className="settings-btn settings-btn-primary settings-cep-button"
                       disabled={isLoadingCompany}
                       title="Buscar CEP e preencher coordenadas da loja"
                     >
@@ -1593,6 +1851,414 @@ export const SettingsPage: React.FC = () => {
           )}
         </Card>
       </>
+      )}
+
+      {/* Scale Integration Tab */}
+      {activeTab === 'scale' && isAdmin && (
+      <Card>
+        <h2 className="settings-section-title">⚖️ Integração com Balança</h2>
+
+        <div className="settings-option-item">
+          <div>
+            <p className="settings-option-title">Ativar leitura de balança</p>
+            <p className="settings-option-description">
+              Habilita leitura automática no PDV e Comandas (modal de produtos por peso)
+            </p>
+          </div>
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              checked={scaleConfig.isEnabled}
+              onChange={(e) => setScaleConfig({ ...scaleConfig, isEnabled: e.target.checked })}
+              className="settings-toggle-input"
+              title="Ativar balança"
+            />
+            <div className="settings-toggle-slider"></div>
+          </label>
+        </div>
+
+        <div className="settings-form-grid settings-scale-form-grid">
+          <div className="settings-form-group">
+            <label className="settings-form-label">Fabricante</label>
+            <select
+              className="settings-form-input"
+              value={scaleConfig.manufacturer}
+              onChange={(e) => {
+                const manufacturer = e.target.value as ScaleManufacturer;
+                const defaults = getScaleDefaults(manufacturer);
+                setScaleConfig({
+                  ...scaleConfig,
+                  manufacturer,
+                  model: defaults.model,
+                  protocol: defaults.protocol,
+                  baudRate: defaults.baudRate,
+                  dataBits: defaults.dataBits,
+                  stopBits: defaults.stopBits,
+                  parity: defaults.parity,
+                  readTimeoutMs: defaults.readTimeoutMs,
+                  stableOnly: defaults.stableOnly,
+                  requestCommand: defaults.requestCommand,
+                });
+              }}
+              title="Selecionar fabricante"
+            >
+              <option value="TOLEDO">Toledo</option>
+              <option value="URANO">Urano</option>
+              <option value="FILIZOLA">Filizola</option>
+              <option value="GENERIC">Genérica (Serial)</option>
+            </select>
+          </div>
+
+          <div className="settings-form-group">
+            <label className="settings-form-label">Modelo</label>
+            <input
+              type="text"
+              value={scaleConfig.model || ''}
+              onChange={(e) => setScaleConfig({ ...scaleConfig, model: e.target.value })}
+              className="settings-form-input"
+              placeholder="Ex: PRIX 3 FIT"
+            />
+          </div>
+
+          <div className="settings-form-group">
+            <label className="settings-form-label">Protocolo</label>
+            <select
+              className="settings-form-input"
+              value={scaleConfig.protocol}
+              onChange={(e) => setScaleConfig({ ...scaleConfig, protocol: e.target.value as ScaleProtocol })}
+              title="Selecionar protocolo"
+            >
+              <option value="toledo_prix">Toledo PRIX</option>
+              <option value="urano">Urano</option>
+              <option value="filizola">Filizola</option>
+              <option value="generic">Genérico</option>
+            </select>
+            <small className="settings-form-hint">
+              Compatível com Toledo PRIX (foco PRIX 3 FIT), Urano e Filizola.
+            </small>
+          </div>
+
+          <div className="settings-form-group">
+            <label className="settings-form-label">Porta Serial</label>
+            {availableScalePorts.length > 0 ? (
+              <select
+                className="settings-form-input"
+                value={scaleConfig.port}
+                onChange={(e) => setScaleConfig({ ...scaleConfig, port: e.target.value })}
+                title="Selecionar porta USB/Serial"
+              >
+                {availableScalePorts.map((port) => (
+                  <option key={port.path} value={port.path}>
+                    {port.path} {port.friendlyName ? `- ${port.friendlyName}` : ''}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={scaleConfig.port}
+                onChange={(e) => setScaleConfig({ ...scaleConfig, port: e.target.value })}
+                className="settings-form-input"
+                placeholder="COM3"
+              />
+            )}
+            <small className="settings-form-hint">
+              Em computadores sem porta serial, o adaptador USB cria uma porta virtual (ex: COM3).
+            </small>
+          </div>
+
+          <div className="settings-form-group">
+            <label className="settings-form-label">Baud rate</label>
+            <input
+              type="number"
+              value={scaleConfig.baudRate}
+              onChange={(e) => setScaleConfig({ ...scaleConfig, baudRate: Number(e.target.value) || 9600 })}
+              className="settings-form-input"
+              placeholder="9600"
+            />
+          </div>
+
+          <div className="settings-form-group">
+            <label className="settings-form-label">Data bits</label>
+            <select
+              className="settings-form-input"
+              value={scaleConfig.dataBits}
+              onChange={(e) => setScaleConfig({ ...scaleConfig, dataBits: Number(e.target.value) })}
+              title="Selecionar data bits"
+            >
+              <option value={7}>7</option>
+              <option value={8}>8</option>
+            </select>
+          </div>
+
+          <div className="settings-form-group">
+            <label className="settings-form-label">Stop bits</label>
+            <select
+              className="settings-form-input"
+              value={scaleConfig.stopBits}
+              onChange={(e) => setScaleConfig({ ...scaleConfig, stopBits: Number(e.target.value) })}
+              title="Selecionar stop bits"
+            >
+              <option value={1}>1</option>
+              <option value={2}>2</option>
+            </select>
+          </div>
+
+          <div className="settings-form-group">
+            <label className="settings-form-label">Paridade</label>
+            <select
+              className="settings-form-input"
+              value={scaleConfig.parity}
+              onChange={(e) => setScaleConfig({ ...scaleConfig, parity: e.target.value as ScaleParity })}
+              title="Selecionar paridade"
+            >
+              <option value="none">Nenhuma</option>
+              <option value="even">Par</option>
+              <option value="odd">Ímpar</option>
+              <option value="mark">Mark</option>
+              <option value="space">Space</option>
+            </select>
+          </div>
+
+          <div className="settings-form-group">
+            <label className="settings-form-label">Timeout de leitura (ms)</label>
+            <input
+              type="number"
+              value={scaleConfig.readTimeoutMs}
+              onChange={(e) => setScaleConfig({ ...scaleConfig, readTimeoutMs: Number(e.target.value) || 1500 })}
+              className="settings-form-input"
+              placeholder="1500"
+            />
+          </div>
+
+          <div className="settings-form-group">
+            <label className="settings-form-label">Comando de leitura (opcional)</label>
+            <input
+              type="text"
+              value={scaleConfig.requestCommand || ''}
+              onChange={(e) => setScaleConfig({ ...scaleConfig, requestCommand: e.target.value })}
+              className="settings-form-input"
+              placeholder="Ex: P\\r\\n"
+            />
+            <small className="settings-form-hint">Use \r e \n se a balança exigir comando de leitura.</small>
+          </div>
+        </div>
+
+        <div className="settings-option settings-scale-option">
+          <label className="settings-checkbox-option">
+            <input
+              type="checkbox"
+              checked={scaleConfig.stableOnly}
+              onChange={(e) => setScaleConfig({ ...scaleConfig, stableOnly: e.target.checked })}
+            />
+            <span>Ler somente peso estável</span>
+          </label>
+          <p className="settings-option-description">
+            Recomendado para evitar variações durante o manuseio do produto.
+          </p>
+        </div>
+
+        {availableScalePorts.length === 0 && (
+          <div className="settings-scale-diagnostic">
+            <p className="settings-scale-diagnostic-title">Nenhuma porta USB/Serial detectada</p>
+            <p className="settings-scale-diagnostic-text">
+              Verifique o driver do adaptador USB-Serial (FTDI/Prolific/CH340),
+              reconecte o cabo e clique em “Atualizar portas”.
+            </p>
+          </div>
+        )}
+
+        {scalePortsWarning && (
+          <div className="settings-scale-diagnostic">
+            <p className="settings-scale-diagnostic-title">Aviso do servidor</p>
+            <p className="settings-scale-diagnostic-text">{scalePortsWarning}</p>
+          </div>
+        )}
+
+        {scaleTestResult && (
+          <div className="settings-scale-test-result">
+            {scaleTestResult}
+          </div>
+        )}
+
+        <div className="settings-form-actions">
+          <Button variant="primary" onClick={handleSaveScaleConfig} disabled={isLoadingScale}>
+            {isLoadingScale ? 'Salvando...' : 'Salvar Configurações'}
+          </Button>
+          <Button variant="secondary" onClick={loadScalePorts}>
+            Atualizar portas
+          </Button>
+          <Button variant="secondary" onClick={handleTestScale} disabled={isTestingScale}>
+            {isTestingScale ? 'Testando...' : 'Testar Leitura'}
+          </Button>
+        </div>
+      </Card>
+      )}
+
+      {/* Printer Settings Tab */}
+      {activeTab === 'printer' && isAdmin && (
+      <Card>
+        <h2 className="settings-section-title">🖨️ Configurações de Impressão (80mm)</h2>
+
+        {isLoadingPrinter ? (
+          <div className="settings-info-value">Carregando configurações...</div>
+        ) : (
+          <div className="settings-company-form">
+            <div className="settings-form-section">
+              <h3 className="settings-form-section-title">Layout e Papel</h3>
+              <div className="settings-form-grid">
+                <div className="settings-form-group">
+                  <label className="settings-form-label">Largura do papel</label>
+                  <input
+                    type="text"
+                    value={printerConfig.paperWidth}
+                    onChange={(e) => setPrinterConfig({ ...printerConfig, paperWidth: e.target.value })}
+                    className="settings-form-input"
+                    placeholder="80mm"
+                  />
+                </div>
+                <div className="settings-form-group">
+                  <label className="settings-form-label">Largura do conteúdo</label>
+                  <input
+                    type="text"
+                    value={printerConfig.contentWidth}
+                    onChange={(e) => setPrinterConfig({ ...printerConfig, contentWidth: e.target.value })}
+                    className="settings-form-input"
+                    placeholder="70mm"
+                  />
+                </div>
+                <div className="settings-form-group">
+                  <label className="settings-form-label">Margem (mm)</label>
+                  <input
+                    type="number"
+                    value={printerConfig.marginMm}
+                    onChange={(e) => setPrinterConfig({ ...printerConfig, marginMm: Number(e.target.value) || 0 })}
+                    className="settings-form-input"
+                    placeholder="5"
+                  />
+                </div>
+                <div className="settings-form-group">
+                  <label className="settings-form-label">Máx. caracteres por linha</label>
+                  <input
+                    type="number"
+                    value={printerConfig.maxCharsPerLine}
+                    onChange={(e) => setPrinterConfig({ ...printerConfig, maxCharsPerLine: Number(e.target.value) || 42 })}
+                    className="settings-form-input"
+                    placeholder="42"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="settings-form-section">
+              <h3 className="settings-form-section-title">Tipografia</h3>
+              <div className="settings-form-grid">
+                <div className="settings-form-group">
+                  <label className="settings-form-label">Fonte</label>
+                  <input
+                    type="text"
+                    value={printerConfig.fontFamily}
+                    onChange={(e) => setPrinterConfig({ ...printerConfig, fontFamily: e.target.value })}
+                    className="settings-form-input"
+                    placeholder="Courier New"
+                  />
+                </div>
+                <div className="settings-form-group">
+                  <label className="settings-form-label">Tamanho da fonte (px)</label>
+                  <input
+                    type="number"
+                    value={printerConfig.fontSize}
+                    onChange={(e) => setPrinterConfig({ ...printerConfig, fontSize: Number(e.target.value) || 11 })}
+                    className="settings-form-input"
+                    placeholder="11"
+                  />
+                </div>
+                <div className="settings-form-group">
+                  <label className="settings-form-label">Altura de linha</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={printerConfig.lineHeight}
+                    onChange={(e) => setPrinterConfig({ ...printerConfig, lineHeight: Number(e.target.value) || 1.4 })}
+                    className="settings-form-input"
+                    placeholder="1.4"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="settings-form-section">
+              <h3 className="settings-form-section-title">Cabeçalho e Rodapé</h3>
+              <div className="settings-option">
+                <div className="settings-option-header">
+                  <div>
+                    <p className="settings-option-title">Exibir logo</p>
+                    <p className="settings-option-description">Mostra o logo da empresa no cabeçalho do cupom</p>
+                  </div>
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={printerConfig.showLogo}
+                      onChange={(e) => setPrinterConfig({ ...printerConfig, showLogo: e.target.checked })}
+                      className="settings-toggle-input"
+                      title="Exibir logo"
+                    />
+                    <div className="settings-toggle-slider"></div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="settings-option">
+                <div className="settings-option-header">
+                  <div>
+                    <p className="settings-option-title">Exibir dados da empresa</p>
+                    <p className="settings-option-description">Mostra nome e telefone no cabeçalho</p>
+                  </div>
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={printerConfig.showCompanyInfo}
+                      onChange={(e) => setPrinterConfig({ ...printerConfig, showCompanyInfo: e.target.checked })}
+                      className="settings-toggle-input"
+                      title="Exibir dados da empresa"
+                    />
+                    <div className="settings-toggle-slider"></div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="settings-form-grid">
+                <div className="settings-form-group">
+                  <label className="settings-form-label">Texto do rodapé</label>
+                  <input
+                    type="text"
+                    value={printerConfig.footerText}
+                    onChange={(e) => setPrinterConfig({ ...printerConfig, footerText: e.target.value })}
+                    className="settings-form-input"
+                    placeholder="Documento não fiscal"
+                  />
+                </div>
+                <div className="settings-form-group">
+                  <label className="settings-form-label">Texto secundário</label>
+                  <input
+                    type="text"
+                    value={printerConfig.footerSecondaryText}
+                    onChange={(e) => setPrinterConfig({ ...printerConfig, footerSecondaryText: e.target.value })}
+                    className="settings-form-input"
+                    placeholder="Gelatini © 2026"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="settings-form-actions">
+              <Button variant="primary" onClick={handleSavePrinterConfig} disabled={isLoadingPrinter}>
+                {isLoadingPrinter ? 'Salvando...' : 'Salvar Configurações de Impressão'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
       )}
     </div>
 

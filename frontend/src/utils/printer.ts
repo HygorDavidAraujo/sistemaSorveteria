@@ -6,6 +6,35 @@
 import { apiClient } from '@/services/api';
 
 let cachedCompanyInfo: any = null;
+let cachedPrinterConfig: PrinterConfig | null = null;
+
+export interface PrinterConfig {
+  paperWidth: string;
+  contentWidth: string;
+  fontFamily: string;
+  fontSize: number;
+  lineHeight: number;
+  marginMm: number;
+  maxCharsPerLine: number;
+  showLogo: boolean;
+  showCompanyInfo: boolean;
+  footerText?: string | null;
+  footerSecondaryText?: string | null;
+}
+
+export const DEFAULT_PRINTER_CONFIG: PrinterConfig = {
+  paperWidth: '80mm',
+  contentWidth: '70mm',
+  fontFamily: 'Courier New',
+  fontSize: 11,
+  lineHeight: 1.4,
+  marginMm: 5,
+  maxCharsPerLine: 42,
+  showLogo: true,
+  showCompanyInfo: true,
+  footerText: 'Documento não fiscal',
+  footerSecondaryText: 'Gelatini © 2026',
+};
 
 export const getCompanyInfo = async () => {
   if (cachedCompanyInfo) return cachedCompanyInfo;
@@ -24,14 +53,38 @@ export const getCompanyInfo = async () => {
 };
 
 export const PRINTER_CONFIG = {
-  paperWidth: '80mm',
-  contentWidth: '70mm',
-  maxCharsPerLine: 42, // Aproximadamente 42 caracteres em monospace 10px
+  paperWidth: DEFAULT_PRINTER_CONFIG.paperWidth,
+  contentWidth: DEFAULT_PRINTER_CONFIG.contentWidth,
+  maxCharsPerLine: DEFAULT_PRINTER_CONFIG.maxCharsPerLine,
 };
 
-export const getPrintStyles = () => `
+const normalizePrinterConfig = (data: any): PrinterConfig => {
+  if (!data || typeof data !== 'object') return DEFAULT_PRINTER_CONFIG;
+  return {
+    ...DEFAULT_PRINTER_CONFIG,
+    ...data,
+  } as PrinterConfig;
+};
+
+export const getPrinterConfig = async () => {
+  if (cachedPrinterConfig) return cachedPrinterConfig;
+
+  try {
+    const response = await apiClient.get('/settings/printer');
+    const payload = (response as any)?.data || response;
+    cachedPrinterConfig = normalizePrinterConfig(payload?.data || payload);
+    return cachedPrinterConfig;
+  } catch (error) {
+    console.error('Erro ao carregar configurações de impressão:', error);
+  }
+
+  cachedPrinterConfig = DEFAULT_PRINTER_CONFIG;
+  return cachedPrinterConfig;
+};
+
+export const getPrintStyles = (config: PrinterConfig = DEFAULT_PRINTER_CONFIG) => `
   @page {
-    size: 80mm auto;
+    size: ${config.paperWidth} auto;
     margin: 0;
   }
 
@@ -40,12 +93,12 @@ export const getPrintStyles = () => `
   }
 
   body {
-    font-family: 'Courier New', monospace;
-    font-size: 11px;
-    line-height: 1.4;
+    font-family: ${config.fontFamily}, monospace;
+    font-size: ${config.fontSize}px;
+    line-height: ${config.lineHeight};
     margin: 0;
-    padding: 5mm;
-    width: ${PRINTER_CONFIG.contentWidth};
+    padding: ${config.marginMm}mm;
+    width: ${config.contentWidth};
     background: white;
   }
 
@@ -81,6 +134,21 @@ export const getPrintStyles = () => `
     font-weight: bold;
     margin: 0 0 2mm 0;
     letter-spacing: 1px;
+  }
+
+  .print-document-title {
+    font-size: 12px;
+    font-weight: bold;
+    text-align: center;
+    margin: 2mm 0 1mm 0;
+    letter-spacing: 0.6px;
+  }
+
+  .print-document-subtitle {
+    font-size: 10px;
+    text-align: center;
+    color: #444;
+    margin-bottom: 2mm;
   }
 
   .print-header-subtitle {
@@ -263,16 +331,30 @@ interface PrintOptions {
 export const printReceipt = async (options: PrintOptions) => {
   const { title, subtitle, content } = options;
   const companyInfo = await getCompanyInfo();
+  const printerConfig = await getPrinterConfig();
+
+  const footerText = printerConfig.footerText || '';
+  const footerSecondary = printerConfig.footerSecondaryText || '';
+  const footerBlock = footerText || footerSecondary
+    ? `
+      <div class="print-footer">
+        ${footerText ? `<div class="print-footer-text">${footerText}</div>` : ''}
+        ${footerSecondary ? `<div class="print-footer-line">${footerSecondary}</div>` : ''}
+      </div>
+    `
+    : '';
 
   let logoHtml = '';
   let companyHeaderHtml = '';
 
-  if (companyInfo) {
+  if (companyInfo && printerConfig.showLogo) {
     if (companyInfo.logoBase64 && companyInfo.logoMimeType) {
       const logoUrl = `data:${companyInfo.logoMimeType};base64,${companyInfo.logoBase64}`;
       logoHtml = `<div class="print-header-logo"><img src="${logoUrl}" alt="Logo" /></div>`;
     }
-    
+  }
+
+  if (companyInfo && printerConfig.showCompanyInfo) {
     companyHeaderHtml = `
       <div class="print-header-info">
         <div class="print-header-title">${companyInfo.tradeName || 'Sorveteria'}</div>
@@ -288,6 +370,16 @@ export const printReceipt = async (options: PrintOptions) => {
     </div>
   ` : '';
 
+  const hasContentHeader = content.includes('print-header');
+  const contentWithFooter = content
+    .replace(/\{\{FOOTER_TEXT\}\}/g, footerText)
+    .replace(/\{\{FOOTER_SECONDARY\}\}/g, footerSecondary)
+    .replace(/\{\{FOOTER_BLOCK\}\}/g, footerBlock);
+  const documentHeaderHtml = !hasContentHeader && title ? `
+    <div class="print-document-title">${title}</div>
+    ${subtitle ? `<div class="print-document-subtitle">${subtitle}</div>` : ''}
+  ` : '';
+
   const html = `
     <!DOCTYPE html>
     <html>
@@ -296,12 +388,13 @@ export const printReceipt = async (options: PrintOptions) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>${title}</title>
         <style>
-          ${getPrintStyles()}
+          ${getPrintStyles(printerConfig)}
         </style>
       </head>
       <body>
         ${headerHtml}
-        ${content}
+        ${documentHeaderHtml}
+        ${contentWithFooter}
       </body>
     </html>
   `;

@@ -8,7 +8,7 @@ export const updateCashbackConfigSchema = Joi.object({
     cashbackPercentage: Joi.number().positive().max(100).optional(),
     minPurchaseForCashback: Joi.number().min(0).optional(),
     maxCashbackPerPurchase: Joi.number().positive().optional().allow(null),
-    cashbackExpirationDays: Joi.number().integer().positive().optional(),
+    cashbackExpirationDays: Joi.number().integer().positive().optional().allow(null),
     minCashbackToUse: Joi.number().positive().optional(),
     isActive: Joi.boolean().optional(),
     applyToAllProducts: Joi.boolean().optional(),

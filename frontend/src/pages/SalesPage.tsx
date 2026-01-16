@@ -422,14 +422,35 @@ export const SalesPage: React.FC = () => {
     return result;
   }, [salesStore.items]);
 
+  const parseWeightInput = (value: string): number => {
+    const cleaned = value
+      .trim()
+      .replace(/\s+/g, '')
+      .replace(/[^\d.,]/g, '');
+
+    if (!cleaned) return NaN;
+
+    const lastComma = cleaned.lastIndexOf(',');
+    const lastDot = cleaned.lastIndexOf('.');
+    let normalized = cleaned;
+
+    if (lastComma > -1 && lastDot > -1) {
+      if (lastComma > lastDot) {
+        normalized = cleaned.replace(/\./g, '').replace(',', '.');
+      } else {
+        normalized = cleaned.replace(/,/g, '');
+      }
+    } else if (lastComma > -1) {
+      normalized = cleaned.replace(',', '.');
+    }
+
+    return parseFloat(normalized);
+  };
+
   const handleConfirmWeight = () => {
     if (!pendingWeightProduct) return;
 
-    const raw = tempWeight
-      .replace(/[^\d,]/g, '')
-      .replace(/,(?=.*,)/g, '')
-      .replace(',', '.');
-    const weight = parseFloat(raw);
+    const weight = parseWeightInput(tempWeight);
 
     if (isNaN(weight) || weight <= 0) {
       setError('Peso inválido');
@@ -462,12 +483,20 @@ export const SalesPage: React.FC = () => {
     setTempWeight('');
   };
 
+  const normalizeScaleWeight = (value: number) => {
+    if (!Number.isFinite(value)) return value;
+    // Some protocols send grams without decimal point (e.g., 500 -> 0.500 kg)
+    if (value > 100 && value < 100000) return value / 1000;
+    return value;
+  };
+
   const readWeightFromScale = async () => {
     if (isReadingScale) return;
     setIsReadingScale(true);
     try {
       const data = await apiClient.get('/scale/weight');
-      const weightKg = Number((data as any)?.weightKg);
+      const weightRaw = Number((data as any)?.weightKg);
+      const weightKg = normalizeScaleWeight(weightRaw);
       if (!Number.isFinite(weightKg) || weightKg <= 0) {
         throw new Error('Peso inválido retornado pela balança');
       }
@@ -703,10 +732,15 @@ export const SalesPage: React.FC = () => {
     ` : '';
 
     const content = `
-      <div class="print-header">
-        <div class="print-header-title">PRÉ-CONTA</div>
-        <div class="print-header-info" style="text-align: center; margin-top: 6px;">Cliente: ${customerName}</div>
-        <div class="print-header-info" style="text-align: center; margin-top: 4px;">Data: ${dateStr} ${timeStr}</div>
+      <div class="print-section">
+        <div class="print-row">
+          <span class="print-row-label"><strong>Cliente:</strong></span>
+          <span class="print-row-value">${customerName}</span>
+        </div>
+        <div class="print-row">
+          <span class="print-row-label">Data/Hora:</span>
+          <span class="print-row-value">${dateStr} ${timeStr}</span>
+        </div>
       </div>
 
       <table class="print-table">
@@ -749,14 +783,119 @@ export const SalesPage: React.FC = () => {
 
       <div class="print-footer">
         <div class="print-footer-text">Prévia para conferência do cliente</div>
-        <div class="print-footer-line">Documento não fiscal</div>
-        <div class="print-footer-line">Gelatini © 2024</div>
+        <div class="print-footer-line">{{FOOTER_TEXT}}</div>
+        <div class="print-footer-line">{{FOOTER_SECONDARY}}</div>
       </div>
     `;
 
     printReceipt({
-      title: 'Pré-Conta - Venda PDV',
+      title: 'Pré-Conta',
+      subtitle: 'Venda PDV',
       content
+    });
+  };
+
+  const handlePrintFinalReceipt = (params: {
+    items: typeof salesStore.items;
+    payments: typeof payments;
+    subtotal: number;
+    total: number;
+    additionalFee: number;
+    discountValue: number;
+    customerName: string;
+    dateStr: string;
+    timeStr: string;
+  }) => {
+    const itemsHTML = params.items.map((item) => {
+      const qtyLabel = item.saleType === 'weight'
+        ? `${item.quantity.toFixed(3)} kg`
+        : `${item.quantity}x`;
+      const unit = formatCurrency(item.unitPrice);
+      const lineTotal = formatCurrency(item.totalPrice);
+      return `
+        <tr>
+          <td class="print-table-item-name">
+            <div>${item.productName}</div>
+            <div class="print-table-item-detail">${qtyLabel} · ${unit}</div>
+          </td>
+          <td class="print-table-col-qty">${qtyLabel}</td>
+          <td class="print-table-col-total">${lineTotal}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const paymentsHTML = params.payments.length > 0 ? `
+      <div class="print-section">
+        <div class="print-section-title">Formas de Pagamento</div>
+        ${params.payments.map((p) => `
+          <div class="print-row">
+            <span class="print-row-label">${getPaymentMethodLabel(p.method)}</span>
+            <span class="print-row-value">${formatCurrency(p.amount)}</span>
+          </div>
+        `).join('')}
+      </div>
+    ` : '';
+
+    const content = `
+      <div class="print-section">
+        <div class="print-row">
+          <span class="print-row-label"><strong>Cliente:</strong></span>
+          <span class="print-row-value">${params.customerName}</span>
+        </div>
+        <div class="print-row">
+          <span class="print-row-label">Data/Hora:</span>
+          <span class="print-row-value">${params.dateStr} ${params.timeStr}</span>
+        </div>
+      </div>
+
+      <table class="print-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th class="print-table-col-qty">Qtd</th>
+            <th class="print-table-col-total">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsHTML}
+        </tbody>
+      </table>
+
+      <div class="print-totals">
+        <div class="print-row">
+          <span class="print-row-label">Subtotal:</span>
+          <span class="print-row-value">${formatCurrency(params.subtotal)}</span>
+        </div>
+        ${params.additionalFee > 0 ? `
+          <div class="print-row">
+            <span class="print-row-label">Acréscimo:</span>
+            <span class="print-row-value">${formatCurrency(params.additionalFee)}</span>
+          </div>
+        ` : ''}
+        ${params.discountValue > 0 ? `
+          <div class="print-row">
+            <span class="print-row-label">Desconto:</span>
+            <span class="print-row-value">-${formatCurrency(params.discountValue)}</span>
+          </div>
+        ` : ''}
+        <div class="print-row total highlight">
+          <span class="print-row-label">TOTAL:</span>
+          <span class="print-row-value">${formatCurrency(params.total)}</span>
+        </div>
+      </div>
+
+      ${paymentsHTML}
+
+      <div class="print-footer">
+        <div class="print-footer-text">{{FOOTER_TEXT}}</div>
+        <div class="print-footer-line">{{FOOTER_SECONDARY}}</div>
+      </div>
+    `;
+
+    printReceipt({
+      title: 'Cupom de Venda',
+      subtitle: 'Fechamento PDV',
+      content,
     });
   };
 
@@ -805,6 +944,19 @@ export const SalesPage: React.FC = () => {
         deliveryFee: 0,
         additionalFee,
         loyaltyPointsUsed: 0,
+      });
+
+      const now = new Date();
+      handlePrintFinalReceipt({
+        items: salesStore.items,
+        payments,
+        subtotal,
+        total,
+        additionalFee,
+        discountValue: totalDiscount,
+        customerName: getCustomerName(),
+        dateStr: now.toLocaleDateString('pt-BR'),
+        timeStr: now.toLocaleTimeString('pt-BR'),
       });
 
       setSuccess('Venda finalizada com sucesso!');

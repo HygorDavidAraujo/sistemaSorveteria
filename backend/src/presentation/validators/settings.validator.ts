@@ -123,4 +123,43 @@ export const settingsValidators = {
       id: Joi.string().uuid().required(),
     }),
   }),
+
+  // Scale Config
+  upsertScaleConfig: Joi.object({
+    body: Joi.object({
+      isEnabled: Joi.boolean().required(),
+      manufacturer: Joi.string().valid('TOLEDO', 'URANO', 'FILIZOLA', 'GENERIC').required(),
+      model: Joi.string().max(60).allow('', null).optional(),
+      protocol: Joi.string().valid('toledo_prix', 'urano', 'filizola', 'generic').required(),
+      port: Joi.string().max(50).required(),
+      baudRate: Joi.number().integer().min(1200).max(115200).required(),
+      dataBits: Joi.number().integer().valid(7, 8).required(),
+      stopBits: Joi.number().integer().valid(1, 2).required(),
+      parity: Joi.string().valid('none', 'even', 'odd', 'mark', 'space').required(),
+      stableOnly: Joi.boolean().required(),
+      readTimeoutMs: Joi.number().integer().min(500).max(10000).required(),
+      requestCommand: Joi.string().max(50).allow('', null).optional(),
+    }),
+    query: Joi.object({}),
+    params: Joi.object({}),
+  }),
+
+  // Printer Config
+  upsertPrinterConfig: Joi.object({
+    body: Joi.object({
+      paperWidth: Joi.string().max(10).required(),
+      contentWidth: Joi.string().max(10).required(),
+      fontFamily: Joi.string().max(100).required(),
+      fontSize: Joi.number().integer().min(8).max(20).required(),
+      lineHeight: Joi.number().min(1).max(2).required(),
+      marginMm: Joi.number().integer().min(0).max(10).required(),
+      maxCharsPerLine: Joi.number().integer().min(30).max(60).required(),
+      showLogo: Joi.boolean().required(),
+      showCompanyInfo: Joi.boolean().required(),
+      footerText: Joi.string().max(255).allow('', null).optional(),
+      footerSecondaryText: Joi.string().max(255).allow('', null).optional(),
+    }),
+    query: Joi.object({}),
+    params: Joi.object({}),
+  }),
 };

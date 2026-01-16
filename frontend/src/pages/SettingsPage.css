@@ -637,6 +637,54 @@
   color: #1f2937;
 }
 
+.settings-cep-row {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-cep-button {
+  white-space: nowrap;
+  padding: 10px 12px;
+}
+
+.settings-scale-form-grid {
+  margin-top: 16px;
+}
+
+.settings-scale-option {
+  margin-top: 12px;
+}
+
+.settings-scale-test-result {
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: var(--border-radius);
+  background: rgba(129, 93, 209, 0.08);
+  border: 1px solid rgba(129, 93, 209, 0.2);
+  color: #4c1d95;
+  font-weight: 600;
+}
+
+.settings-scale-diagnostic {
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: var(--border-radius);
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+}
+
+.settings-scale-diagnostic-title {
+  margin: 0 0 6px 0;
+  font-weight: 700;
+  color: #9a3412;
+}
+
+.settings-scale-diagnostic-text {
+  margin: 0;
+  color: #7c2d12;
+  font-size: 13px;
+}
+
 /* Responsive */
 @media (max-width: 640px) {
   .settings-button-group {

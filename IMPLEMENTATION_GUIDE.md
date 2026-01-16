@@ -720,21 +720,55 @@ GET    /dashboard/alerts             // Alertas (estoque, vencimentos)
 GET    /dashboard/realtime           // Métricas em tempo real
 ```
 
-### 8. Integração com Balança Toledo 🔵 FUTURA
+### 8. Integração com Balança ✅ IMPLEMENTADA
 
-#### Implementação
-```typescript
-// backend/src/infrastructure/integrations/scale/
-//   ├── toledo-scale.service.ts
-//   └── serial-port.adapter.ts
+#### Arquivos principais
+```
+backend/src/application/services/scale-reader.service.ts
+backend/src/application/use-cases/settings/scale-config.service.ts
+backend/src/presentation/http/controllers/settings.controller.ts
+backend/src/presentation/http/routes/settings.routes.ts
+backend/src/presentation/http/routes/scale.routes.ts
+backend/src/presentation/validators/settings.validator.ts
+
+frontend/src/pages/SettingsPage.tsx
+frontend/src/pages/SalesPage.tsx
+frontend/src/pages/ComandasPage.tsx
+frontend/src/pages/DeliveryPage.tsx
 ```
 
+#### Endpoints
+```
+GET  /settings/scale   // Ler configuração da balança
+PUT  /settings/scale   // Atualizar configuração da balança
+GET  /scale/ports      // Listar portas seriais disponíveis
+GET  /scale/weight     // Ler peso em tempo real
+```
+
+#### Escopos suportados
+- Toledo PRIX 3 FIT (protocolo PRt1/PRt3)
+- Urano
+- Filizola
+
+#### Configuração (backend.env)
+- SCALE_ENABLED
+- SCALE_PORT
+- SCALE_BAUD_RATE
+- SCALE_DATA_BITS
+- SCALE_STOP_BITS
+- SCALE_PARITY
+- SCALE_READ_TIMEOUT_MS
+- SCALE_ENQ_COMMAND (ex: \x05)
+- SCALE_ALLOW_MOCK_ON_ERROR
+- SCALE_USE_PROXY / SCALE_PROXY_URL
+
 #### Funcionalidades
-- Conectar via Serial/USB
-- Ler peso em tempo real
-- Calcular preço automaticamente
-- Reconexão automática
-- Tratamento de erros
+- Conexão Serial/USB com fallback em /dev
+- Leitura sob demanda (ENQ) e parsing por ETX/CR/LF
+- Normalização de peso (ex.: 00500 → 0.500 kg)
+- Diagnóstico de portas e testes na aba de configurações
+- Integração no PDV/Comandas/Delivery com modal de peso
+- Tratamento de erros e mensagens claras
 
 ---
 
@@ -842,19 +876,19 @@ frontend/
 - 14 schemas de validação Joi
 - Documentação completa (7 arquivos, 2.000+ linhas)
 
-### Fase 3: Frontend (4-6 semanas) 🔴 PRIORIDADE AGORA
-15. 🔲 Design system
-16. 🔲 Autenticação
-17. 🔲 PDV
-18. 🔲 Caixa
-19. 🔲 Comandas
-20. 🔲 Cadastros
-21. 🔲 Dashboard
-22. 🔲 Fidelidade/Cashback/Cupons
+### Fase 3: Frontend ✅ CONCLUÍDA
+15. ✅ Design system
+16. ✅ Autenticação
+17. ✅ PDV
+18. ✅ Caixa
+19. ✅ Comandas
+20. ✅ Cadastros
+21. ✅ Dashboard
+22. ✅ Fidelidade/Cashback/Cupons
 
 ### Fase 4: Integrações (1-2 semanas)
 23. 🔲 Impressora térmica
-24. 🔲 Balança Toledo
+24. ✅ Balança (Toledo/Urano/Filizola)
 25. 🔲 WhatsApp (notificações)
 
 ### Fase 5: Refinamentos (1-2 semanas)
@@ -885,22 +919,16 @@ frontend/
    - ✅ Gestão de caixa e produtos completa
 
 3. **Próximas Prioridades:**
-   - 🔴 Iniciar Frontend (mais importante agora!)
-   - 🟡 Módulo Financeiro (se necessário)
-   - 🟢 Relatórios e DRE (quando frontend estiver pronto)
+  - 🔴 Testes automatizados (unitário + E2E)
+  - 🟡 Impressão térmica
+  - 🟡 Otimizações e monitoramento
+  - 🟢 Integração WhatsApp
 
-4. **Iniciar Frontend:**
-   - Setup do Vite + React
-   - Instalar shadcn/ui
-   - Criar tela de login
-   - Criar tela de PDV
-   - Integrar com as APIs
-
-5. **Testar Integrações:**
-   - Testar fluxo completo de venda com fidelidade
-   - Testar uso de cashback em compras
-   - Testar aplicação de cupons
-   - Validar cálculos de pontos e descontos
+4. **Testar Integrações:**
+  - Fluxo completo de venda (PDV/Comandas/Delivery)
+  - Balança por USB/Serial (leitura e normalização)
+  - Fidelidade/cashback/cupons
+  - Fechamento de caixa e relatórios
 
 ---
 

@@ -112,8 +112,8 @@ export const CashPage: React.FC = () => {
 
       <div class="print-footer">
         <div class="print-footer-text">Obrigado por seu trabalho!</div>
-        <div class="print-footer-line">Documento para arquivo</div>
-        <div class="print-footer-line" style="margin-top: 2mm;">Gelatini © 2024</div>
+        <div class="print-footer-line">{{FOOTER_TEXT}}</div>
+        <div class="print-footer-line" style="margin-top: 2mm;">{{FOOTER_SECONDARY}}</div>
       </div>
     `;
 

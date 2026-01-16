@@ -1,5 +1,7 @@
 # 📁 GELATINI - Estrutura Completa de Arquivos
 
+**Atualização (16/01/2026):** este mapa é histórico e pode conter status antigos. O estado real do projeto está consolidado em [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) e [IMPLEMENTATION_STATUS.txt](IMPLEMENTATION_STATUS.txt).
+
 ```
 sistemaSorveteria/
 │

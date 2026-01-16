@@ -717,14 +717,35 @@ export const DeliveryPage: React.FC = () => {
     return result;
   }, [deliveryStore.items]);
 
+  const parseWeightInput = (value: string): number => {
+    const cleaned = value
+      .trim()
+      .replace(/\s+/g, '')
+      .replace(/[^\d.,]/g, '');
+
+    if (!cleaned) return NaN;
+
+    const lastComma = cleaned.lastIndexOf(',');
+    const lastDot = cleaned.lastIndexOf('.');
+    let normalized = cleaned;
+
+    if (lastComma > -1 && lastDot > -1) {
+      if (lastComma > lastDot) {
+        normalized = cleaned.replace(/\./g, '').replace(',', '.');
+      } else {
+        normalized = cleaned.replace(/,/g, '');
+      }
+    } else if (lastComma > -1) {
+      normalized = cleaned.replace(',', '.');
+    }
+
+    return parseFloat(normalized);
+  };
+
   const handleConfirmWeight = () => {
     if (!selectedWeightProduct) return;
 
-    const raw = weightQuantity
-      .replace(/[^\d,]/g, '')
-      .replace(/,(?=.*,)/g, '')
-      .replace(',', '.');
-    const quantity = parseFloat(raw);
+    const quantity = parseWeightInput(weightQuantity);
 
     if (Number.isNaN(quantity) || quantity <= 0) {
       setError('Quantidade deve ser maior que 0');
@@ -756,12 +777,20 @@ export const DeliveryPage: React.FC = () => {
     setWeightQuantity('');
   };
 
+  const normalizeScaleWeight = (value: number) => {
+    if (!Number.isFinite(value)) return value;
+    // Some protocols send grams without decimal point (e.g., 500 -> 0.500 kg)
+    if (value > 100 && value < 100000) return value / 1000;
+    return value;
+  };
+
   const readWeightFromScale = async () => {
     if (isReadingScale) return;
     setIsReadingScale(true);
     try {
       const data = await apiClient.get('/scale/weight');
-      const weightKg = Number((data as any)?.weightKg);
+      const weightRaw = Number((data as any)?.weightKg);
+      const weightKg = normalizeScaleWeight(weightRaw);
       if (!Number.isFinite(weightKg) || weightKg <= 0) {
         throw new Error('Peso inválido retornado pela balança');
       }
@@ -994,6 +1023,11 @@ export const DeliveryPage: React.FC = () => {
       console.log('🚚 Enviando pedido payload:', orderData);
       const resp = await apiClient.post('/delivery/orders', orderData);
       console.log('✅ Pedido criado:', resp);
+
+      const createdOrder = (resp as any)?.data?.data || (resp as any)?.data || resp;
+      if (createdOrder) {
+        handlePrintOrder(createdOrder);
+      }
       
       setSuccess('Pedido criado com sucesso!');
       setTimeout(() => setSuccess(null), 3000);
@@ -1059,10 +1093,15 @@ ${address.neighborhood} - ${address.city}/${address.state}
 CEP: ${address.zipCode || 'N/A'}${address.referencePoint ? ` | Ref: ${address.referencePoint}` : ''}`;
 
     const content = `
-      <div class="print-header">
-        <div class="print-header-title">🚚 DELIVERY</div>
-        <div class="print-header-info" style="text-align: center; margin-top: 6px;">Pedido #${order.orderNumber}</div>
-        <div class="print-header-info" style="text-align: center; margin-top: 4px;">Data: ${new Date(order.orderedAt).toLocaleString('pt-BR')}</div>
+      <div class="print-section">
+        <div class="print-row">
+          <span class="print-row-label"><strong>Pedido:</strong></span>
+          <span class="print-row-value">#${order.orderNumber}</span>
+        </div>
+        <div class="print-row">
+          <span class="print-row-label">Data/Hora:</span>
+          <span class="print-row-value">${new Date(order.orderedAt).toLocaleString('pt-BR')}</span>
+        </div>
       </div>
 
       <div class="print-section">
@@ -1156,12 +1195,13 @@ ${addressText}
 
       <div class="print-footer">
         <div class="print-footer-text">Obrigado pela preferência!</div>
-        <div class="print-footer-line">Gelatini © 2024</div>
+        <div class="print-footer-line">{{FOOTER_SECONDARY}}</div>
       </div>
     `;
 
     printReceipt({
-      title: 'Pedido Delivery #' + order.orderNumber,
+      title: 'Delivery',
+      subtitle: `Pedido #${order.orderNumber}`,
       content
     });
   };

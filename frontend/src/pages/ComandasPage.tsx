@@ -674,6 +674,31 @@ export const ComandasPage: React.FC = () => {
     }
   };
 
+  const parseWeightInput = (value: string): number => {
+    const cleaned = value
+      .trim()
+      .replace(/\s+/g, '')
+      .replace(/[^\d.,]/g, '');
+
+    if (!cleaned) return NaN;
+
+    const lastComma = cleaned.lastIndexOf(',');
+    const lastDot = cleaned.lastIndexOf('.');
+    let normalized = cleaned;
+
+    if (lastComma > -1 && lastDot > -1) {
+      if (lastComma > lastDot) {
+        normalized = cleaned.replace(/\./g, '').replace(',', '.');
+      } else {
+        normalized = cleaned.replace(/,/g, '');
+      }
+    } else if (lastComma > -1) {
+      normalized = cleaned.replace(',', '.');
+    }
+
+    return parseFloat(normalized);
+  };
+
   const handleConfirmWeightComanda = async () => {
     if (!selectedComanda || !pendingWeightProduct) return;
 
@@ -685,12 +710,7 @@ export const ComandasPage: React.FC = () => {
       return;
     }
 
-    const raw = tempWeight
-      .trim()
-      .replace(/\s+/g, '')
-      .replace(',', '.');
-
-    const weight = parseFloat(raw);
+    const weight = parseWeightInput(tempWeight);
     if (isNaN(weight) || weight <= 0) {
       setError('Informe um peso válido (kg)');
       setTimeout(() => setError(null), 2500);
@@ -748,12 +768,20 @@ export const ComandasPage: React.FC = () => {
     }
   };
 
+  const normalizeScaleWeight = (value: number) => {
+    if (!Number.isFinite(value)) return value;
+    // Some protocols send grams without decimal point (e.g., 500 -> 0.500 kg)
+    if (value > 100 && value < 100000) return value / 1000;
+    return value;
+  };
+
   const readWeightFromScale = async () => {
     if (isReadingScale) return;
     setIsReadingScale(true);
     try {
       const data = await apiClient.get('/scale/weight');
-      const weightKg = Number((data as any)?.weightKg);
+      const weightRaw = Number((data as any)?.weightKg);
+      const weightKg = normalizeScaleWeight(weightRaw);
       if (!Number.isFinite(weightKg) || weightKg <= 0) {
         throw new Error('Peso inválido retornado pela balança');
       }
@@ -1137,17 +1165,24 @@ export const ComandasPage: React.FC = () => {
     `).join('');
 
     const content = `
-      <div class="print-header">
-        <div class="print-header-title">PRÉ-CONTA</div>
-        <div class="print-header-info" style="text-align: center; margin-top: 6px;">Comanda #${selectedComanda.comandaNumber}</div>
-        ${selectedComanda.tableNumber ? `<div class=\"print-header-info\" style=\"text-align: center; margin-top: 4px;\">Mesa: ${selectedComanda.tableNumber}</div>` : ''}
-        <div class="print-header-info" style="text-align: center; margin-top: 4px;">Data: ${dateStr} ${timeStr}</div>
-      </div>
-
       <div class="print-section">
         <div class="print-row">
-          <span class="print-row-label"><strong>Cliente:</strong></span>
+          <span class="print-row-label"><strong>Comanda:</strong></span>
+          <span class="print-row-value">#${selectedComanda.comandaNumber}</span>
+        </div>
+        ${selectedComanda.tableNumber ? `
+          <div class="print-row">
+            <span class="print-row-label">Mesa:</span>
+            <span class="print-row-value">${selectedComanda.tableNumber}</span>
+          </div>
+        ` : ''}
+        <div class="print-row">
+          <span class="print-row-label">Cliente:</span>
           <span class="print-row-value">${customerInfo}</span>
+        </div>
+        <div class="print-row">
+          <span class="print-row-label">Data/Hora:</span>
+          <span class="print-row-value">${dateStr} ${timeStr}</span>
         </div>
       </div>
 
@@ -1190,15 +1225,127 @@ export const ComandasPage: React.FC = () => {
 
       <div class="print-footer">
         <div class="print-footer-text">*** PRÉ-CONTA ***</div>
-        <div class="print-footer-text">Documento não fiscal</div>
+        <div class="print-footer-text">{{FOOTER_TEXT}}</div>
         <div class="print-footer-text">Conferência do cliente</div>
-        <div class="print-footer-line">Gelatini © 2024</div>
+        <div class="print-footer-line">{{FOOTER_SECONDARY}}</div>
       </div>
     `;
 
     printReceipt({
-      title: 'Pré-Conta - Comanda #' + selectedComanda.comandaNumber,
+      title: 'Pré-Conta',
+      subtitle: `Comanda #${selectedComanda.comandaNumber}`,
       content
+    });
+  };
+
+  const handlePrintFinalComanda = (params: {
+    comanda: any;
+    payments: typeof payments;
+    customerInfo: string;
+  }) => {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('pt-BR');
+    const timeStr = now.toLocaleTimeString('pt-BR');
+    const items = params.comanda?.items || [];
+
+    const itemsHTML = items.map((item: any) => `
+      <tr>
+        <td class="print-table-item-name">${item.productName}</td>
+        <td class="print-table-col-qty">${Number(item.quantity).toFixed(3)}</td>
+        <td class="print-table-col-price">R$ ${Number(item.unitPrice || 0).toFixed(2)}</td>
+        <td class="print-table-col-total">R$ ${Number(item.subtotal || 0).toFixed(2)}</td>
+      </tr>
+    `).join('');
+
+    const paymentsHTML = params.payments.length > 0 ? `
+      <div class="print-section">
+        <div class="print-section-title">Formas de Pagamento</div>
+        ${params.payments.map((p) => `
+          <div class="print-row">
+            <span class="print-row-label">${getPaymentMethodLabel(p.method)}</span>
+            <span class="print-row-value">${formatCurrency(p.amount)}</span>
+          </div>
+        `).join('')}
+      </div>
+    ` : '';
+
+    const subtotalValue = Number(params.comanda?.subtotal || 0);
+    const discountValue = Number(params.comanda?.discount || 0);
+    const additionalValue = Number(params.comanda?.additionalFee || 0);
+    const totalValue = Number(params.comanda?.total || 0);
+
+    const content = `
+      <div class="print-section">
+        <div class="print-row">
+          <span class="print-row-label"><strong>Comanda:</strong></span>
+          <span class="print-row-value">#${params.comanda?.comandaNumber || ''}</span>
+        </div>
+        ${params.comanda?.tableNumber ? `
+          <div class="print-row">
+            <span class="print-row-label">Mesa:</span>
+            <span class="print-row-value">${params.comanda.tableNumber}</span>
+          </div>
+        ` : ''}
+        <div class="print-row">
+          <span class="print-row-label">Cliente:</span>
+          <span class="print-row-value">${params.customerInfo}</span>
+        </div>
+        <div class="print-row">
+          <span class="print-row-label">Data/Hora:</span>
+          <span class="print-row-value">${dateStr} ${timeStr}</span>
+        </div>
+      </div>
+
+      <table class="print-table">
+        <thead>
+          <tr>
+            <th>Descrição</th>
+            <th class="print-table-col-qty">Qtd</th>
+            <th class="print-table-col-price">Valor</th>
+            <th class="print-table-col-total">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsHTML}
+        </tbody>
+      </table>
+
+      <div class="print-totals">
+        <div class="print-row">
+          <span class="print-row-label">Subtotal:</span>
+          <span class="print-row-value">${formatCurrency(subtotalValue)}</span>
+        </div>
+        ${discountValue > 0 ? `
+          <div class="print-row">
+            <span class="print-row-label">Desconto:</span>
+            <span class="print-row-value">-${formatCurrency(discountValue)}</span>
+          </div>
+        ` : ''}
+        ${additionalValue > 0 ? `
+          <div class="print-row">
+            <span class="print-row-label">Acréscimo:</span>
+            <span class="print-row-value">${formatCurrency(additionalValue)}</span>
+          </div>
+        ` : ''}
+        <div class="print-row total highlight">
+          <span class="print-row-label">TOTAL:</span>
+          <span class="print-row-value">${formatCurrency(totalValue)}</span>
+        </div>
+      </div>
+
+      ${paymentsHTML}
+
+      <div class="print-footer">
+        <div class="print-footer-text">Conta Final</div>
+        <div class="print-footer-line">{{FOOTER_TEXT}}</div>
+        <div class="print-footer-line">{{FOOTER_SECONDARY}}</div>
+      </div>
+    `;
+
+    printReceipt({
+      title: 'Conta Final',
+      subtitle: `Comanda #${params.comanda?.comandaNumber || ''}`,
+      content,
     });
   };
 
@@ -1234,6 +1381,13 @@ export const ComandasPage: React.FC = () => {
       const response = await apiClient.post(`/comandas/${selectedComanda.id}/close`, closePayload);
 
       const comandaData = normalizeComanda(response.data?.data || response.data);
+      const customerInfo = selectedComanda.customerName || 'Cliente não informado';
+
+      handlePrintFinalComanda({
+        comanda: comandaData,
+        payments,
+        customerInfo,
+      });
       updateSelectedComandaState(comandaData);
       setSuccess('Comanda fechada com sucesso!');
       setDiscount('0');
