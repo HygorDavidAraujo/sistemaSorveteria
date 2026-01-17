@@ -28,13 +28,11 @@ export const DashboardPage: React.FC = () => {
 
   // Atualiza stats quando os stores mudam
   useEffect(() => {
-    if (products.length > 0 || customers.length > 0) {
-      setStats(prev => ({
-        ...prev,
-        totalCustomers: customers.length,
-        totalProducts: products.length,
-      }));
-    }
+    setStats(prev => ({
+      ...prev,
+      totalCustomers: customers.length,
+      totalProducts: products.length,
+    }));
   }, [products, customers]);
 
   const loadDashboardData = async () => {
@@ -135,14 +133,13 @@ export const DashboardPage: React.FC = () => {
       const revenueChangePct = calcChangePct(totalRevenue, prevTotalRevenue);
       const salesChangePct = calcChangePct(totalSales, prevTotalSales);
 
-      setStats({
+      setStats(prev => ({
+        ...prev,
         totalSales,
         totalRevenue,
-        totalCustomers: customers.length,
-        totalProducts: products.length,
         revenueChangePct,
         salesChangePct,
-      });
+      }));
     } catch (error) {
       console.error('Error loading dashboard:', error);
     } finally {
