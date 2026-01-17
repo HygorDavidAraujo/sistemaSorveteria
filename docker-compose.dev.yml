@@ -1,0 +1,56 @@
+# Docker Compose for Development (Windows)
+# Only runs Postgres + Redis
+# Backend and Frontend run locally via npm for better device access (COM ports, balança)
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:14-alpine
+    container_name: gelatini-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gelatini
+      POSTGRES_PASSWORD: gelatini123
+      POSTGRES_DB: gelatini_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gelatini -d gelatini_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - gelatini-network-dev
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: gelatini-redis-dev
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_dev:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - gelatini-network-dev
+
+volumes:
+  postgres_data_dev:
+    driver: local
+  redis_data_dev:
+    driver: local
+
+networks:
+  gelatini-network-dev:
+    driver: bridge
