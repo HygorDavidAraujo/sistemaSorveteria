@@ -17,6 +17,8 @@ export const DashboardPage: React.FC = () => {
     totalRevenue: 0,
     totalCustomers: 0,
     totalProducts: 0,
+    revenueChangePct: null as number | null,
+    salesChangePct: null as number | null,
   });
   const [loading, setLoading] = useState(true);
 
@@ -39,9 +41,28 @@ export const DashboardPage: React.FC = () => {
     try {
       setLoading(true);
       const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const startDate = monthStart.toISOString();
-      const endDate = now.toISOString();
+      const currentStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const currentEnd = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        23,
+        59,
+        59,
+        999
+      );
+      const prevMonthIndex = now.getMonth() - 1;
+      const prevYear = prevMonthIndex < 0 ? now.getFullYear() - 1 : now.getFullYear();
+      const prevMonth = prevMonthIndex < 0 ? 11 : prevMonthIndex;
+      const prevMonthDays = new Date(prevYear, prevMonth + 1, 0).getDate();
+      const prevEndDay = Math.min(now.getDate(), prevMonthDays);
+      const prevStart = new Date(prevYear, prevMonth, 1);
+      const prevEnd = new Date(prevYear, prevMonth, prevEndDay, 23, 59, 59, 999);
+
+      const startDate = currentStart.toISOString();
+      const endDate = currentEnd.toISOString();
+      const prevStartDate = prevStart.toISOString();
+      const prevEndDate = prevEnd.toISOString();
 
       await Promise.all([loadSession(), loadProducts(), loadCustomers()]);
 
@@ -50,7 +71,11 @@ export const DashboardPage: React.FC = () => {
       // counting only CLOSED cash sessions (cashier_closed + manager_closed).
       const limit = 100;
 
-      const sumRevenueByStatus = async (status: 'cashier_closed' | 'manager_closed') => {
+      const sumRevenueByStatus = async (
+        status: 'cashier_closed' | 'manager_closed',
+        rangeStart: string,
+        rangeEnd: string
+      ) => {
         let page = 1;
         let totalPages = 1;
         let subtotal = 0;
@@ -58,8 +83,8 @@ export const DashboardPage: React.FC = () => {
         do {
           const sessionsResp: any = await apiClient.get('/cash-sessions/history', {
             params: {
-              startDate,
-              endDate,
+              startDate: rangeStart,
+              endDate: rangeEnd,
               status,
               page,
               limit,
@@ -80,30 +105,43 @@ export const DashboardPage: React.FC = () => {
         return subtotal;
       };
 
-      const [cashierClosedRevenue, managerClosedRevenue] = await Promise.all([
-        sumRevenueByStatus('cashier_closed'),
-        sumRevenueByStatus('manager_closed'),
-      ]);
+      const [cashierClosedRevenue, managerClosedRevenue, prevCashierClosedRevenue, prevManagerClosedRevenue] =
+        await Promise.all([
+          sumRevenueByStatus('cashier_closed', startDate, endDate),
+          sumRevenueByStatus('manager_closed', startDate, endDate),
+          sumRevenueByStatus('cashier_closed', prevStartDate, prevEndDate),
+          sumRevenueByStatus('manager_closed', prevStartDate, prevEndDate),
+        ]);
 
       const totalRevenue = cashierClosedRevenue + managerClosedRevenue;
+      const prevTotalRevenue = prevCashierClosedRevenue + prevManagerClosedRevenue;
 
-      // Keep the "Vendas" card as number of PDV sales (not including comandas/delivery)
-      const salesResp: any = await apiClient.get('/sales', {
-        params: {
-          startDate,
-          endDate,
-          status: 'completed',
-          page: 1,
-          limit: 1,
-        },
-      });
-      const totalSales = Number(salesResp?.pagination?.total ?? 0);
+      const unwrap = (res: any) => res?.data?.data ?? res?.data ?? res;
+
+      const [currentSalesModules, prevSalesModules] = await Promise.all([
+        apiClient.getSalesByModuleReport(startDate, endDate),
+        apiClient.getSalesByModuleReport(prevStartDate, prevEndDate),
+      ]);
+      const salesCurrent = unwrap(currentSalesModules);
+      const salesPrev = unwrap(prevSalesModules);
+      const totalSales = Number(salesCurrent?.totals?.count ?? 0);
+      const prevTotalSales = Number(salesPrev?.totals?.count ?? 0);
+
+      const calcChangePct = (current: number, previous: number) => {
+        if (previous <= 0) return null;
+        return ((current - previous) / previous) * 100;
+      };
+
+      const revenueChangePct = calcChangePct(totalRevenue, prevTotalRevenue);
+      const salesChangePct = calcChangePct(totalSales, prevTotalSales);
 
       setStats({
         totalSales,
         totalRevenue,
         totalCustomers: customers.length,
         totalProducts: products.length,
+        revenueChangePct,
+        salesChangePct,
       });
     } catch (error) {
       console.error('Error loading dashboard:', error);
@@ -119,6 +157,18 @@ export const DashboardPage: React.FC = () => {
       </div>
     );
   }
+
+  const formatChangePct = (value: number | null) => {
+    if (value === null || Number.isNaN(value)) return '—';
+    const sign = value > 0 ? '+' : '';
+    return `${sign}${value.toFixed(1)}%`;
+  };
+
+  const getBadgeClass = (value: number | null) => {
+    if (value === null || Number.isNaN(value)) return 'dashboard__card-badge dashboard__card-badge--neutral';
+    if (value < 0) return 'dashboard__card-badge dashboard__card-badge--negative';
+    return 'dashboard__card-badge dashboard__card-badge--positive';
+  };
 
   return (
     <div className="dashboard">
@@ -138,7 +188,9 @@ export const DashboardPage: React.FC = () => {
             <div className="dashboard__card-icon dashboard__card-icon--blue">
               <DollarSign size={24} />
             </div>
-            <span className="dashboard__card-badge">+12.5%</span>
+            <span className={getBadgeClass(stats.revenueChangePct)}>
+              {formatChangePct(stats.revenueChangePct)}
+            </span>
           </div>
           <p className="dashboard__card-label">Faturamento</p>
           <p className="dashboard__card-value">
@@ -152,7 +204,9 @@ export const DashboardPage: React.FC = () => {
             <div className="dashboard__card-icon dashboard__card-icon--cyan">
               <ShoppingCart size={24} />
             </div>
-            <span className="dashboard__card-badge">+8.2%</span>
+            <span className={getBadgeClass(stats.salesChangePct)}>
+              {formatChangePct(stats.salesChangePct)}
+            </span>
           </div>
           <p className="dashboard__card-label">Vendas</p>
           <p className="dashboard__card-value">{stats.totalSales}</p>
@@ -164,7 +218,6 @@ export const DashboardPage: React.FC = () => {
             <div className="dashboard__card-icon dashboard__card-icon--amber">
               <Users size={24} />
             </div>
-            <span className="dashboard__card-badge">+5.1%</span>
           </div>
           <p className="dashboard__card-label">Clientes</p>
           <p className="dashboard__card-value">{stats.totalCustomers}</p>
@@ -176,7 +229,6 @@ export const DashboardPage: React.FC = () => {
             <div className="dashboard__card-icon dashboard__card-icon--purple">
               <Package size={24} />
             </div>
-            <span className="dashboard__card-badge">Total</span>
           </div>
           <p className="dashboard__card-label">Produtos</p>
           <p className="dashboard__card-value">{stats.totalProducts}</p>

@@ -80,8 +80,21 @@
   font-weight: 600;
   padding: 4px 8px;
   border-radius: 4px;
+}
+
+.dashboard__card-badge--positive {
   background-color: #f0fdf4;
   color: #15803d;
+}
+
+.dashboard__card-badge--negative {
+  background-color: #fef2f2;
+  color: #b91c1c;
+}
+
+.dashboard__card-badge--neutral {
+  background-color: #f1f5f9;
+  color: #475569;
 }
 
 .dashboard__card-label {
