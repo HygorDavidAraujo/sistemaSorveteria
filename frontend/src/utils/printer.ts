@@ -25,9 +25,9 @@ export interface PrinterConfig {
 export const DEFAULT_PRINTER_CONFIG: PrinterConfig = {
   paperWidth: '80mm',
   contentWidth: '70mm',
-  fontFamily: 'Courier New',
-  fontSize: 11,
-  lineHeight: 1.4,
+  fontFamily: 'Consolas',
+  fontSize: 12,
+  lineHeight: 1.25,
   marginMm: 5,
   maxCharsPerLine: 42,
   showLogo: true,

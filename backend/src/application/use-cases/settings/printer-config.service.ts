@@ -17,9 +17,9 @@ export interface PrinterConfigDTO {
 const DEFAULT_PRINTER_CONFIG: PrinterConfigDTO = {
   paperWidth: '80mm',
   contentWidth: '70mm',
-  fontFamily: 'Courier New',
-  fontSize: 11,
-  lineHeight: 1.4,
+  fontFamily: 'Consolas',
+  fontSize: 12,
+  lineHeight: 1.25,
   marginMm: 5,
   maxCharsPerLine: 42,
   showLogo: true,

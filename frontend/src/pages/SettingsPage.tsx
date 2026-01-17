@@ -240,9 +240,9 @@ export const SettingsPage: React.FC = () => {
   const [printerConfig, setPrinterConfig] = useState({
     paperWidth: '80mm',
     contentWidth: '70mm',
-    fontFamily: 'Courier New',
-    fontSize: 11,
-    lineHeight: 1.4,
+    fontFamily: 'Consolas',
+    fontSize: 12,
+    lineHeight: 1.25,
     marginMm: 5,
     maxCharsPerLine: 42,
     showLogo: true,
@@ -251,6 +251,20 @@ export const SettingsPage: React.FC = () => {
     footerSecondaryText: 'Gelatini © 2026',
   });
   const [isLoadingPrinter, setIsLoadingPrinter] = useState(false);
+
+  const recommendedPrinterConfig = {
+    paperWidth: '80mm',
+    contentWidth: '70mm',
+    fontFamily: 'Consolas',
+    fontSize: 12,
+    lineHeight: 1.25,
+    marginMm: 5,
+    maxCharsPerLine: 42,
+    showLogo: true,
+    showCompanyInfo: true,
+    footerText: 'Documento não fiscal',
+    footerSecondaryText: 'Gelatini © 2026',
+  };
 
   useEffect(() => {
     if (activeTab === 'user' && isAdmin && users.length === 0 && !isLoadingUsers) {
@@ -435,6 +449,29 @@ export const SettingsPage: React.FC = () => {
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erro ao salvar configurações de impressão');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setIsLoadingPrinter(false);
+    }
+  };
+
+  const handleApplyPrinterDefaults = async () => {
+    try {
+      setIsLoadingPrinter(true);
+      setError(null);
+      const payload = {
+        ...recommendedPrinterConfig,
+        fontSize: Number(recommendedPrinterConfig.fontSize),
+        lineHeight: Number(recommendedPrinterConfig.lineHeight),
+        marginMm: Number(recommendedPrinterConfig.marginMm),
+        maxCharsPerLine: Number(recommendedPrinterConfig.maxCharsPerLine),
+      };
+      setPrinterConfig(payload);
+      await apiClient.put('/settings/printer', payload);
+      setSuccess('Padrões recomendados de impressão aplicados com sucesso!');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Erro ao aplicar padrões de impressão');
       setTimeout(() => setError(null), 3000);
     } finally {
       setIsLoadingPrinter(false);
@@ -2274,6 +2311,9 @@ export const SettingsPage: React.FC = () => {
             </div>
 
             <div className="settings-form-actions">
+              <Button variant="secondary" onClick={handleApplyPrinterDefaults} disabled={isLoadingPrinter}>
+                Aplicar padrão recomendado
+              </Button>
               <Button variant="primary" onClick={handleSavePrinterConfig} disabled={isLoadingPrinter}>
                 {isLoadingPrinter ? 'Salvando...' : 'Salvar Configurações de Impressão'}
               </Button>

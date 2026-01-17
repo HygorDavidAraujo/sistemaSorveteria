@@ -11,10 +11,10 @@ Write-Host "[Start] Docker: postgres + redis" -ForegroundColor Cyan
 
 # Start Backend (local)
 Write-Host "[Start] Backend (local)" -ForegroundColor Cyan
-Start-Process -FilePath "powershell.exe" -WorkingDirectory $backendDir -ArgumentList "-NoExit", "-Command", "npm install; npm run dev" -WindowStyle Minimized
+Start-Process -FilePath "powershell.exe" -WorkingDirectory $backendDir -ArgumentList "-NoExit", "-Command", "if (!(Test-Path node_modules)) { npm install }; npm run dev" -WindowStyle Minimized
 
 # Start Frontend (local)
 Write-Host "[Start] Frontend (local)" -ForegroundColor Cyan
-Start-Process -FilePath "powershell.exe" -WorkingDirectory $frontendDir -ArgumentList "-NoExit", "-Command", "npm install; npm run dev" -WindowStyle Minimized
+Start-Process -FilePath "powershell.exe" -WorkingDirectory $frontendDir -ArgumentList "-NoExit", "-Command", "if (!(Test-Path node_modules)) { npm install }; npm run dev" -WindowStyle Minimized
 
 Write-Host "[OK] Servidores iniciados." -ForegroundColor Green
