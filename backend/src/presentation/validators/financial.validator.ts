@@ -233,6 +233,15 @@ export const comparativeReportSchema = Joi.object({
   query: reportDateRangeQuerySchema,
 });
 
+export const financialReportExportSchema = Joi.object({
+  query: reportDateRangeQuerySchema.keys({
+    type: Joi.string()
+      .valid('summary', 'dre', 'cash-flow', 'profitability', 'indicators', 'comparative')
+      .required(),
+    format: Joi.string().valid('pdf', 'xlsx').required(),
+  }),
+});
+
 /**
  * Payment Method Config Validators
  */

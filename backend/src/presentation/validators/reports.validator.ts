@@ -61,3 +61,23 @@ export const salesByPaymentMethodReportSchema = Joi.object({
 export const cardFeesByPaymentMethodReportSchema = Joi.object({
   query: reportDateRangeQuerySchema,
 });
+
+export const exportReportSchema = Joi.object({
+  query: reportDateRangeQuerySchema.keys({
+    type: Joi.string()
+      .valid(
+        'products-ranking',
+        'products-abc',
+        'products-timeseries',
+        'customers-birthdays',
+        'sales-modules',
+        'sales-payments',
+        'card-fees'
+      )
+      .required(),
+    format: Joi.string().valid('pdf', 'xlsx').required(),
+    metric: Joi.string().valid('revenue', 'quantity').optional(),
+    limit: Joi.number().integer().min(1).max(200).optional(),
+    granularity: Joi.string().valid('day', 'month', 'year').optional(),
+  }),
+});

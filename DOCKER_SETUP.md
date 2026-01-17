@@ -4,7 +4,7 @@
 
 - Docker Desktop instalado (Windows/Mac) ou Docker + Docker Compose (Linux)
 - Mínimo 4GB de RAM disponível
-- Portas 5173 (Frontend), 3000 (Backend), 5432 (DB), 6379 (Redis) livres
+- Portas 5433 (DB) e 6379 (Redis) livres
 
 ## 📋 Arquitetura
 
@@ -12,11 +12,11 @@
 ┌─────────────────────────────────────────┐
 │         Docker Compose Stack            │
 ├─────────────────────────────────────────┤
-│ Frontend (React + Vite) - :5173        │
-│ Backend (Node.js) - :3000              │
-│ PostgreSQL - :5432                      │
+│ PostgreSQL - :5433                      │
 │ Redis - :6379                           │
 └─────────────────────────────────────────┘
+
+Backend/Frontend rodam localmente (Node.js)
 ```
 
 ## 🚀 Quick Start (Windows)
@@ -32,11 +32,8 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ### Opção 2: Comando Manual
 
 ```powershell
-# Construir imagens
-docker-compose build --no-cache
-
-# Iniciar containers
-docker-compose up -d
+# Iniciar apenas Postgres e Redis
+docker-compose up -d postgres redis
 
 # Verificar status
 docker-compose ps
@@ -56,7 +53,7 @@ chmod +x init-docker.sh
 
 - **Frontend**: http://localhost:5173
 - **Backend API**: http://localhost:3000/api/v1
-- **PostgreSQL**: localhost:5432
+- **PostgreSQL**: localhost:5433
   - User: `gelatini`
   - Password: `gelatini123`
   - Database: `gelatini_db`
@@ -68,14 +65,11 @@ chmod +x init-docker.sh
 # Ver todos os logs em tempo real
 docker-compose logs -f
 
-# Ver logs apenas do frontend
-docker-compose logs -f frontend
-
-# Ver logs apenas do backend
-docker-compose logs -f backend
-
 # Ver logs apenas do banco
 docker-compose logs -f postgres
+
+# Ver logs apenas do redis
+docker-compose logs -f redis
 ```
 
 ## 🛠️ Gerenciamento de Containers
@@ -94,30 +88,27 @@ docker-compose down
 docker-compose down -v
 
 # Reiniciar um container específico
-docker-compose restart backend
+docker-compose restart postgres
 
 # Executar comando dentro de um container
-docker-compose exec backend npm run db:seed
-docker-compose exec frontend npm run build
+docker-compose exec postgres psql -U gelatini -d gelatini_db
 ```
 
 ## 🔧 Desenvolvimento
 
-### Fazer mudanças no Frontend
-
-Os arquivos CSS e código TypeScript estão mapeados via volume, então mudanças são refletidas automaticamente:
-
-```
-./frontend/src → /app/src (inside container)
-```
-
-Apenas reinicie o container se necessário:
-
+### Backend local
 ```bash
-docker-compose restart frontend
+cd backend
+npm install
+npm run dev
 ```
 
-### Fazer mudanças no Backend
+### Frontend local
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
 Similarmente, mudanças no backend são refletidas:
 

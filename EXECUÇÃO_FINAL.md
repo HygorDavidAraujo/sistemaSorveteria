@@ -2,7 +2,7 @@
 
 ## Status: ✅ PRONTO PARA EXECUÇÃO
 
-Todos os requisitos foram implementados e validados. O sistema está 100% integrado com Docker e pronto para uso em produção.
+Todos os requisitos foram implementados e validados. O sistema está pronto para uso com Postgres/Redis no Docker e backend/frontend local.
 
 ---
 
@@ -35,8 +35,8 @@ Todos os requisitos foram implementados e validados. O sistema está 100% integr
 12. ✅ App.css (Sistema de Design)
 
 ### ✅ Docker Configuration (Completo)
-- [x] Criado docker-compose.yml (desenvolvimento)
-- [x] Criado docker-compose.prod.yml (produção)
+- [x] docker-compose.yml com Postgres/Redis
+- [x] docker-compose.prod.yml (produção)
 - [x] Atualizado frontend/Dockerfile
 - [x] Criado frontend/Dockerfile.prod
 - [x] Atualizado backend/Dockerfile
@@ -47,23 +47,19 @@ Todos os requisitos foram implementados e validados. O sistema está 100% integr
 - [x] Atualizado vite.config.ts (host: 0.0.0.0, polling)
 
 ### ✅ Volume Mounts (Pronto)
-- [x] Frontend: ./frontend:/app (CSS muda em tempo real)
-- [x] Backend: ./backend:/app (código muda em tempo real)
+- [x] PostgreSQL: postgres_data (persistência de dados)
+- [x] Redis: redis_data (persistência de cache)
 - [x] PostgreSQL: postgres_data (persistência de dados)
 - [x] Redis: redis_data (persistência de cache)
 - [x] Logs: backend_logs (arquivo de logs)
 
 ### ✅ Network Setup (Pronto)
 - [x] Rede: gelatini-network (bridge)
-- [x] Frontend: http://frontend:5173 (interno)
-- [x] Backend: http://backend:3000 (interno)
 - [x] PostgreSQL: postgres:5432 (interno)
 - [x] Redis: redis:6379 (interno)
-- [x] Acesso externo: localhost:5173, localhost:3000
+- [x] Acesso externo: localhost:5433, localhost:6379
 
 ### ✅ Health Checks (Pronto)
-- [x] Frontend: curl http://localhost:5173 (a cada 30s)
-- [x] Backend: curl http://localhost:3000/api/v1/health (a cada 30s)
 - [x] PostgreSQL: pg_isready -U gelatini (a cada 10s)
 - [x] Redis: redis-cli ping (a cada 10s)
 
@@ -102,21 +98,27 @@ Todos os requisitos foram implementados e validados. O sistema está 100% integr
 
 ### 2️⃣ Inicializar Docker
 ```powershell
-# Execute o script de inicialização:
-.\init-docker.ps1
+# Inicie apenas Postgres e Redis
+docker-compose up -d postgres redis
 
-# Isso fará:
-# 1. Build de todas as imagens Docker
-# 2. Iniciar todos os containers
-# 3. Aguardar healthchecks
-# 4. Fazer seed do banco de dados
-# 5. Exibir URLs dos serviços
+# Backend local
+cd backend
+npm install
+npm run db:generate
+npm run db:migrate
+npm run db:seed
+npm run dev
+
+# Frontend local (em outro terminal)
+cd frontend
+npm install
+npm run dev
 ```
 
 ### 3️⃣ Acessar os Serviços
 - **Frontend**: http://localhost:5173
 - **Backend API**: http://localhost:3000/api/v1
-- **PostgreSQL**: localhost:5432 (user: gelatini, senha: gelatini123)
+- **PostgreSQL**: localhost:5433 (user: gelatini, senha: gelatini123)
 - **Redis**: localhost:6379
 
 ### 4️⃣ Parar os Serviços

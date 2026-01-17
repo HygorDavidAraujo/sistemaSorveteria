@@ -9,6 +9,7 @@ import {
   salesByModuleReportSchema,
   salesByPaymentMethodReportSchema,
   cardFeesByPaymentMethodReportSchema,
+  exportReportSchema,
 } from '@presentation/validators/reports.validator';
 import { ReportsController } from '@presentation/http/controllers/reports.controller';
 
@@ -35,5 +36,10 @@ router.get('/customers/birthdays', validate(birthdayCustomersReportSchema), cont
 router.get('/sales/modules', validate(salesByModuleReportSchema), controller.getSalesByModule);
 router.get('/sales/payment-methods', validate(salesByPaymentMethodReportSchema), controller.getSalesByPaymentMethod);
 router.get('/fees/card', validate(cardFeesByPaymentMethodReportSchema), controller.getCardFeesByPaymentMethod);
+
+/**
+ * Export reports (PDF/Excel)
+ */
+router.get('/export', validate(exportReportSchema), controller.exportReport);
 
 export default router;

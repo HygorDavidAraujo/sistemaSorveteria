@@ -32,7 +32,7 @@
 
 ---
 
-## 🚀 Como Iniciar o Projeto com Docker
+## 🚀 Como Iniciar o Projeto com Docker (Postgres/Redis)
 
 ### 1. Pré-requisitos
 ```bash
@@ -58,16 +58,16 @@ ls -la
 
 #### `backend/.env`
 ```env
-# Database
-DATABASE_URL=postgresql://gelatini:gelatini123@postgres:5432/gelatini_db?schema=public
+# Database (Docker em localhost:5433)
+DATABASE_URL=postgresql://gelatini:gelatini123@localhost:5433/gelatini_db?schema=public
 
 # Server
 NODE_ENV=development
 API_PORT=3000
 API_HOST=0.0.0.0
 
-# Redis
-REDIS_HOST=redis
+# Redis (Docker em localhost)
+REDIS_HOST=localhost
 REDIS_PORT=6379
 
 # JWT (se estiver usando)
@@ -88,8 +88,8 @@ NODE_ENV=development
 
 #### Modo Desenvolvimento (Recomendado)
 ```bash
-# Construir imagens e iniciar serviços
-docker-compose up -d
+# Iniciar apenas Postgres e Redis
+docker-compose up -d postgres redis
 
 # Ver status
 docker-compose ps
@@ -98,8 +98,8 @@ docker-compose ps
 docker-compose logs -f
 
 # Ver logs de um serviço específico
-docker-compose logs -f backend
-docker-compose logs -f frontend
+docker-compose logs -f postgres
+docker-compose logs -f redis
 ```
 
 #### Parar Serviços
@@ -121,17 +121,15 @@ docker-compose ps
 
 # Esperado:
 # NAME              STATUS           PORTS
-# gelatini-postgres running          5432
+# gelatini-postgres running          5433
 # gelatini-redis    running          6379
-# gelatini-backend  running          3000
-# gelatini-frontend running          5173
 ```
 
 ### Acessar Aplicação
 ```
 Frontend:  http://localhost:5173
 Backend:   http://localhost:3000/api/v1
-Database:  localhost:5432
+Database:  localhost:5433
 Redis:     localhost:6379
 ```
 

@@ -149,8 +149,7 @@ Status: ✅ Healthy
 
 1. **Acessar Frontend**
 ```bash
-# Aguarde o frontend ficar HEALTHY (status: health: starting → healthy)
-# Depois abra no navegador:
+# Inicie o frontend localmente e depois abra no navegador:
 http://localhost:5173
 ```
 
@@ -167,11 +166,11 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
 
 3. **Ver Logs em Tempo Real**
 ```bash
-# Frontend
-docker-compose logs -f frontend
+# Postgres
+docker-compose logs -f postgres
 
-# Backend
-docker-compose logs -f backend
+# Redis
+docker-compose logs -f redis
 
 # Todos
 docker-compose logs -f
@@ -179,14 +178,9 @@ docker-compose logs -f
 
 4. **Executar Comandos no Container**
 ```bash
-# Shell do backend
-docker-compose exec backend sh
-
-# Shell do frontend
-docker-compose exec frontend sh
-
 # Prisma Studio (gerenciar banco)
-docker-compose exec backend npx prisma studio
+cd backend
+npm run db:studio
 ```
 
 ---
@@ -196,11 +190,11 @@ docker-compose exec backend npx prisma studio
 ### Serviços
 - [x] PostgreSQL rodando e healthy
 - [x] Redis rodando e healthy
-- [x] Backend rodando e healthy
-- [x] Frontend iniciando
+- [x] Backend local rodando
+- [x] Frontend local rodando
 
 ### Funcionalidades
-- [x] Migrations automáticas
+- [x] Migrations executadas localmente
 - [x] Seed do banco
 - [x] API respondendo
 - [x] CORS configurado

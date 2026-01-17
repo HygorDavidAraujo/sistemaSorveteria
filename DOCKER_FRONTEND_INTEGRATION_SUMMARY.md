@@ -77,10 +77,8 @@ CustomersPage.tsx
 ### Docker Services
 ```
 gelatini-network
-├── postgres (5432) - Healthy ✓
-├── redis (6379) - Healthy ✓
-├── backend (3000) - Depends: postgres, redis - Healthy ✓
-└── frontend (5173) - Depends: backend - Healthy ✓
+├── postgres (5433) - Healthy ✓
+└── redis (6379) - Healthy ✓
 ```
 
 ---
@@ -90,19 +88,19 @@ gelatini-network
 ### Iniciar Projeto
 ```bash
 cd c:\Users\hygor\Documentos\Sorveteria\sistemaSorveteria
-docker-compose up -d
+docker-compose up -d postgres redis
 ```
 
 ### Acessar
 - **Frontend:** http://localhost:5173
 - **Backend:** http://localhost:3000/api/v1
-- **Database:** localhost:5432
+- **Database:** localhost:5433
+- **Redis:** localhost:6379
 
 ### Ver Logs
 ```bash
-docker-compose logs -f frontend
-docker-compose logs -f backend
 docker-compose logs -f postgres
+docker-compose logs -f redis
 ```
 
 ### Parar Projeto

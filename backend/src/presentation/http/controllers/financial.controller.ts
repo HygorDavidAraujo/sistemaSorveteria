@@ -4,6 +4,7 @@ import { FinancialService } from '@application/use-cases/financial/financial.ser
 import { AccountPayableService } from '@application/use-cases/financial/accounts-payable.service';
 import { AccountReceivableService } from '@application/use-cases/financial/accounts-receivable.service';
 import { DREService } from '@application/use-cases/financial/dre.service';
+import { ReportExportService } from '@application/services/report-export.service';
 import { PaymentMethod } from '@prisma/client';
 import { PaymentMethodConfigService } from '@application/use-cases/financial/payment-method-config.service';
 import { FinancialTransactionType, FinancialTransactionStatus } from '@domain/entities/financial.entity';
@@ -761,9 +762,13 @@ export class AccountReceivableController {
  */
 export class DREController {
   private dreService: DREService;
+  private financialService: FinancialService;
+  private reportExportService: ReportExportService;
 
   constructor() {
     this.dreService = new DREService();
+    this.financialService = new FinancialService();
+    this.reportExportService = new ReportExportService();
   }
 
   private parseDateInput(value: unknown, endOfDay: boolean): Date {
@@ -897,5 +902,58 @@ export class DREController {
       success: true,
       data: report,
     });
+  });
+
+  /**
+   * Exportar relatórios financeiros (PDF/Excel)
+   * GET /financial/reports/export
+   */
+  exportReport = asyncHandler(async (req: Request, res: Response) => {
+    const { startDate, endDate, type, format } = req.query as Record<string, string>;
+
+    const start = this.parseDateInput(startDate, false);
+    const end = this.parseDateInput(endDate, true);
+
+    let data: any;
+    switch (type) {
+      case 'summary':
+        data = await this.financialService.getTransactionsSummary(start, end);
+        break;
+      case 'dre':
+        data = await this.dreService.generateDREReport({ startDate: start, endDate: end });
+        break;
+      case 'cash-flow':
+        data = await this.dreService.generateCashFlow({ startDate: start, endDate: end });
+        break;
+      case 'profitability':
+        data = await this.dreService.analyzeProfitability({ startDate: start, endDate: end });
+        break;
+      case 'indicators':
+        data = await this.dreService.calculateFinancialIndicators();
+        break;
+      case 'comparative':
+        data = await this.dreService.generateComparativeReport(start, end);
+        break;
+      default:
+        data = null;
+    }
+
+    const reportTitle = `Relatório ${type}`;
+    const fileDate = new Date().toISOString().slice(0, 10);
+    const fileName = `relatorio-${type}-${fileDate}.${format}`;
+
+    const buffer =
+      format === 'pdf'
+        ? await this.reportExportService.buildPdf(reportTitle, data)
+        : await this.reportExportService.buildExcel(reportTitle, data);
+
+    res.setHeader(
+      'Content-Type',
+      format === 'pdf'
+        ? 'application/pdf'
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(buffer);
   });
 }

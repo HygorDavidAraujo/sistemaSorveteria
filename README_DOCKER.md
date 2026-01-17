@@ -24,20 +24,19 @@ Sistema de gerenciamento de sorveteria completamente integrado com Docker e CSS 
 
 ### Windows
 ```powershell
-.\verify.ps1              # Verificar setup
-.\init-docker.ps1         # Inicializar Docker
+docker-compose up -d postgres redis
 ```
 
 ### Linux/Mac
 ```bash
-chmod +x verify.sh init-docker.sh
-./verify.sh               # Verificar setup
-./init-docker.sh          # Inicializar Docker
+docker-compose up -d postgres redis
 ```
 
 ### Acesse
 - **Frontend**: http://localhost:5173
 - **Backend API**: http://localhost:3000/api/v1
+- **PostgreSQL**: localhost:5433
+- **Redis**: localhost:6379
 
 ---
 
@@ -45,19 +44,11 @@ chmod +x verify.sh init-docker.sh
 
 ```
 ┌─────────────────────────────────────────┐
-│   Frontend (Vite React)    :5173        │
-│   CSS Hot Reload ✓                      │
-│   Volume: ./frontend:/app              │
+│   Backend (Node local)     :3000        │
+│   Frontend (Vite local)    :5173        │
 ├─────────────────────────────────────────┤
-│   Backend (Node Express)   :3000        │
-│   API Server ✓                          │
-│   Volume: ./backend:/app               │
-├─────────────────────────────────────────┤
-│   PostgreSQL               :5432        │
-│   Redis                    :6379        │
-├─────────────────────────────────────────┤
-│   Network: gelatini-network (Bridge)    │
-│   Health Checks: All services           │
+│   PostgreSQL (Docker)      :5433        │
+│   Redis (Docker)           :6379        │
 └─────────────────────────────────────────┘
 ```
 

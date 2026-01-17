@@ -8,6 +8,7 @@ Este documento reúne o passo a passo completo para instalar o sistema em uma no
 
 ## 1) Pré‑requisitos
 - Docker Desktop instalado e atualizado.
+- Node.js 18+ e npm 9+ instalados.
 - Git instalado.
 - Acesso administrativo na máquina.
 - Rede local estável (servidor local).
@@ -63,19 +64,28 @@ Conferir:
 ---
 
 ## 6) Subida de containers
-1. Na nova máquina, subir os serviços com Docker Compose (produção):
-   - backend
-   - frontend
+1. Na nova máquina, subir apenas os serviços base com Docker Compose:
    - postgres
    - redis
-   - nginx (se aplicável)
 
 2. Confirmar status saudável dos containers.
+
+3. Iniciar backend localmente (Node):
+   - `cd backend`
+   - `npm install`
+   - `npm run dev`
+
+4. Iniciar frontend localmente (Node):
+   - `cd frontend`
+   - `npm install`
+   - `npm run dev`
 
 ---
 
 ## 7) Migrações
-- Aplicar migrações do Prisma (se houver versões mais novas do schema).
+- Aplicar migrações do Prisma no backend local:
+   - `npm run db:migrate`
+   - `npm run db:seed` (se necessário)
 - Garantir que o banco esteja sincronizado com o código.
 
 ---

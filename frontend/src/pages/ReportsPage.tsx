@@ -3,6 +3,18 @@ import { apiClient } from '@/services/api';
 import { Card, Button, Loading, Alert } from '@/components/common';
 import { BarChart3, Download } from 'lucide-react';
 import { format } from 'date-fns';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar, Line, Pie, Doughnut } from 'react-chartjs-2';
 import type {
   TransactionsSummaryReport,
   DREReport,
@@ -21,6 +33,8 @@ import type {
   CardFeesByPaymentMethodReport,
 } from '@/types';
 import './ReportsPage.css';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Tooltip, Legend);
 
 type ReportKind =
   | 'summary'
@@ -377,6 +391,292 @@ export const ReportsPage: React.FC = () => {
     document.body.removeChild(element);
   };
 
+  const downloadReportExport = async (format: 'pdf' | 'xlsx') => {
+    if (!report) return;
+
+    const params: Record<string, any> = {
+      startDate,
+      endDate,
+    };
+
+    if (reportKind === 'products-timeseries') {
+      params.granularity = productGranularity;
+    }
+    if (reportKind === 'products-ranking') {
+      params.metric = productMetric;
+      params.limit = productLimit;
+    }
+
+    const financialTypes = new Set(['summary', 'dre', 'cash-flow', 'profitability', 'comparative', 'indicators']);
+    const scope = financialTypes.has(reportKind) ? 'financial' : 'reports';
+
+    const blob = await apiClient.downloadReportExport(scope as any, reportKind, format, params);
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `relatorio-${reportKind}-${periodLabel}.${format}`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const renderChart = () => {
+    if (!report) return null;
+
+    if (reportKind === 'summary') {
+      const r = report as TransactionsSummaryReport;
+      return (
+        <Bar
+          data={{
+            labels: ['Receitas', 'Despesas', 'Pendentes', 'Pagas', 'Vencidas'],
+            datasets: [
+              {
+                label: 'Valores',
+                data: [r.totalIncome, r.totalExpense, r.pending, r.paid, r.overdue],
+                backgroundColor: ['#22c55e', '#ef4444', '#f59e0b', '#3b82f6', '#ef4444'],
+              },
+            ],
+          }}
+        />
+      );
+    }
+
+    if (reportKind === 'dre') {
+      const r = report as DREReport;
+      return (
+        <Bar
+          data={{
+            labels: ['Receita Bruta', 'Receita Líquida', 'Lucro Bruto', 'Lucro Líquido'],
+            datasets: [
+              {
+                label: 'R$',
+                data: [r.grossRevenue, r.netRevenue, r.grossProfit, r.netProfit],
+                backgroundColor: ['#38bdf8', '#22c55e', '#a855f7', '#f59e0b'],
+              },
+            ],
+          }}
+        />
+      );
+    }
+
+    if (reportKind === 'cash-flow') {
+      const r = report as CashFlowReport;
+      return (
+        <Bar
+          data={{
+            labels: ['Entradas', 'Saídas', 'Fluxo Líquido', 'Saldo Final'],
+            datasets: [
+              {
+                label: 'R$',
+                data: [r.inflows.total, r.outflows.total, r.netCashFlow, r.finalBalance],
+                backgroundColor: ['#22c55e', '#ef4444', '#0ea5e9', '#a855f7'],
+              },
+            ],
+          }}
+        />
+      );
+    }
+
+    if (reportKind === 'profitability') {
+      const r = report as ProfitabilityReport;
+      return (
+        <Bar
+          data={{
+            labels: ['Margem Bruta', 'Margem Operacional', 'Margem Líquida', 'ROI', 'Margem Contribuição'],
+            datasets: [
+              {
+                label: '%',
+                data: [r.grossProfitMargin, r.operatingMargin, r.netMargin, r.roi, r.contributionMargin],
+                backgroundColor: '#22c55e',
+              },
+            ],
+          }}
+        />
+      );
+    }
+
+    if (reportKind === 'comparative') {
+      const r = report as ComparativeReport;
+      return (
+        <Bar
+          data={{
+            labels: ['Receita Líquida (Atual)', 'Receita Líquida (Anterior)', 'Lucro Líquido (Atual)', 'Lucro Líquido (Anterior)'],
+            datasets: [
+              {
+                label: 'R$',
+                data: [r.current.netRevenue, r.previous.netRevenue, r.current.netProfit, r.previous.netProfit],
+                backgroundColor: ['#22c55e', '#94a3b8', '#0ea5e9', '#94a3b8'],
+              },
+            ],
+          }}
+        />
+      );
+    }
+
+    if (reportKind === 'indicators') {
+      const r = report as FinancialIndicatorsReport;
+      return (
+        <Bar
+          data={{
+            labels: ['Current', 'Quick', 'Debt/Equity', 'ROA', 'ROE', 'Inventory', 'Receivables'],
+            datasets: [
+              {
+                label: 'Indicadores',
+                data: [
+                  r.currentRatio,
+                  r.quickRatio,
+                  r.debtToEquity,
+                  r.returnOnAssets,
+                  r.returnOnEquity,
+                  r.inventoryTurnover,
+                  r.receivablesTurnover,
+                ],
+                backgroundColor: '#0ea5e9',
+              },
+            ],
+          }}
+        />
+      );
+    }
+
+    if (reportKind === 'sales-modules') {
+      const r = report as SalesByModuleReport;
+      return (
+        <Bar
+          data={{
+            labels: r.modules.map((m) => m.label),
+            datasets: [
+              {
+                label: 'R$',
+                data: r.modules.map((m) => m.totalAmount || 0),
+                backgroundColor: '#38bdf8',
+              },
+            ],
+          }}
+        />
+      );
+    }
+
+    if (reportKind === 'sales-payments') {
+      const r = report as SalesByPaymentMethodReport;
+      return (
+        <Pie
+          data={{
+            labels: r.methods.map((m) => m.label),
+            datasets: [
+              {
+                label: 'R$',
+                data: r.methods.map((m) => m.amount || 0),
+                backgroundColor: ['#22c55e', '#3b82f6', '#f59e0b', '#a855f7', '#94a3b8'],
+              },
+            ],
+          }}
+        />
+      );
+    }
+
+    if (reportKind === 'card-fees') {
+      const r = report as CardFeesByPaymentMethodReport;
+      return (
+        <Bar
+          data={{
+            labels: r.methods.map((m) => m.label),
+            datasets: [
+              {
+                label: 'Taxa (R$)',
+                data: r.methods.map((m) => m.feeAmount || 0),
+                backgroundColor: '#f59e0b',
+              },
+            ],
+          }}
+        />
+      );
+    }
+
+    if (reportKind === 'products-timeseries') {
+      const r = report as ProductTimeSeriesReport;
+      return (
+        <Line
+          data={{
+            labels: r.series.map((p) => p.bucket),
+            datasets: [
+              {
+                label: 'Quantidade',
+                data: r.series.map((p) => p.quantity || 0),
+                borderColor: '#22c55e',
+                backgroundColor: 'rgba(34,197,94,0.2)',
+              },
+              {
+                label: 'Receita',
+                data: r.series.map((p) => p.revenue || 0),
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59,130,246,0.2)',
+              },
+            ],
+          }}
+        />
+      );
+    }
+
+    if (reportKind === 'products-ranking') {
+      const r = report as ProductRankingReport;
+      const values = r.metric === 'quantity' ? r.items.map((i) => i.quantity) : r.items.map((i) => i.revenue);
+      return (
+        <Bar
+          data={{
+            labels: r.items.map((i) => i.productName),
+            datasets: [
+              {
+                label: r.metric === 'quantity' ? 'Quantidade' : 'Receita',
+                data: values,
+                backgroundColor: '#0ea5e9',
+              },
+            ],
+          }}
+        />
+      );
+    }
+
+    if (reportKind === 'products-abc') {
+      const r = report as ProductABCCurveReport;
+      return (
+        <Bar
+          data={{
+            labels: r.items.map((i) => i.productName),
+            datasets: [
+              {
+                label: 'Receita',
+                data: r.items.map((i) => i.revenue),
+                backgroundColor: '#a855f7',
+              },
+            ],
+          }}
+        />
+      );
+    }
+
+    if (reportKind === 'customers-birthdays') {
+      const r = report as BirthdayCustomersReport;
+      return (
+        <Doughnut
+          data={{
+            labels: ['Aniversariantes'],
+            datasets: [
+              {
+                label: 'Total',
+                data: [r.total || 0],
+                backgroundColor: ['#f59e0b'],
+              },
+            ],
+          }}
+        />
+      );
+    }
+
+    return null;
+  };
+
   return (
     <div className="reports-page">
       <div className="page-header">
@@ -680,13 +980,30 @@ export const ReportsPage: React.FC = () => {
             )}
           </div>
 
+          {renderChart() && (
+            <Card>
+              <div className="reports-card-header">
+                <h3 className="reports-section-title">Gráficos</h3>
+              </div>
+              <div className="reports-chart-wrapper">{renderChart()}</div>
+            </Card>
+          )}
+
           <Card>
             <div className="reports-card-header">
               <h3 className="reports-section-title">Detalhamento</h3>
-              <Button variant="secondary" onClick={downloadReport}>
-                <Download size={16} />
-                Exportar CSV
-              </Button>
+              <div className="reports-card-actions">
+                <Button variant="secondary" onClick={downloadReport}>
+                  <Download size={16} />
+                  Exportar CSV
+                </Button>
+                <Button variant="secondary" onClick={() => downloadReportExport('pdf')}>
+                  Exportar PDF
+                </Button>
+                <Button variant="secondary" onClick={() => downloadReportExport('xlsx')}>
+                  Exportar Excel
+                </Button>
+              </div>
             </div>
 
             {reportKind === 'dre' && (

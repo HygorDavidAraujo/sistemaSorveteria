@@ -81,6 +81,17 @@
   gap: 12px;
 }
 
+.reports-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reports-chart-wrapper {
+  padding: 12px 4px;
+  min-height: 280px;
+}
+
 .reports-details-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

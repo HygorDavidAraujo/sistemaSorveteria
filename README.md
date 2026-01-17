@@ -62,31 +62,37 @@ Sistema completo de gerenciamento para sorveteria e minimarket, com foco em PDV,
 
 ## 🚀 Instalação e Configuração
 
-### Opção 1: Docker (Recomendado)
+### Opção 1: Postgres/Redis no Docker + Backend/Frontend local (Recomendado)
 
 ```bash
 # Clone o repositório
 git clone <repo-url>
 cd sistemaSorveteria
 
-# Copie o arquivo de ambiente
-cp backend/.env.example backend/.env
+# Inicie apenas Postgres e Redis
+docker-compose up -d postgres redis
 
-# Inicie os serviços
-docker-compose up -d
+# Backend (local)
+cd backend
+npm install
+npm run db:generate
+npm run db:migrate
+npm run db:seed
+npm run dev
 
-# Execute as migrations
-docker-compose exec backend npx prisma migrate deploy
-
-# Popule o banco com dados iniciais
-docker-compose exec backend npm run db:seed
+# Frontend (local)
+cd ../frontend
+npm install
+npm run dev
 ```
 
 Acesse:
 - **API**: http://localhost:3000/api/v1
 - **Frontend**: http://localhost:5173
+- **PostgreSQL**: localhost:5433
+- **Redis**: localhost:6379
 
-### Opção 2: Instalação Manual
+### Opção 2: Instalação Manual (Tudo local, sem Docker)
 
 #### 1. PostgreSQL
 

@@ -132,20 +132,16 @@ Vite Config:
 
 ## 🚀 Quick Start (Windows)
 
-### 1. Verificar Setup
+### 1. Inicializar Docker (Postgres/Redis)
 ```powershell
-.\verify.ps1
-```
-
-### 2. Inicializar Docker
-```powershell
-.\init-docker.ps1
+docker-compose up -d postgres redis
 ```
 
 ### 3. Acessar Serviços
 - Frontend: http://localhost:5173
 - Backend API: http://localhost:3000/api/v1
-- PostgreSQL: localhost:5432
+- PostgreSQL: localhost:5433
+- Redis: localhost:6379
 
 ### 4. Parar Serviços
 ```powershell
@@ -156,20 +152,16 @@ docker-compose down
 
 ## 🚀 Quick Start (Linux/Mac)
 
-### 1. Verificar Setup
+### 1. Inicializar Docker (Postgres/Redis)
 ```bash
-./verify.sh
-```
-
-### 2. Inicializar Docker
-```bash
-./init-docker.sh
+docker-compose up -d postgres redis
 ```
 
 ### 3. Acessar Serviços
 - Frontend: http://localhost:5173
 - Backend API: http://localhost:3000/api/v1
-- PostgreSQL: localhost:5432
+- PostgreSQL: localhost:5433
+- Redis: localhost:6379
 
 ### 4. Parar Serviços
 ```bash
@@ -184,15 +176,11 @@ docker-compose down
 ```
 1. Você edita: ./frontend/src/pages/CustomersPage.css
    ↓
-2. Volume monta mudança no container (/app/src/...)
+2. Vite detecta mudança (local)
    ↓
-3. Vite detecta mudança (polling habilitado)
+3. Browser recebe HMR update
    ↓
-4. Frontend rebuilda CSS module
-   ↓
-5. Browser recebe HMR update
-   ↓
-6. CSS atualizado em tempo real (sem reload)
+4. CSS atualizado em tempo real (sem reload)
 ```
 
 ### Resultado
@@ -207,17 +195,19 @@ docker-compose down
 
 ```
 Host Machine (Localhost)
-├─ :5173  → Frontend Container (Vite Dev Server)
+├─ :5173  → Frontend (Vite local)
 │           Hot Reload ✓
 │           CSS Changes ✓
 │
-├─ :3000  → Backend Container (API Server)
+├─ :3000  → Backend (Node local)
 │           /api/* routes ✓
 │           Database connected ✓
 │
-├─ :5432  → PostgreSQL (if needed from host)
+├─ :5433  → PostgreSQL (Docker)
 │           User: gelatini
 │           Pass: gelatini123
+│
+├─ :6379  → Redis (Docker)
 │
 └─ :6379  → Redis (if needed from host)
             Cache operations ✓

@@ -27,6 +27,7 @@ import {
   dreReportSchema,
   cashFlowSchema,
   comparativeReportSchema,
+  financialReportExportSchema,
   upsertPaymentMethodConfigSchema,
 } from '@presentation/validators/financial.validator';
 
@@ -432,6 +433,16 @@ router.get(
   authorize(['admin', 'manager']),
   validate(comparativeReportSchema),
   dreController.generateComparative
+);
+
+/**
+ * GET /financial/reports/export - Exportar relatório financeiro (PDF/Excel)
+ */
+router.get(
+  '/reports/export',
+  authorize(['admin', 'manager']),
+  validate(financialReportExportSchema),
+  dreController.exportReport
 );
 
 export default router;

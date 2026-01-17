@@ -302,6 +302,20 @@ export class ApiClient {
     return response.data;
   }
 
+  async downloadReportExport(
+    scope: 'reports' | 'financial',
+    type: string,
+    format: 'pdf' | 'xlsx',
+    params: Record<string, any>
+  ) {
+    const path = scope === 'financial' ? '/financial/reports/export' : '/reports/export';
+    const response = await this.client.get(path, {
+      params: { type, format, ...params },
+      responseType: 'blob',
+    });
+    return response.data;
+  }
+
   async getDailyReport(date: string) {
     const response = await this.client.get('/financial/daily', {
       params: { date },
