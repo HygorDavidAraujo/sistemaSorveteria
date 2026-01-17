@@ -626,9 +626,9 @@ export const SettingsPage: React.FC = () => {
   const handleSaveCashbackConfig = async () => {
     try {
       const normalizeNullableNumber = (value: unknown) => {
-        if (value === null || value === undefined || value === '') return undefined;
+        if (value === null || value === undefined || value === '') return null;
         const parsed = Number(value);
-        return Number.isFinite(parsed) ? parsed : undefined;
+        return Number.isFinite(parsed) ? parsed : null;
       };
 
       const payload = {

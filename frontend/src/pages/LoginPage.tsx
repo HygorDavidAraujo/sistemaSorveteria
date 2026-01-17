@@ -90,7 +90,6 @@ export const LoginPage: React.FC = () => {
                     className="login__input"
                   />
                 </div>
-                <p className="login__hint">hygordavidaraujo@gmail.com</p>
               </div>
 
               {/* Password Input */}
@@ -128,7 +127,6 @@ export const LoginPage: React.FC = () => {
                     )}
                   </button>
                 </div>
-                <p className="login__hint">admin123</p>
               </div>
 
               {/* Submit Button */}
@@ -147,17 +145,6 @@ export const LoginPage: React.FC = () => {
               <p className="login__footer-version">Sistema de Gestão v1.0.0</p>
               <p className="login__footer-copyright">© 2026 Sorveteria - Todos os direitos reservados</p>
             </div>
-          </div>
-        </div>
-
-        {/* Credenciais dica */}
-        <div className="login__hint-card">
-          <p className="login__hint-title">
-            💡 Dica: Use as credenciais de teste
-          </p>
-          <div className="login__hint-credentials">
-            <p><span>Email:</span> hygordavidaraujo@gmail.com</p>
-            <p><span>Senha:</span> admin123</p>
           </div>
         </div>
       </div>

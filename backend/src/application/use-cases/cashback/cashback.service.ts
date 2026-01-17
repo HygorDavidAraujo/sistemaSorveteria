@@ -25,8 +25,8 @@ export class CashbackService {
   async updateCashbackConfig(data: {
     cashbackPercentage?: number;
     minPurchaseForCashback?: number;
-    maxCashbackPerPurchase?: number;
-    cashbackExpirationDays?: number;
+    maxCashbackPerPurchase?: number | null;
+    cashbackExpirationDays?: number | null;
     minCashbackToUse?: number;
     isActive?: boolean;
     applyToAllProducts?: boolean;
@@ -39,8 +39,8 @@ export class CashbackService {
         data: {
           cashbackPercentage: data.cashbackPercentage || 5,
           minPurchaseForCashback: data.minPurchaseForCashback || 0,
-          maxCashbackPerPurchase: data.maxCashbackPerPurchase,
-          cashbackExpirationDays: data.cashbackExpirationDays || 180,
+          maxCashbackPerPurchase: data.maxCashbackPerPurchase ?? null,
+          cashbackExpirationDays: data.cashbackExpirationDays ?? 180,
           minCashbackToUse: data.minCashbackToUse || 5,
           isActive: data.isActive ?? true,
           applyToAllProducts: data.applyToAllProducts ?? true,
@@ -48,9 +48,21 @@ export class CashbackService {
       });
     }
 
+    // Preparar dados para update, mantendo null explícito quando fornecido
+    const updateData: any = {};
+    if (data.cashbackPercentage !== undefined) updateData.cashbackPercentage = data.cashbackPercentage;
+    if (data.minPurchaseForCashback !== undefined) updateData.minPurchaseForCashback = data.minPurchaseForCashback;
+    if (data.minCashbackToUse !== undefined) updateData.minCashbackToUse = data.minCashbackToUse;
+    if (data.isActive !== undefined) updateData.isActive = data.isActive;
+    if (data.applyToAllProducts !== undefined) updateData.applyToAllProducts = data.applyToAllProducts;
+    
+    // Para campos nullable, incluir explicitamente mesmo se null
+    if ('maxCashbackPerPurchase' in data) updateData.maxCashbackPerPurchase = data.maxCashbackPerPurchase;
+    if ('cashbackExpirationDays' in data) updateData.cashbackExpirationDays = data.cashbackExpirationDays;
+
     return this.prismaClient.cashbackConfig.update({
       where: { id: config.id },
-      data,
+      data: updateData,
     });
   }
 
