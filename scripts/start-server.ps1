@@ -1,7 +1,11 @@
 $ErrorActionPreference = "Stop"
 
-# Paths
-$root = "C:\Users\hygor\Documentos\Sorveteria\sistemaSorveteria"
+# Paths (dynamic based on script location or current directory)
+if ($PSScriptRoot) {
+    $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+} else {
+    $root = Get-Location | Select-Object -ExpandProperty Path
+}
 $backendDir = Join-Path $root "backend"
 $frontendDir = Join-Path $root "frontend"
 
