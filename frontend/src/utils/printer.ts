@@ -100,6 +100,9 @@ export const getPrintStyles = (config: PrinterConfig = DEFAULT_PRINTER_CONFIG) =
     padding: ${config.marginMm}mm;
     width: ${config.contentWidth};
     background: white;
+    color: #000;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .print-header {
@@ -147,20 +150,20 @@ export const getPrintStyles = (config: PrinterConfig = DEFAULT_PRINTER_CONFIG) =
   .print-document-subtitle {
     font-size: 10px;
     text-align: center;
-    color: #444;
+    color: #000;
     margin-bottom: 2mm;
   }
 
   .print-header-subtitle {
     font-size: 10px;
     margin: 1mm 0;
-    color: #333;
+    color: #000;
   }
 
   .print-header-info {
     font-size: 9px;
     margin: 0.5mm 0;
-    color: #555;
+    color: #000;
   }
 
   .print-section {
@@ -242,7 +245,7 @@ export const getPrintStyles = (config: PrinterConfig = DEFAULT_PRINTER_CONFIG) =
 
   .print-table-item-detail {
     font-size: 9px;
-    color: #666;
+    color: #000;
     margin-top: 0.5mm;
   }
 
