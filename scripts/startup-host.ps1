@@ -1,6 +1,6 @@
 param(
     [ValidateSet('dev', 'prod')]
-    [string]$Mode = 'prod',
+    [string]$Mode = 'dev',
     [string]$Root
 )
 

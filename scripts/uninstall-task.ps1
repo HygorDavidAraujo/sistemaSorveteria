@@ -34,4 +34,4 @@ Write-Host "Removendo tarefa..." -ForegroundColor Yellow
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
 
 Write-Host ""
-Write-Host "✓ Tarefa removida com sucesso!" -ForegroundColor Green
+Write-Host "[OK] Tarefa removida com sucesso!" -ForegroundColor Green

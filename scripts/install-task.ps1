@@ -3,7 +3,7 @@
 
 param(
     [ValidateSet("dev", "prod")]
-    [string]$Mode = "prod",
+    [string]$Mode = "dev",
     [string]$TaskName = "SistemaSorveteria",
     [switch]$RunAtStartup = $true
 )
